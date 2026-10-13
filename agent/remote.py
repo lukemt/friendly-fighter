@@ -34,7 +34,8 @@ from altruagent.console import print_line
 
 from .redalert_bot import Knobs, RedAlertBot, _dict, _list, is_combat
 
-ROOT = Path(__file__).resolve().parent.parent / "remote"
+# FF_REMOTE_DIR moves the switches (a local simulator run keeps its own, away from the live ones).
+ROOT = Path(os.environ.get("FF_REMOTE_DIR") or Path(__file__).resolve().parent.parent / "remote")
 STATE_EVERY_SECONDS = 1.0
 MAX_ORDERS = 20
 

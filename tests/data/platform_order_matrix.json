@@ -1,0 +1,856 @@
+{
+ "source": "recordings/8d78b9e8-8993-49cd-b59f-37c6273585fe/probe-seat0.jsonl (a08_order_matrix), hosted platform 2026-10-13",
+ "context": {
+  "map_size": [
+   99,
+   99
+  ],
+  "own_units": [
+   {
+    "id": 328,
+    "type": "mcv"
+   }
+  ],
+  "available_production": []
+ },
+ "cases": [
+  {
+   "name": "unknown_field",
+   "order": {
+    "cmd": "stop",
+    "units": [
+     328
+    ],
+    "foo": 1
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "stop",
+    "rejected",
+    "invalid",
+    "unknown field(s) for stop: ['foo']",
+    null
+   ],
+   "final": [
+    "stop",
+    "rejected",
+    "invalid",
+    "unknown field(s) for stop: ['foo']",
+    null
+   ]
+  },
+  {
+   "name": "unknown_cmd",
+   "order": {
+    "cmd": "dance",
+    "units": [
+     328
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    null,
+    "rejected",
+    "invalid",
+    "cmd must be one of ['attack', 'attack_move', 'build', 'cancel', 'deploy', 'enter_transport', 'guard', 'harvest', 'move', 'place', 'power_toggle', 'rally', 'repair', 'sell', 'set_primary', 'set_stance', 'stop', 'train', 'unload']",
+    null
+   ],
+   "final": [
+    null,
+    "rejected",
+    "invalid",
+    "cmd must be one of ['attack', 'attack_move', 'build', 'cancel', 'deploy', 'enter_transport', 'guard', 'harvest', 'move', 'place', 'power_toggle', 'rally', 'repair', 'sell', 'set_primary', 'set_stance', 'stop', 'train', 'unload']",
+    null
+   ]
+  },
+  {
+   "name": "to_outside_bounds_inside_map",
+   "order": {
+    "cmd": "move",
+    "units": [
+     328
+    ],
+    "to": [
+     0,
+     0
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "move",
+    "pending",
+    "pending",
+    null,
+    null
+   ],
+   "final": [
+    "move",
+    "rejected",
+    "invalid",
+    null,
+    [
+     {
+      "unit": 328,
+      "reason": "invalid"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "to_outside_map",
+   "order": {
+    "cmd": "move",
+    "units": [
+     328
+    ],
+    "to": [
+     999,
+     999
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "move",
+    "rejected",
+    "invalid",
+    "to [999, 999] is outside the map (99x99)",
+    null
+   ],
+   "final": [
+    "move",
+    "rejected",
+    "invalid",
+    "to [999, 999] is outside the map (99x99)",
+    null
+   ]
+  },
+  {
+   "name": "float_cell",
+   "order": {
+    "cmd": "move",
+    "units": [
+     328
+    ],
+    "to": [
+     10.5,
+     10
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "move",
+    "rejected",
+    "invalid",
+    "to must be a cell [x, y] of two integers",
+    null
+   ],
+   "final": [
+    "move",
+    "rejected",
+    "invalid",
+    "to must be a cell [x, y] of two integers",
+    null
+   ]
+  },
+  {
+   "name": "duplicate_ids",
+   "order": {
+    "cmd": "stop",
+    "units": [
+     328,
+     328
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "stop",
+    "rejected",
+    "invalid",
+    "units must be distinct",
+    null
+   ],
+   "final": [
+    "stop",
+    "rejected",
+    "invalid",
+    "units must be distinct",
+    null
+   ]
+  },
+  {
+   "name": "fifty_one_units",
+   "order": {
+    "cmd": "stop",
+    "units": [
+     328,
+     900000,
+     900001,
+     900002,
+     900003,
+     900004,
+     900005,
+     900006,
+     900007,
+     900008,
+     900009,
+     900010,
+     900011,
+     900012,
+     900013,
+     900014,
+     900015,
+     900016,
+     900017,
+     900018,
+     900019,
+     900020,
+     900021,
+     900022,
+     900023,
+     900024,
+     900025,
+     900026,
+     900027,
+     900028,
+     900029,
+     900030,
+     900031,
+     900032,
+     900033,
+     900034,
+     900035,
+     900036,
+     900037,
+     900038,
+     900039,
+     900040,
+     900041,
+     900042,
+     900043,
+     900044,
+     900045,
+     900046,
+     900047,
+     900048,
+     900049
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "stop",
+    "rejected",
+    "invalid",
+    "at most 50 units per order",
+    null
+   ],
+   "final": [
+    "stop",
+    "rejected",
+    "invalid",
+    "at most 50 units per order",
+    null
+   ]
+  },
+  {
+   "name": "unknown_unit",
+   "order": {
+    "cmd": "stop",
+    "units": [
+     987654
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "stop",
+    "rejected",
+    "not_owned",
+    "unit 987654 no longer exists or is not yours",
+    [
+     {
+      "unit": 987654,
+      "reason": "not_owned"
+     }
+    ]
+   ],
+   "final": [
+    "stop",
+    "rejected",
+    "not_owned",
+    "unit 987654 no longer exists or is not yours",
+    [
+     {
+      "unit": 987654,
+      "reason": "not_owned"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "string_id",
+   "order": {
+    "cmd": "stop",
+    "units": [
+     "abc"
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "stop",
+    "rejected",
+    "invalid",
+    "units must be integer actor ids",
+    null
+   ],
+   "final": [
+    "stop",
+    "rejected",
+    "invalid",
+    "units must be integer actor ids",
+    null
+   ]
+  },
+  {
+   "name": "empty_units",
+   "order": {
+    "cmd": "stop",
+    "units": []
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "stop",
+    "rejected",
+    "invalid",
+    "units must be a non-empty list of unit ids",
+    null
+   ],
+   "final": [
+    "stop",
+    "rejected",
+    "invalid",
+    "units must be a non-empty list of unit ids",
+    null
+   ]
+  },
+  {
+   "name": "train_count_11",
+   "order": {
+    "cmd": "train",
+    "item": "e1",
+    "count": 11
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "train",
+    "rejected",
+    "invalid",
+    "count must be an integer from 1 to 10",
+    null
+   ],
+   "final": [
+    "train",
+    "rejected",
+    "invalid",
+    "count must be an integer from 1 to 10",
+    null
+   ]
+  },
+  {
+   "name": "train_unavailable",
+   "order": {
+    "cmd": "train",
+    "item": "3tnk"
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "train",
+    "rejected",
+    "not_available",
+    "3tnk is not in available_production",
+    null
+   ],
+   "final": [
+    "train",
+    "rejected",
+    "not_available",
+    "3tnk is not in available_production",
+    null
+   ]
+  },
+  {
+   "name": "build_unavailable",
+   "order": {
+    "cmd": "build",
+    "item": "weap"
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "build",
+    "rejected",
+    "not_available",
+    "weap is not in available_production",
+    null
+   ],
+   "final": [
+    "build",
+    "rejected",
+    "not_available",
+    "weap is not in available_production",
+    null
+   ]
+  },
+  {
+   "name": "build_unknown_item",
+   "order": {
+    "cmd": "build",
+    "item": "deathstar"
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "build",
+    "rejected",
+    "not_available",
+    "deathstar is not in available_production",
+    null
+   ],
+   "final": [
+    "build",
+    "rejected",
+    "not_available",
+    "deathstar is not in available_production",
+    null
+   ]
+  },
+  {
+   "name": "place_not_ready",
+   "order": {
+    "cmd": "place",
+    "item": "powr"
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "place",
+    "rejected",
+    "not_ready",
+    "powr is not in any production queue",
+    null
+   ],
+   "final": [
+    "place",
+    "rejected",
+    "not_ready",
+    "powr is not in any production queue",
+    null
+   ]
+  },
+  {
+   "name": "cancel_nothing",
+   "order": {
+    "cmd": "cancel",
+    "item": "powr"
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "cancel",
+    "rejected",
+    "not_available",
+    "powr is not in any production queue",
+    null
+   ],
+   "final": [
+    "cancel",
+    "rejected",
+    "not_available",
+    "powr is not in any production queue",
+    null
+   ]
+  },
+  {
+   "name": "attack_unknown",
+   "order": {
+    "cmd": "attack",
+    "units": [
+     328
+    ],
+    "target": 987654
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "attack",
+    "rejected",
+    "target_not_visible",
+    "actor 987654 is not visible to you",
+    null
+   ],
+   "final": [
+    "attack",
+    "rejected",
+    "target_not_visible",
+    "actor 987654 is not visible to you",
+    null
+   ]
+  },
+  {
+   "name": "attack_self",
+   "order": {
+    "cmd": "attack",
+    "units": [
+     328
+    ],
+    "target": 328
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "attack",
+    "pending",
+    "pending",
+    null,
+    null
+   ],
+   "final": [
+    "attack",
+    "rejected",
+    "invalid",
+    null,
+    [
+     {
+      "unit": 328,
+      "reason": "invalid"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "attack_ground",
+   "order": {
+    "cmd": "attack",
+    "units": [
+     328
+    ],
+    "to": [
+     6,
+     6
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "attack",
+    "pending",
+    "pending",
+    null,
+    null
+   ],
+   "final": [
+    "attack",
+    "rejected",
+    "invalid",
+    null,
+    [
+     {
+      "unit": 328,
+      "reason": "invalid"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "attack_both",
+   "order": {
+    "cmd": "attack",
+    "units": [
+     328
+    ],
+    "target": 328,
+    "to": [
+     5,
+     5
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "attack",
+    "rejected",
+    "invalid",
+    "attack needs exactly one of target (an actor id) or to (a cell: attack ground)",
+    null
+   ],
+   "final": [
+    "attack",
+    "rejected",
+    "invalid",
+    "attack needs exactly one of target (an actor id) or to (a cell: attack ground)",
+    null
+   ]
+  },
+  {
+   "name": "guard_self",
+   "order": {
+    "cmd": "guard",
+    "units": [
+     328
+    ],
+    "target": 328
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "guard",
+    "pending",
+    "pending",
+    null,
+    null
+   ],
+   "final": [
+    "guard",
+    "rejected",
+    "invalid",
+    null,
+    [
+     {
+      "unit": 328,
+      "reason": "invalid"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "stance_bad",
+   "order": {
+    "cmd": "set_stance",
+    "units": [
+     328
+    ],
+    "stance": "berserk"
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "set_stance",
+    "rejected",
+    "invalid",
+    "stance must be one of ['hold_fire', 'return_fire', 'defend', 'attack_anything']",
+    null
+   ],
+   "final": [
+    "set_stance",
+    "rejected",
+    "invalid",
+    "stance must be one of ['hold_fire', 'return_fire', 'defend', 'attack_anything']",
+    null
+   ]
+  },
+  {
+   "name": "repair_unit",
+   "order": {
+    "cmd": "repair",
+    "building": 328
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "repair",
+    "rejected",
+    "not_owned",
+    "328 is not one of your buildings",
+    null
+   ],
+   "final": [
+    "repair",
+    "rejected",
+    "not_owned",
+    "328 is not one of your buildings",
+    null
+   ]
+  },
+  {
+   "name": "sell_unit",
+   "order": {
+    "cmd": "sell",
+    "building": 328
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "sell",
+    "rejected",
+    "not_owned",
+    "328 is not one of your buildings",
+    null
+   ],
+   "final": [
+    "sell",
+    "rejected",
+    "not_owned",
+    "328 is not one of your buildings",
+    null
+   ]
+  },
+  {
+   "name": "rally_unit",
+   "order": {
+    "cmd": "rally",
+    "building": 328,
+    "to": [
+     10,
+     10
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "rally",
+    "rejected",
+    "not_owned",
+    "328 is not one of your buildings",
+    null
+   ],
+   "final": [
+    "rally",
+    "rejected",
+    "not_owned",
+    "328 is not one of your buildings",
+    null
+   ]
+  },
+  {
+   "name": "unload_nothing",
+   "order": {
+    "cmd": "unload",
+    "units": [
+     328
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "unload",
+    "pending",
+    "pending",
+    null,
+    null
+   ],
+   "final": [
+    "unload",
+    "rejected",
+    "invalid",
+    null,
+    [
+     {
+      "unit": 328,
+      "reason": "invalid"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "enter_self",
+   "order": {
+    "cmd": "enter_transport",
+    "units": [
+     328
+    ],
+    "target": 328
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "enter_transport",
+    "pending",
+    "pending",
+    null,
+    null
+   ],
+   "final": [
+    "enter_transport",
+    "rejected",
+    "invalid",
+    null,
+    [
+     {
+      "unit": 328,
+      "reason": "invalid"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "harvest_mcv",
+   "order": {
+    "cmd": "harvest",
+    "units": [
+     328
+    ]
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "harvest",
+    "pending",
+    "pending",
+    null,
+    null
+   ],
+   "final": [
+    "harvest",
+    "rejected",
+    "invalid",
+    null,
+    [
+     {
+      "unit": 328,
+      "reason": "invalid"
+     }
+    ]
+   ]
+  },
+  {
+   "name": "queued_flag",
+   "order": {
+    "cmd": "move",
+    "units": [
+     328
+    ],
+    "to": [
+     49,
+     49
+    ],
+    "queued": true
+   },
+   "error": null,
+   "detail": null,
+   "immediate": [
+    "move",
+    "pending",
+    "pending",
+    null,
+    null
+   ],
+   "final": [
+    "move",
+    "ok",
+    "ok",
+    null,
+    null
+   ]
+  }
+ ]
+}

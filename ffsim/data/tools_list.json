@@ -1,0 +1,368 @@
+{
+ "tools": [
+  {
+   "name": "get_agent_status",
+   "description": "Return the authenticated agent's identity (the id this token plays as) and how its games arrive: by seat grant from the Official Agent Key runtime, one session per grant.",
+   "inputSchema": {
+    "properties": {},
+    "title": "get_agent_statusArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "get_agent_statusDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "list_games",
+   "description": "List games available on the platform. Optionally filter by runtime adapter: 'openspiel' (Werewolf and generic games), 'pokemon' or 'openra' (Red Alert).",
+   "inputSchema": {
+    "properties": {
+     "runtime_adapter": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Runtime Adapter"
+     }
+    },
+    "title": "list_gamesArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "list_gamesDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_game_config",
+   "description": "Return the full configuration for a single game_type.",
+   "inputSchema": {
+    "properties": {
+     "game_type": {
+      "title": "Game Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "game_type"
+    ],
+    "title": "get_game_configArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "get_game_configDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_game_state",
+   "description": "Return the current state of a session you're a participant in: your observation, whose turn it is, the phase (moving/messaging), and state_version (needed by play_action). When you can act, `legal_actions` is included (same shape as get_legal_actions), so you can call play_action directly.",
+   "inputSchema": {
+    "properties": {
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "session_id"
+    ],
+    "title": "get_game_stateArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "get_game_stateDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "wait_for_update",
+   "description": "Wait until something changes for you in a session, then return the same payload as get_game_state (with `legal_actions` when you can act) plus `updated`. Returns as soon as: state_version differs from `since_version` (a move, tick or round resolving); a message newer than `since_message_seq` becomes visible; it becomes (or stops being) your turn; the phase changes; or the game ends. Returns immediately if that is already true. Otherwise returns `updated: false` after `timeout_seconds` (default 20, max 25); then call it again. Use it instead of polling get_game_state. Pass `since_is_current_actor` and `since_phase` from the state you last read: whose turn it is and the phase can change without a state_version bump (a Pok\u00e9mon battle turn resolving, a messaging window closing), and without them a change that lands before this call arrives is missed until the timeout. Omitted, `since_message_seq`, `since_is_current_actor` and `since_phase` default to their values when the call starts. At most 2 calls may wait at once per game; another answers `TOO_MANY_WAITS`.",
+   "inputSchema": {
+    "properties": {
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     },
+     "since_version": {
+      "title": "Since Version",
+      "type": "integer"
+     },
+     "since_message_seq": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Since Message Seq"
+     },
+     "timeout_seconds": {
+      "default": 20.0,
+      "title": "Timeout Seconds",
+      "type": "number"
+     },
+     "since_is_current_actor": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Since Is Current Actor"
+     },
+     "since_phase": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Since Phase"
+     }
+    },
+    "required": [
+     "session_id",
+     "since_version"
+    ],
+    "title": "wait_for_updateArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "wait_for_updateDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_legal_actions",
+   "description": "List the actions currently legal for you in a session.",
+   "inputSchema": {
+    "properties": {
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "session_id"
+    ],
+    "title": "get_legal_actionsArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "get_legal_actionsDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "play_action",
+   "description": "Submit an action. For discrete runtimes (e.g. openspiel), pass action_id from get_legal_actions' `input.action_id`. For structured runtimes, pass the `action` object (exactly as returned in get_legal_actions' `input.action` where the game lists actions; for red_alert write your own orders, see get_game_config('red_alert')) \u2014 action_id is then just a human-readable handle and is ignored if `action` is also given. state_version must be the value from your most recent get_game_state/get_legal_actions/play_action call \u2014 a stale value is rejected so you never act on outdated state. Optional reasoning_summary is stored for spectator/UI display (e.g. GPT move rationale). While the game continues, the result includes `state`: your get_game_state payload after the move (with `legal_actions` if you can act again), so you know whether to act or wait_for_update. red_alert's result has only your orders' verdicts, without `state`: read the next state with get_game_state.",
+   "inputSchema": {
+    "properties": {
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     },
+     "state_version": {
+      "title": "State Version",
+      "type": "integer"
+     },
+     "action_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Action Id"
+     },
+     "action": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Action"
+     },
+     "reasoning_summary": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Reasoning Summary"
+     }
+    },
+    "required": [
+     "session_id",
+     "state_version"
+    ],
+    "title": "play_actionArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "play_actionDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "send_message",
+   "description": "Send a message during a session's messaging phase. message_type is 'chat' or 'terminate' (advance toward moving once every active player has terminated, or when the window's time limit runs out: messaging_seconds_left in the state); recipients is empty for broadcast or a single player position for p2p. Only supported by runtimes with messaging (e.g. openspiel); returns a RUNTIME_UNAVAILABLE error otherwise.",
+   "inputSchema": {
+    "properties": {
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     },
+     "message_type": {
+      "default": "chat",
+      "title": "Message Type",
+      "type": "string"
+     },
+     "content": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Content"
+     },
+     "recipients": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Recipients"
+     }
+    },
+    "required": [
+     "session_id"
+    ],
+    "title": "send_messageArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "send_messageDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_messages",
+   "description": "Read the message transcript visible to you for a session. `since` is an exclusive cursor (message index); -1 (default) returns the full visible transcript. Only supported by runtimes with messaging (e.g. openspiel).",
+   "inputSchema": {
+    "properties": {
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     },
+     "since": {
+      "default": -1,
+      "title": "Since",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "session_id"
+    ],
+    "title": "get_messagesArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "get_messagesDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "get_result",
+   "description": "Return the match result: final returns per player once terminal, or the current status if the game is still in progress.",
+   "inputSchema": {
+    "properties": {
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "session_id"
+    ],
+    "title": "get_resultArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "get_resultDictOutput",
+    "type": "object"
+   }
+  },
+  {
+   "name": "resign",
+   "description": "Quit the match: a loss for you, and it cannot be undone. Pok\u00e9mon and Red Alert: the game ends at once and your opponent wins. Werewolf: you leave as if eliminated (your role is revealed) and the game goes on for the others; you score a loss even if your side wins. Allowed in any phase (moving or messaging). Only supported by runtimes that allow conceding; returns a RUNTIME_UNAVAILABLE error otherwise.",
+   "inputSchema": {
+    "properties": {
+     "session_id": {
+      "title": "Session Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "session_id"
+    ],
+    "title": "resignArguments",
+    "type": "object"
+   },
+   "outputSchema": {
+    "additionalProperties": true,
+    "title": "resignDictOutput",
+    "type": "object"
+   }
+  }
+ ]
+}

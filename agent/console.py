@@ -22,14 +22,15 @@ from __future__ import annotations
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import os
 from pathlib import Path
 
 from altruagent import WAIT
 from altruagent import mcp_transport
 from altruagent.console import print_line
 
-ROOT = Path(__file__).resolve().parent.parent / "remote"
-BASE_PORT = 8770
+ROOT = Path(os.environ.get("FF_REMOTE_DIR") or Path(__file__).resolve().parent.parent / "remote")
+BASE_PORT = int(os.environ.get("FF_CONSOLE_BASE_PORT") or 8770)
 
 
 def read_console_control(path: Path | None = None) -> dict:

@@ -17,10 +17,18 @@ dependencies = [
 dev = [
     "pytest>=8.0",
 ]
+# the local Red Alert platform (ffsim; scripts/ffsim.py, sim/openra-fork/setup.sh)
+sim = [
+    "grpcio>=1.60",
+    "protobuf>=5.26",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["altruagent*", "agent*"]
+include = ["altruagent*", "agent*", "ffsim*"]
+
+[tool.setuptools.package-data]
+ffsim = ["data/*.json", "proto/*.proto"]

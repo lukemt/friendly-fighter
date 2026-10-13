@@ -1,0 +1,1161 @@
+{
+ "pending": {
+  "session_id": "8d78b9e8-8993-49cd-b59f-37c6273585fe",
+  "game_type": "red_alert",
+  "runtime_adapter": "openra",
+  "status": "in_progress",
+  "phase": "playing",
+  "state_version": 41,
+  "is_current_actor": true,
+  "is_terminal": false,
+  "current_actor": null,
+  "your_seat": "Multi1",
+  "players": [
+   {
+    "seat": "Multi0",
+    "agent_id": null,
+    "name": "Luke (Player0, Self-hosted)",
+    "faction": "england",
+    "checked_in": true
+   },
+   {
+    "seat": "Multi1",
+    "agent_id": "f2db9f60-f69b-4e5e-bfa0-cc10d9fcf71f",
+    "name": "Luke (Player1, Self-hosted)",
+    "faction": "russia",
+    "checked_in": true
+   }
+  ],
+  "window": null,
+  "pacing": {
+   "mode": "realtime",
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120,
+   "next_batch_allowed_in_ms": 11
+  },
+  "time": {
+   "game_seconds": 1.225,
+   "remaining_seconds": 1198.775,
+   "max_minutes": 20
+  },
+  "queue_position": null,
+  "map": {
+   "id": "trapped",
+   "width": 99,
+   "height": 99,
+   "bounds": [
+    1,
+    1,
+    97
+   ],
+   "layout": "A picture of this map (terrain, starting ore, obstacles, spawns) is in get_game_config('red_alert') at rules.maps['trapped'].layout."
+  },
+  "limits": {
+   "max_orders_per_batch": 20,
+   "max_units_per_order": 50,
+   "max_train_count": 10,
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120
+  },
+  "match_rules": {
+   "starting_cash": 5000,
+   "starting_units": "none",
+   "explored_map": false,
+   "kill_bounties": false,
+   "crates": true
+  },
+  "observation": {
+   "tick": 41,
+   "faction": "russia",
+   "enemy_faction": "england",
+   "economy": {
+    "cash": 5000,
+    "ore": 0,
+    "power_provided": 0,
+    "power_drained": 0,
+    "resource_capacity": 0,
+    "harvesters": 0
+   },
+   "military": {
+    "kills_cost": 0,
+    "deaths_cost": 0,
+    "assets_value": 2000,
+    "army_value": 2000,
+    "units_killed": 0,
+    "units_lost": 0,
+    "buildings_killed": 0,
+    "buildings_lost": 0
+   },
+   "units": [
+    {
+     "id": 329,
+     "type": "mcv",
+     "x": 26,
+     "y": 32,
+     "hp": 100,
+     "act": null,
+     "idle": true,
+     "stance": "hold_fire"
+    }
+   ],
+   "buildings": [],
+   "production": [],
+   "available_production": [],
+   "visible_enemies": [],
+   "visible_enemy_buildings": [],
+   "map": {
+    "id": "trapped",
+    "width": 99,
+    "height": 99
+   },
+   "base_center": [
+    26,
+    32
+   ],
+   "explored_percent": 0.86,
+   "events": []
+  },
+  "last_orders": {
+   "pacing": "realtime",
+   "state_version": 35,
+   "batch": 1,
+   "carried": false,
+   "pending": true,
+   "applied_at_tick": null,
+   "results": [
+    {
+     "index": 0,
+     "cmd": "deploy",
+     "detail": null,
+     "commands": 1,
+     "status": "pending",
+     "reason": "pending",
+     "failed": []
+    }
+   ],
+   "accepted_orders": 1,
+   "rejected_orders": 0,
+   "next_batch_allowed_in_ms": 200
+  },
+  "recent_order_problems": [],
+  "hint": "Real time: the game keeps running. Send orders whenever you are ready with play_action (state_version=41, this state's), then read the new state and act again; up to one batch every 0.2 s.",
+  "new_messages": [],
+  "legal_actions": {
+   "session_id": "8d78b9e8-8993-49cd-b59f-37c6273585fe",
+   "state_version": 41,
+   "build": [],
+   "train": [],
+   "place": [],
+   "deploy": [
+    329
+   ],
+   "repair": [],
+   "attack": [],
+   "attack_now": null,
+   "enemy_base": [
+    66,
+    72
+   ],
+   "combat_units": [],
+   "idle_units": [
+    329
+   ],
+   "harvesters": [],
+   "production_buildings": [],
+   "how_to_send": "Send 1-20 orders: play_action(session_id, state_version, action={\"type\":\"orders\",\"orders\":[...]}); see get_game_config('red_alert').order_schema."
+  },
+  "next_actions": [
+   {
+    "tool": "play_action",
+    "hint": "Send 1-20 orders as legal_actions.how_to_send shows; legal_actions lists what you can do now."
+   }
+  ]
+ },
+ "settled": {
+  "session_id": "8d78b9e8-8993-49cd-b59f-37c6273585fe",
+  "game_type": "red_alert",
+  "runtime_adapter": "openra",
+  "status": "in_progress",
+  "phase": "playing",
+  "state_version": 9899,
+  "is_current_actor": true,
+  "is_terminal": false,
+  "current_actor": null,
+  "your_seat": "Multi1",
+  "players": [
+   {
+    "seat": "Multi0",
+    "agent_id": null,
+    "name": "Luke (Player0, Self-hosted)",
+    "faction": "england",
+    "checked_in": true
+   },
+   {
+    "seat": "Multi1",
+    "agent_id": "f2db9f60-f69b-4e5e-bfa0-cc10d9fcf71f",
+    "name": "Luke (Player1, Self-hosted)",
+    "faction": "russia",
+    "checked_in": true
+   }
+  ],
+  "window": null,
+  "pacing": {
+   "mode": "realtime",
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120,
+   "next_batch_allowed_in_ms": 0
+  },
+  "time": {
+   "game_seconds": 395.588,
+   "remaining_seconds": 804.412,
+   "max_minutes": 20
+  },
+  "queue_position": null,
+  "map": {
+   "id": "trapped",
+   "width": 99,
+   "height": 99,
+   "bounds": [
+    1,
+    1,
+    97
+   ],
+   "layout": "A picture of this map (terrain, starting ore, obstacles, spawns) is in get_game_config('red_alert') at rules.maps['trapped'].layout."
+  },
+  "limits": {
+   "max_orders_per_batch": 20,
+   "max_units_per_order": 50,
+   "max_train_count": 10,
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120
+  },
+  "match_rules": {
+   "starting_cash": 5000,
+   "starting_units": "none",
+   "explored_map": false,
+   "kill_bounties": false,
+   "crates": true
+  },
+  "observation": {
+   "tick": 9899,
+   "faction": "russia",
+   "enemy_faction": "england",
+   "economy": {
+    "cash": 0,
+    "ore": 475,
+    "power_provided": 200,
+    "power_drained": 180,
+    "resource_capacity": 4000,
+    "harvesters": 4
+   },
+   "military": {
+    "kills_cost": 2100,
+    "deaths_cost": 600,
+    "assets_value": 20750,
+    "army_value": 10150,
+    "units_killed": 11,
+    "units_lost": 2,
+    "buildings_killed": 0,
+    "buildings_lost": 0
+   },
+   "units": [
+    {
+     "id": 333,
+     "type": "harv",
+     "x": 25,
+     "y": 47,
+     "hp": 100,
+     "act": "FindAndDeliverResources",
+     "idle": false,
+     "stance": "hold_fire"
+    },
+    {
+     "id": 339,
+     "type": "e1",
+     "x": 55,
+     "y": 63,
+     "hp": 85,
+     "act": "AttackMoveActivity",
+     "idle": false,
+     "stance": "attack_anything"
+    },
+    {
+     "id": 340,
+     "type": "e3",
+     "x": 55,
+     "y": 62,
+     "hp": 98,
+     "act": "AttackMoveActivity",
+     "idle": false,
+     "stance": "attack_anything"
+    }
+   ],
+   "buildings": [
+    {
+     "id": 330,
+     "type": "fact",
+     "x": 26,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    },
+    {
+     "id": 331,
+     "type": "powr",
+     "x": 24,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    },
+    {
+     "id": 332,
+     "type": "proc",
+     "x": 29,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    }
+   ],
+   "production": [],
+   "available_production": [
+    "spen",
+    "dome",
+    "weap"
+   ],
+   "visible_enemies": [],
+   "visible_enemy_buildings": [
+    {
+     "id": 363,
+     "type": "powr",
+     "x": 64,
+     "y": 69,
+     "hp": 100
+    }
+   ],
+   "map": {
+    "id": "trapped",
+    "width": 99,
+    "height": 99
+   },
+   "base_center": [
+    26,
+    32
+   ],
+   "explored_percent": 12.35,
+   "events": [
+    {
+     "seq": 55,
+     "tick": 9407,
+     "kind": "enemy_killed",
+     "count": 1
+    },
+    {
+     "seq": 56,
+     "tick": 9413,
+     "kind": "unit_lost",
+     "id": 375,
+     "type": "e3",
+     "x": 46,
+     "y": 53
+    },
+    {
+     "seq": 57,
+     "tick": 9413,
+     "kind": "under_attack",
+     "id": 354,
+     "type": "e1",
+     "x": 46,
+     "y": 53
+    }
+   ]
+  },
+  "last_orders": {
+   "pacing": "realtime",
+   "state_version": 9827,
+   "batch": 43,
+   "carried": true,
+   "pending": false,
+   "applied_at_tick": 9839,
+   "results": [
+    {
+     "index": 0,
+     "cmd": "attack_move",
+     "detail": null,
+     "commands": 6,
+     "status": "ok",
+     "reason": "ok",
+     "failed": []
+    }
+   ],
+   "accepted_orders": 1,
+   "rejected_orders": 0,
+   "next_batch_allowed_in_ms": 200
+  },
+  "recent_order_problems": [],
+  "hint": "Real time: the game keeps running. Send orders whenever you are ready with play_action (state_version=9899, this state's), then read the new state and act again; up to one batch every 0.2 s.",
+  "new_messages": [],
+  "legal_actions": {
+   "session_id": "8d78b9e8-8993-49cd-b59f-37c6273585fe",
+   "state_version": 9899,
+   "build": [
+    "spen",
+    "dome",
+    "weap"
+   ],
+   "train": [
+    "v2rl",
+    "3tnk",
+    "harv"
+   ],
+   "place": [],
+   "deploy": [],
+   "repair": [],
+   "attack": [
+    363
+   ],
+   "attack_now": {
+    "cmd": "attack_move",
+    "units": [
+     391,
+     393,
+     394
+    ],
+    "to": [
+     64,
+     69
+    ]
+   },
+   "enemy_base": [
+    66,
+    72
+   ],
+   "combat_units": [
+    391,
+    393,
+    394
+   ],
+   "idle_units": [
+    391,
+    393,
+    394
+   ],
+   "harvesters": [
+    333,
+    351,
+    356
+   ],
+   "production_buildings": [
+    {
+     "id": 330,
+     "type": "fact"
+    },
+    {
+     "id": 335,
+     "type": "barr"
+    },
+    {
+     "id": 344,
+     "type": "weap"
+    }
+   ],
+   "how_to_send": "Send 1-20 orders: play_action(session_id, state_version, action={\"type\":\"orders\",\"orders\":[...]}); see get_game_config('red_alert').order_schema."
+  },
+  "next_actions": [
+   {
+    "tool": "play_action",
+    "hint": "Send 1-20 orders as legal_actions.how_to_send shows; legal_actions lists what you can do now."
+   }
+  ],
+  "updated": true
+ },
+ "combat": {
+  "session_id": "8d78b9e8-8993-49cd-b59f-37c6273585fe",
+  "game_type": "red_alert",
+  "runtime_adapter": "openra",
+  "status": "in_progress",
+  "phase": "playing",
+  "state_version": 11459,
+  "is_current_actor": true,
+  "is_terminal": false,
+  "current_actor": null,
+  "your_seat": "Multi1",
+  "players": [
+   {
+    "seat": "Multi0",
+    "agent_id": null,
+    "name": "Luke (Player0, Self-hosted)",
+    "faction": "england",
+    "checked_in": true
+   },
+   {
+    "seat": "Multi1",
+    "agent_id": "f2db9f60-f69b-4e5e-bfa0-cc10d9fcf71f",
+    "name": "Luke (Player1, Self-hosted)",
+    "faction": "russia",
+    "checked_in": true
+   }
+  ],
+  "window": null,
+  "pacing": {
+   "mode": "realtime",
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120,
+   "next_batch_allowed_in_ms": 0
+  },
+  "time": {
+   "game_seconds": 457.972,
+   "remaining_seconds": 742.028,
+   "max_minutes": 20
+  },
+  "queue_position": null,
+  "map": {
+   "id": "trapped",
+   "width": 99,
+   "height": 99,
+   "bounds": [
+    1,
+    1,
+    97
+   ],
+   "layout": "A picture of this map (terrain, starting ore, obstacles, spawns) is in get_game_config('red_alert') at rules.maps['trapped'].layout."
+  },
+  "limits": {
+   "max_orders_per_batch": 20,
+   "max_units_per_order": 50,
+   "max_train_count": 10,
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120
+  },
+  "match_rules": {
+   "starting_cash": 5000,
+   "starting_units": "none",
+   "explored_map": false,
+   "kill_bounties": false,
+   "crates": true
+  },
+  "observation": {
+   "tick": 11459,
+   "faction": "russia",
+   "enemy_faction": "england",
+   "economy": {
+    "cash": 0,
+    "ore": 525,
+    "power_provided": 200,
+    "power_drained": 180,
+    "resource_capacity": 4000,
+    "harvesters": 4
+   },
+   "military": {
+    "kills_cost": 10200,
+    "deaths_cost": 2250,
+    "assets_value": 21550,
+    "army_value": 10950,
+    "units_killed": 16,
+    "units_lost": 6,
+    "buildings_killed": 7,
+    "buildings_lost": 0
+   },
+   "units": [
+    {
+     "id": 333,
+     "type": "harv",
+     "x": 24,
+     "y": 47,
+     "hp": 100,
+     "act": "FindAndDeliverResources",
+     "idle": false,
+     "stance": "hold_fire"
+    },
+    {
+     "id": 343,
+     "type": "e1",
+     "x": 63,
+     "y": 69,
+     "hp": 91,
+     "act": "AttackMoveActivity",
+     "idle": false,
+     "stance": "attack_anything"
+    },
+    {
+     "id": 346,
+     "type": "e3",
+     "x": 63,
+     "y": 67,
+     "hp": 100,
+     "act": "AttackMoveActivity",
+     "idle": false,
+     "stance": "attack_anything"
+    }
+   ],
+   "buildings": [
+    {
+     "id": 330,
+     "type": "fact",
+     "x": 26,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    },
+    {
+     "id": 331,
+     "type": "powr",
+     "x": 24,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    },
+    {
+     "id": 332,
+     "type": "proc",
+     "x": 29,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    }
+   ],
+   "production": [],
+   "available_production": [
+    "spen",
+    "dome",
+    "weap"
+   ],
+   "visible_enemies": [
+    {
+     "id": 406,
+     "type": "2tnk.husk",
+     "x": 65,
+     "y": 70,
+     "hp": 56,
+     "wreck": true
+    },
+    {
+     "id": 410,
+     "type": "2tnk.husk",
+     "x": 66,
+     "y": 70,
+     "hp": 99,
+     "wreck": true
+    }
+   ],
+   "visible_enemy_buildings": [
+    {
+     "id": 341,
+     "type": "proc",
+     "x": 69,
+     "y": 72,
+     "hp": 100
+    }
+   ],
+   "map": {
+    "id": "trapped",
+    "width": 99,
+    "height": 99
+   },
+   "base_center": [
+    26,
+    32
+   ],
+   "explored_percent": 13.43,
+   "events": [
+    {
+     "seq": 107,
+     "tick": 10619,
+     "kind": "under_attack",
+     "id": 383,
+     "type": "e1",
+     "x": 62,
+     "y": 69
+    },
+    {
+     "seq": 108,
+     "tick": 10673,
+     "kind": "under_attack",
+     "id": 354,
+     "type": "e1",
+     "x": 62,
+     "y": 69
+    },
+    {
+     "seq": 109,
+     "tick": 10673,
+     "kind": "under_attack",
+     "id": 385,
+     "type": "e3",
+     "x": 62,
+     "y": 69
+    }
+   ]
+  },
+  "last_orders": {
+   "pacing": "realtime",
+   "state_version": 11447,
+   "batch": 62,
+   "carried": true,
+   "pending": false,
+   "applied_at_tick": 11459,
+   "results": [
+    {
+     "index": 0,
+     "cmd": "attack_move",
+     "detail": null,
+     "commands": 13,
+     "status": "partial",
+     "reason": "not_owned",
+     "failed": [
+      {
+       "unit": 390,
+       "reason": "not_owned"
+      }
+     ]
+    }
+   ],
+   "accepted_orders": 1,
+   "rejected_orders": 0,
+   "next_batch_allowed_in_ms": 200
+  },
+  "recent_order_problems": [
+   {
+    "batch": 62,
+    "index": 0,
+    "cmd": "attack_move",
+    "status": "partial",
+    "reason": "not_owned",
+    "detail": null
+   }
+  ],
+  "hint": "Real time: the game keeps running. Send orders whenever you are ready with play_action (state_version=11459, this state's), then read the new state and act again; up to one batch every 0.2 s.",
+  "new_messages": [],
+  "legal_actions": {
+   "session_id": "8d78b9e8-8993-49cd-b59f-37c6273585fe",
+   "state_version": 11459,
+   "build": [
+    "spen",
+    "dome",
+    "weap"
+   ],
+   "train": [
+    "v2rl",
+    "3tnk",
+    "harv"
+   ],
+   "place": [],
+   "deploy": [],
+   "repair": [],
+   "attack": [
+    341
+   ],
+   "attack_now": {
+    "cmd": "attack_move",
+    "units": [
+     404,
+     407,
+     408
+    ],
+    "to": [
+     69,
+     72
+    ]
+   },
+   "enemy_base": [
+    66,
+    72
+   ],
+   "combat_units": [
+    404,
+    407,
+    408
+   ],
+   "idle_units": [
+    404,
+    407,
+    408
+   ],
+   "harvesters": [
+    333,
+    351,
+    356
+   ],
+   "production_buildings": [
+    {
+     "id": 330,
+     "type": "fact"
+    },
+    {
+     "id": 335,
+     "type": "barr"
+    },
+    {
+     "id": 344,
+     "type": "weap"
+    }
+   ],
+   "how_to_send": "Send 1-20 orders: play_action(session_id, state_version, action={\"type\":\"orders\",\"orders\":[...]}); see get_game_config('red_alert').order_schema."
+  },
+  "next_actions": [
+   {
+    "tool": "play_action",
+    "hint": "Send 1-20 orders as legal_actions.how_to_send shows; legal_actions lists what you can do now."
+   }
+  ],
+  "updated": true
+ },
+ "starting": {
+  "session_id": "8d78b9e8-8993-49cd-b59f-37c6273585fe",
+  "game_type": "red_alert",
+  "runtime_adapter": "openra",
+  "status": "in_progress",
+  "phase": "starting",
+  "state_version": 0,
+  "is_current_actor": false,
+  "is_terminal": false,
+  "current_actor": null,
+  "your_seat": "Multi1",
+  "players": [
+   {
+    "seat": "Multi0",
+    "agent_id": null,
+    "name": "Luke (Player0, Self-hosted)",
+    "faction": null,
+    "checked_in": false
+   },
+   {
+    "seat": "Multi1",
+    "agent_id": "f2db9f60-f69b-4e5e-bfa0-cc10d9fcf71f",
+    "name": "Luke (Player1, Self-hosted)",
+    "faction": null,
+    "checked_in": true
+   }
+  ],
+  "window": null,
+  "pacing": {
+   "mode": "realtime",
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120,
+   "next_batch_allowed_in_ms": 0
+  },
+  "time": {
+   "game_seconds": null,
+   "remaining_seconds": null,
+   "max_minutes": 20
+  },
+  "queue_position": null,
+  "map": {
+   "id": "trapped",
+   "width": 99,
+   "height": 99,
+   "bounds": [
+    1,
+    1,
+    97
+   ],
+   "layout": "A picture of this map (terrain, starting ore, obstacles, spawns) is in get_game_config('red_alert') at rules.maps['trapped'].layout."
+  },
+  "limits": {
+   "max_orders_per_batch": 20,
+   "max_units_per_order": 50,
+   "max_train_count": 10,
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120
+  },
+  "match_rules": {
+   "starting_cash": 5000,
+   "starting_units": "none",
+   "explored_map": false,
+   "kill_bounties": false,
+   "crates": true
+  },
+  "observation": null,
+  "last_orders": null,
+  "recent_order_problems": [],
+  "hint": "The game server is starting the match; call wait_for_update.",
+  "new_messages": [],
+  "waiting_for_players": [
+   0
+  ],
+  "next_actions": [
+   {
+    "tool": "wait_for_update",
+    "hint": "Waiting for the other players to connect; the game starts automatically once every seat has."
+   }
+  ]
+ },
+ "finished": {
+  "session_id": "8d78b9e8-8993-49cd-b59f-37c6273585fe",
+  "game_type": "red_alert",
+  "runtime_adapter": "openra",
+  "status": "completed",
+  "phase": "finished",
+  "state_version": 12284,
+  "is_current_actor": false,
+  "is_terminal": true,
+  "current_actor": null,
+  "your_seat": "Multi1",
+  "players": [
+   {
+    "seat": "Multi0",
+    "agent_id": null,
+    "name": "Luke (Player0, Self-hosted)",
+    "faction": "england",
+    "checked_in": true
+   },
+   {
+    "seat": "Multi1",
+    "agent_id": "f2db9f60-f69b-4e5e-bfa0-cc10d9fcf71f",
+    "name": "Luke (Player1, Self-hosted)",
+    "faction": "russia",
+    "checked_in": true
+   }
+  ],
+  "window": null,
+  "pacing": {
+   "mode": "realtime",
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120,
+   "next_batch_allowed_in_ms": 0
+  },
+  "time": {
+   "game_seconds": 490.958,
+   "remaining_seconds": null,
+   "max_minutes": 20
+  },
+  "queue_position": null,
+  "map": {
+   "id": "trapped",
+   "width": 99,
+   "height": 99,
+   "bounds": [
+    1,
+    1,
+    97
+   ],
+   "layout": "A picture of this map (terrain, starting ore, obstacles, spawns) is in get_game_config('red_alert') at rules.maps['trapped'].layout."
+  },
+  "limits": {
+   "max_orders_per_batch": 20,
+   "max_units_per_order": 50,
+   "max_train_count": 10,
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120
+  },
+  "match_rules": {
+   "starting_cash": 5000,
+   "starting_units": "none",
+   "explored_map": false,
+   "kill_bounties": false,
+   "crates": true
+  },
+  "observation": {
+   "tick": 12284,
+   "faction": "russia",
+   "enemy_faction": "england",
+   "economy": {
+    "cash": 0,
+    "ore": 380,
+    "power_provided": 200,
+    "power_drained": 180,
+    "resource_capacity": 4000,
+    "harvesters": 4
+   },
+   "military": {
+    "kills_cost": 16000,
+    "deaths_cost": 2250,
+    "assets_value": 21850,
+    "army_value": 11250,
+    "units_killed": 16,
+    "units_lost": 6,
+    "buildings_killed": 12,
+    "buildings_lost": 0
+   },
+   "units": [
+    {
+     "id": 333,
+     "type": "harv",
+     "x": 27,
+     "y": 40,
+     "hp": 100,
+     "act": "FindAndDeliverResources",
+     "idle": false,
+     "stance": "hold_fire"
+    },
+    {
+     "id": 343,
+     "type": "e1",
+     "x": 67,
+     "y": 74,
+     "hp": 91,
+     "act": "AttackMoveActivity",
+     "idle": false,
+     "stance": "attack_anything"
+    },
+    {
+     "id": 346,
+     "type": "e3",
+     "x": 67,
+     "y": 74,
+     "hp": 100,
+     "act": "AttackMoveActivity",
+     "idle": false,
+     "stance": "attack_anything"
+    }
+   ],
+   "buildings": [
+    {
+     "id": 330,
+     "type": "fact",
+     "x": 26,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    },
+    {
+     "id": 331,
+     "type": "powr",
+     "x": 24,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    },
+    {
+     "id": 332,
+     "type": "proc",
+     "x": 29,
+     "y": 32,
+     "hp": 100,
+     "powered": true,
+     "powered_down": false,
+     "repairing": false,
+     "producing": null,
+     "rally": null
+    }
+   ],
+   "production": [
+    {
+     "queue": "Vehicle",
+     "item": "3tnk",
+     "progress": 0.74,
+     "remaining_s": 7.3,
+     "paused": false,
+     "ready": false
+    }
+   ],
+   "available_production": [
+    "spen",
+    "dome",
+    "weap"
+   ],
+   "visible_enemies": [],
+   "visible_enemy_buildings": [],
+   "map": {
+    "id": "trapped",
+    "width": 99,
+    "height": 99
+   },
+   "base_center": [
+    26,
+    32
+   ],
+   "explored_percent": 14.75,
+   "events": [
+    {
+     "seq": 119,
+     "tick": 11171,
+     "kind": "unit_created",
+     "id": 408,
+     "type": "3tnk",
+     "x": 28,
+     "y": 28
+    },
+    {
+     "seq": 120,
+     "tick": 11231,
+     "kind": "enemy_spotted",
+     "id": 409,
+     "type": "2tnk",
+     "x": 68,
+     "y": 70
+    },
+    {
+     "seq": 121,
+     "tick": 11249,
+     "kind": "under_attack",
+     "id": 343,
+     "type": "e1",
+     "x": 63,
+     "y": 69
+    }
+   ]
+  },
+  "last_orders": {
+   "pacing": "realtime",
+   "state_version": 12167,
+   "batch": 72,
+   "carried": true,
+   "pending": false,
+   "applied_at_tick": 12179,
+   "results": [
+    {
+     "index": 0,
+     "cmd": "attack_move",
+     "detail": null,
+     "commands": 17,
+     "status": "ok",
+     "reason": "ok",
+     "failed": []
+    }
+   ],
+   "accepted_orders": 1,
+   "rejected_orders": 0,
+   "next_batch_allowed_in_ms": 200
+  },
+  "recent_order_problems": [],
+  "result": {
+   "outcome": "win",
+   "reason": "victory",
+   "winner_seat": "Multi1",
+   "returns": {
+    "f2db9f60-f69b-4e5e-bfa0-cc10d9fcf71f": 1.0,
+    "443d114d-fe7d-4f6d-9b29-3f7fbf9655ae": 0.0
+   }
+  },
+  "hint": "Game over: you won (victory). Call get_result.",
+  "new_messages": [],
+  "next_actions": [
+   {
+    "tool": "get_result"
+   }
+  ],
+  "updated": true
+ }
+}

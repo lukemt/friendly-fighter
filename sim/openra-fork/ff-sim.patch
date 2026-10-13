@@ -1,0 +1,972 @@
+diff --git a/OpenRA.Game/Game.cs b/OpenRA.Game/Game.cs
+index 18413ce..3e84bb5 100644
+--- a/OpenRA.Game/Game.cs
++++ b/OpenRA.Game/Game.cs
+@@ -1077,6 +1077,11 @@ public static void LoadMap(string launchMap, string launchBots = null)
+ 			}
+ 
+ 			orders.Add(Order.Command("option gamespeed default"));
++
++			// friendly-fighter sim: OPENRA_LOBBY_OPTIONS="startingcash=5000;crates=True;..." sets lobby options
++			foreach (var opt in (Environment.GetEnvironmentVariable("OPENRA_LOBBY_OPTIONS") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
++				orders.Add(Order.Command($"option {opt.Trim().Replace('=', ' ')}"));
++
+ 			orders.Add(Order.Command($"state {Session.ClientState.Ready}"));
+ 
+ 			var map = ModData.MapCache.SingleOrDefault(m => m.Uid == launchMap || Path.GetFileName(m.Path) == launchMap);
+diff --git a/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs b/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs
+index 93c4c96..365ca0a 100644
+--- a/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs
++++ b/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs
+@@ -54,6 +54,9 @@ public class ToggleConditionOnOrder : PausableConditionalTrait<ToggleConditionOn
+ 		[VerifySync]
+ 		bool enabled = false;
+ 
++		// friendly-fighter sim: whether the order's condition is on (e.g. powered down)
++		public bool Enabled => enabled;
++
+ 		public ToggleConditionOnOrder(ToggleConditionOnOrderInfo info)
+ 			: base(info) { }
+ 
+diff --git a/OpenRA.Mods.Common/Traits/Player/ActionHandler.cs b/OpenRA.Mods.Common/Traits/Player/ActionHandler.cs
+index 5b6b39d..6c775a5 100644
+--- a/OpenRA.Mods.Common/Traits/Player/ActionHandler.cs
++++ b/OpenRA.Mods.Common/Traits/Player/ActionHandler.cs
+@@ -10,6 +10,8 @@
+ #endregion
+ 
+ using System;
++using System.Collections.Generic;
++using System.Linq;
+ using OpenRA.Traits;
+ using RLProto = OpenRA.Mods.Common.RL;
+ 
+@@ -17,6 +19,8 @@ namespace OpenRA.Mods.Common.Traits
+ {
+ 	/// <summary>
+ 	/// Converts protobuf AgentAction commands into OpenRA Orders and queues them via IBot.
++	/// friendly-fighter sim: every command also gets an engine verdict (CommandResult):
++	/// ok, or rejected with unknown_actor (gone), not_owned or invalid (the actor or target can't take it).
+ 	/// </summary>
+ 	public sealed class ActionHandler
+ 	{
+@@ -29,166 +33,217 @@ public ActionHandler(World world, Player player)
+ 			this.player = player;
+ 		}
+ 
+-		public void ProcessAction(RLProto.AgentAction agentAction, IBot bot)
++		public void ProcessAction(RLProto.AgentAction agentAction, IBot bot, List<RLProto.CommandResult> results = null)
+ 		{
+ 			foreach (var command in agentAction.Commands)
+ 			{
+-				var order = ConvertCommand(command);
++				Order order;
++				string reason;
++				string detail = "";
++				try
++				{
++					order = ConvertCommand(command, out reason, ref detail);
++				}
++				catch (Exception e)
++				{
++					Log.Write("rl-bridge", $"Command {command.Action} failed: {e.Message}");
++					order = null;
++					reason = "invalid";
++				}
++
+ 				if (order != null)
+ 					bot.QueueOrder(order);
++
++				if (command.Action == RLProto.ActionType.FastAdvance || command.Action == RLProto.ActionType.NoOp)
++					continue;
++
++				results?.Add(new RLProto.CommandResult
++				{
++					Batch = agentAction.Batch,
++					Index = command.Index,
++					ActorId = command.ActorId,
++					Status = reason == "ok" ? "ok" : "rejected",
++					Reason = reason,
++					Tick = world.WorldTick,
++					Detail = detail ?? "",
++				});
+ 			}
+ 		}
+ 
+-		Order ConvertCommand(RLProto.Command cmd)
++		Order ConvertCommand(RLProto.Command cmd, out string reason, ref string detail)
+ 		{
++			reason = "ok";
+ 			switch (cmd.Action)
+ 			{
+ 				case RLProto.ActionType.NoOp:
++				case RLProto.ActionType.FastAdvance:
+ 					return null;
+-
+ 				case RLProto.ActionType.Move:
+-					return CreateMoveOrder(cmd);
+-
++					return CreateMoveOrder(cmd, "Move", out reason);
+ 				case RLProto.ActionType.AttackMove:
+-					return CreateAttackMoveOrder(cmd);
+-
++					return CreateMoveOrder(cmd, "AttackMove", out reason);
+ 				case RLProto.ActionType.Attack:
+-					return CreateAttackOrder(cmd);
+-
++					return CreateAttackOrder(cmd, out reason);
+ 				case RLProto.ActionType.Stop:
+-					return CreateStopOrder(cmd);
+-
++					return CreateStopOrder(cmd, out reason);
+ 				case RLProto.ActionType.Harvest:
+-					return CreateHarvestOrder(cmd);
+-
++					return CreateHarvestOrder(cmd, out reason);
+ 				case RLProto.ActionType.Build:
+ 				case RLProto.ActionType.Train:
+-					return CreateProductionOrder(cmd);
+-
++					return CreateProductionOrder(cmd, out reason);
+ 				case RLProto.ActionType.Deploy:
+-					return CreateDeployOrder(cmd);
+-
++					return CreateDeployOrder(cmd, out reason);
+ 				case RLProto.ActionType.Sell:
+-					return CreateSellOrder(cmd);
+-
++					return CreateBuildingOrder<Sellable>(cmd, "Sell", out reason, true);
+ 				case RLProto.ActionType.Repair:
+-					return CreateRepairOrder(cmd);
+-
++					return CreateBuildingOrder<RepairableBuilding>(cmd, "RepairBuilding", out reason, true);
+ 				case RLProto.ActionType.PlaceBuilding:
+-					return CreatePlaceBuildingOrder(cmd);
+-
++					return CreatePlaceBuildingOrder(cmd, out reason, ref detail);
+ 				case RLProto.ActionType.CancelProduction:
+-					return CreateCancelProductionOrder(cmd);
+-
++					return CreateCancelProductionOrder(cmd, out reason);
+ 				case RLProto.ActionType.SetRallyPoint:
+-					return CreateSetRallyPointOrder(cmd);
+-
++					return CreateSetRallyPointOrder(cmd, out reason);
+ 				case RLProto.ActionType.Guard:
+-					return CreateGuardOrder(cmd);
+-
++					return CreateGuardOrder(cmd, out reason);
+ 				case RLProto.ActionType.SetStance:
+-					return CreateSetStanceOrder(cmd);
+-
++					return CreateSetStanceOrder(cmd, out reason);
+ 				case RLProto.ActionType.EnterTransport:
+-					return CreateEnterTransportOrder(cmd);
+-
++					return CreateEnterTransportOrder(cmd, out reason);
+ 				case RLProto.ActionType.Unload:
+-					return CreateUnloadOrder(cmd);
+-
++					return CreateUnloadOrder(cmd, out reason);
+ 				case RLProto.ActionType.PowerDown:
+-					return CreatePowerDownOrder(cmd);
+-
++					return CreatePowerDownOrder(cmd, out reason);
+ 				case RLProto.ActionType.SetPrimary:
+-					return CreateSetPrimaryOrder(cmd);
+-
++					return CreateBuildingOrder<PrimaryBuilding>(cmd, "PrimaryProducer", out reason, false);
+ 				case RLProto.ActionType.Surrender:
+ 					return new Order("Surrender", player.PlayerActor, false);
+-
+-				case RLProto.ActionType.FastAdvance:
+-					// Handled by ExternalBotBridge directly (not an Order)
+-					return null;
+-
+ 				default:
+ 					Log.Write("rl-bridge", $"Unknown action type: {cmd.Action}");
++					reason = "invalid";
+ 					return null;
+ 			}
+ 		}
+ 
+-		Order CreateMoveOrder(RLProto.Command cmd)
++		/// <summary>The command's own, live subject, or null with the reason why not.</summary>
++		Actor Subject(uint id, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = world.GetActorById(id);
++			if (subject == null || subject.IsDead || !subject.IsInWorld || subject.Disposed)
++			{
++				reason = "unknown_actor";
+ 				return null;
++			}
+ 
+-			var cell = new CPos(cmd.TargetX, cmd.TargetY);
+-			var target = Target.FromCell(world, cell);
++			if (subject.Owner != player)
++			{
++				reason = "not_owned";
++				return null;
++			}
+ 
+-			return new Order("Move", subject, target, cmd.Queued);
++			reason = "ok";
++			return subject;
+ 		}
+ 
+-		Order CreateAttackMoveOrder(RLProto.Command cmd)
++		Actor LiveActor(uint id)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var a = id == 0 ? null : world.GetActorById(id);
++			return a == null || a.IsDead || !a.IsInWorld || a.Disposed ? null : a;
++		}
++
++		static Order Invalid(out string reason)
++		{
++			reason = "invalid";
++			return null;
++		}
++
++		Order CreateMoveOrder(RLProto.Command cmd, string orderString, out string reason)
++		{
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
+ 			var cell = new CPos(cmd.TargetX, cmd.TargetY);
+-			var target = Target.FromCell(world, cell);
++			if (!world.Map.Contains(cell) || !subject.Info.HasTraitInfo<IMoveInfo>())
++				return Invalid(out reason);
++
++			if (orderString == "AttackMove" && subject.TraitOrDefault<AttackMove>() == null)
++				return Invalid(out reason);
+ 
+-			return new Order("AttackMove", subject, target, cmd.Queued);
++			return new Order(orderString, subject, Target.FromCell(world, cell), cmd.Queued);
+ 		}
+ 
+-		Order CreateAttackOrder(RLProto.Command cmd)
++		Order CreateAttackOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
++			var attacks = subject.TraitsImplementing<AttackBase>().Where(a => !a.IsTraitDisabled).ToArray();
++			if (attacks.Length == 0)
++				return Invalid(out reason);
++
+ 			if (cmd.TargetActorId != 0)
+ 			{
+-				var targetActor = world.GetActorById(cmd.TargetActorId);
+-				if (targetActor == null || targetActor.IsDead || !targetActor.IsInWorld)
++				var targetActor = LiveActor(cmd.TargetActorId);
++				if (targetActor == null)
++				{
++					reason = "unknown_actor";
+ 					return null;
++				}
++
++				var target = Target.FromActor(targetActor);
++				if (targetActor == subject || !attacks.Any(a => a.HasAnyValidWeapons(target)))
++					return Invalid(out reason);
+ 
+-				return new Order("Attack", subject, Target.FromActor(targetActor), cmd.Queued);
++				return new Order("Attack", subject, target, cmd.Queued);
+ 			}
+ 
+ 			// Attack-ground at position
+ 			var cell = new CPos(cmd.TargetX, cmd.TargetY);
+-			return new Order("ForceAttack", subject, Target.FromCell(world, cell), cmd.Queued);
++			if (!world.Map.Contains(cell))
++				return Invalid(out reason);
++
++			var groundTarget = Target.FromCell(world, cell);
++			if (!attacks.Any(a => a.HasAnyValidWeapons(groundTarget)))
++				return Invalid(out reason);
++
++			return new Order("ForceAttack", subject, groundTarget, cmd.Queued);
+ 		}
+ 
+-		Order CreateStopOrder(RLProto.Command cmd)
++		Order CreateStopOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
+-				return null;
+-
+-			return new Order("Stop", subject, false);
++			var subject = Subject(cmd.ActorId, out reason);
++			return subject == null ? null : new Order("Stop", subject, false);
+ 		}
+ 
+-		Order CreateHarvestOrder(RLProto.Command cmd)
++		Order CreateHarvestOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
++			if (subject.TraitOrDefault<Harvester>() == null)
++				return Invalid(out reason);
++
+ 			if (cmd.TargetX != 0 || cmd.TargetY != 0)
+ 			{
+ 				var cell = new CPos(cmd.TargetX, cmd.TargetY);
++				if (!world.Map.Contains(cell))
++					return Invalid(out reason);
++
+ 				return new Order("Harvest", subject, Target.FromCell(world, cell), cmd.Queued);
+ 			}
+ 
+ 			return new Order("Harvest", subject, cmd.Queued);
+ 		}
+ 
+-		Order CreateProductionOrder(RLProto.Command cmd)
++		Order CreateProductionOrder(RLProto.Command cmd, out string reason)
+ 		{
++			reason = "ok";
+ 			if (string.IsNullOrEmpty(cmd.ItemType))
+-			{
+-				Log.Write("rl-bridge", "Production command missing item_type");
+-				return null;
+-			}
++				return Invalid(out reason);
++
++			var count = Math.Max(1, cmd.Count);
+ 
+ 			// Find a production structure that can build this item
+ 			foreach (var actor in world.ActorsHavingTrait<ProductionQueue>())
+@@ -201,52 +256,50 @@ Order CreateProductionOrder(RLProto.Command cmd)
+ 					foreach (var buildable in queue.BuildableItems())
+ 					{
+ 						if (string.Equals(buildable.Name, cmd.ItemType, StringComparison.OrdinalIgnoreCase))
+-							return Order.StartProduction(actor, cmd.ItemType, 1, cmd.Queued);
++							return Order.StartProduction(actor, buildable.Name, count, true);
+ 					}
+ 				}
+ 			}
+ 
+ 			Log.Write("rl-bridge", $"Cannot produce '{cmd.ItemType}': no capable production structure found");
+-			return null;
++			return Invalid(out reason);
+ 		}
+ 
+-		Order CreateDeployOrder(RLProto.Command cmd)
++		Order CreateDeployOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
+-			return new Order("DeployTransform", subject, false);
+-		}
+-
+-		Order CreateSellOrder(RLProto.Command cmd)
+-		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
+-				return null;
++			foreach (var deploy in subject.TraitsImplementing<IIssueDeployOrder>())
++				if (deploy.CanIssueDeployOrder(subject, false))
++					return deploy.IssueDeployOrder(subject, false);
+ 
+-			return new Order("Sell", subject, false) { IsImmediate = true };
++			return Invalid(out reason);
+ 		}
+ 
+-		Order CreateRepairOrder(RLProto.Command cmd)
++		Order CreateBuildingOrder<T>(RLProto.Command cmd, string orderString, out string reason, bool immediate) where T : class
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
+-			return new Order("RepairBuilding", subject, false) { IsImmediate = true };
++			var trait = subject.TraitOrDefault<T>();
++			if (trait == null || (trait is IDisabledTrait d && d.IsTraitDisabled))
++				return Invalid(out reason);
++
++			return new Order(orderString, subject, false) { IsImmediate = immediate };
+ 		}
+ 
+-		Order CreatePlaceBuildingOrder(RLProto.Command cmd)
++		Order CreatePlaceBuildingOrder(RLProto.Command cmd, out string reason, ref string detail)
+ 		{
++			reason = "ok";
+ 			if (string.IsNullOrEmpty(cmd.ItemType))
+-			{
+-				Log.Write("rl-bridge", "PlaceBuilding command missing item_type");
+-				return null;
+-			}
++				return Invalid(out reason);
+ 
+ 			// Find the production queue that has this building ready
+ 			Actor producer = null;
++			string queueType = null;
+ 			foreach (var actor in world.ActorsHavingTrait<ProductionQueue>())
+ 			{
+ 				if (actor.Owner != player || actor.IsDead || !actor.IsInWorld)
+@@ -259,6 +312,7 @@ Order CreatePlaceBuildingOrder(RLProto.Command cmd)
+ 						if (item.Done && string.Equals(item.Item, cmd.ItemType, StringComparison.OrdinalIgnoreCase))
+ 						{
+ 							producer = actor;
++							queueType = queue.Info.Type;
+ 							break;
+ 						}
+ 					}
+@@ -272,23 +326,22 @@ Order CreatePlaceBuildingOrder(RLProto.Command cmd)
+ 			if (producer == null)
+ 			{
+ 				Log.Write("rl-bridge", $"Cannot place '{cmd.ItemType}': no completed building in any production queue");
+-				return null;
++				return Invalid(out reason);
+ 			}
+ 
+-			// Resolve building info for placement validation
+ 			var actorInfo = world.Map.Rules.Actors[cmd.ItemType.ToLowerInvariant()];
+ 			var bi = actorInfo.TraitInfoOrDefault<BuildingInfo>();
++			if (bi == null)
++				return Invalid(out reason);
+ 
+ 			// Try agent's requested position first
+ 			var requestedCell = new CPos(cmd.TargetX, cmd.TargetY);
+-			if (cmd.TargetX != 0 || cmd.TargetY != 0)
++			if ((cmd.TargetX != 0 || cmd.TargetY != 0) && world.Map.Contains(requestedCell)
++				&& world.CanPlaceBuilding(requestedCell, actorInfo, bi, null)
++				&& bi.IsCloseEnoughToBase(world, player, actorInfo, requestedCell))
+ 			{
+-				if (world.CanPlaceBuilding(requestedCell, actorInfo, bi, null)
+-					&& bi.IsCloseEnoughToBase(world, player, actorInfo, requestedCell))
+-				{
+-					Log.Write("rl-bridge", $"Placing '{cmd.ItemType}' at requested ({cmd.TargetX},{cmd.TargetY})");
+-					return MakePlaceOrder(cmd.ItemType, requestedCell, producer);
+-				}
++				detail = $"at {requestedCell.X},{requestedCell.Y}";
++				return MakePlaceOrder(cmd.ItemType, requestedCell, producer, queueType);
+ 			}
+ 
+ 			// Auto-find: search outward from base center
+@@ -296,20 +349,19 @@ Order CreatePlaceBuildingOrder(RLProto.Command cmd)
+ 			var foundCell = FindPlacementCell(actorInfo, bi, baseCenter);
+ 			if (foundCell.HasValue)
+ 			{
+-				Log.Write("rl-bridge", $"Auto-placed '{cmd.ItemType}' at ({foundCell.Value.X},{foundCell.Value.Y}) near base center ({baseCenter.X},{baseCenter.Y})");
+-				return MakePlaceOrder(cmd.ItemType, foundCell.Value, producer);
++				detail = $"auto {foundCell.Value.X},{foundCell.Value.Y}";
++				return MakePlaceOrder(cmd.ItemType, foundCell.Value, producer, queueType);
+ 			}
+ 
+ 			Log.Write("rl-bridge", $"Cannot place '{cmd.ItemType}': no valid cell found near base");
+-			return null;
++			return Invalid(out reason);
+ 		}
+ 
+-		Order MakePlaceOrder(string itemType, CPos cell, Actor producer)
++		Order MakePlaceOrder(string itemType, CPos cell, Actor producer, string queueType)
+ 		{
+-			return new Order("PlaceBuilding", player.PlayerActor,
+-				Target.FromCell(world, cell), false)
++			return new Order("PlaceBuilding", player.PlayerActor, Target.FromCell(world, cell), false)
+ 			{
+-				TargetString = itemType,
++				TargetString = itemType.ToLowerInvariant(),
+ 				ExtraData = producer.ActorID,
+ 			};
+ 		}
+@@ -318,17 +370,13 @@ CPos GetBaseCenter()
+ 		{
+ 			// Use Construction Yard location as base center
+ 			foreach (var actor in world.ActorsHavingTrait<BaseProvider>())
+-			{
+ 				if (actor.Owner == player && !actor.IsDead && actor.IsInWorld)
+ 					return actor.Location;
+-			}
+ 
+ 			// Fallback: first owned building
+ 			foreach (var actor in world.ActorsHavingTrait<Building>())
+-			{
+ 				if (actor.Owner == player && !actor.IsDead && actor.IsInWorld)
+ 					return actor.Location;
+-			}
+ 
+ 			return new CPos(world.Map.MapSize.Width / 2, world.Map.MapSize.Height / 2);
+ 		}
+@@ -350,63 +398,70 @@ CPos GetBaseCenter()
+ 			return null;
+ 		}
+ 
+-		Order CreateCancelProductionOrder(RLProto.Command cmd)
++		Order CreateCancelProductionOrder(RLProto.Command cmd, out string reason)
+ 		{
++			reason = "ok";
+ 			if (string.IsNullOrEmpty(cmd.ItemType))
+-			{
+-				Log.Write("rl-bridge", "CancelProduction command missing item_type");
+-				return null;
+-			}
++				return Invalid(out reason);
+ 
+-			// Find the production queue producing this item
++			// Find the production queue producing this item; cancel the last one queued
+ 			foreach (var actor in world.ActorsHavingTrait<ProductionQueue>())
+ 			{
+ 				if (actor.Owner != player || actor.IsDead || !actor.IsInWorld)
+ 					continue;
+ 
+ 				foreach (var queue in actor.TraitsImplementing<ProductionQueue>())
+-				{
+ 					foreach (var item in queue.AllQueued())
+-					{
+ 						if (string.Equals(item.Item, cmd.ItemType, StringComparison.OrdinalIgnoreCase))
+-							return Order.CancelProduction(actor, cmd.ItemType, 1);
+-					}
+-				}
++							return Order.CancelProduction(actor, item.Item, 1);
+ 			}
+ 
+ 			Log.Write("rl-bridge", $"Cannot cancel '{cmd.ItemType}': not in any production queue");
+-			return null;
++			return Invalid(out reason);
+ 		}
+ 
+-		Order CreateSetRallyPointOrder(RLProto.Command cmd)
++		Order CreateSetRallyPointOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
+ 			var cell = new CPos(cmd.TargetX, cmd.TargetY);
+-			return new Order("SetRallyPoint", subject, Target.FromCell(world, cell), false);
++			if (subject.TraitOrDefault<RallyPoint>() == null || !world.Map.Contains(cell))
++				return Invalid(out reason);
++
++			return new Order("SetRallyPoint", subject, Target.FromCell(world, cell), false) { IsImmediate = true };
+ 		}
+ 
+-		Order CreateGuardOrder(RLProto.Command cmd)
++		Order CreateGuardOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
+-			var target = world.GetActorById(cmd.TargetActorId);
+-			if (target == null || target.IsDead || !target.IsInWorld)
++			var target = LiveActor(cmd.TargetActorId);
++			if (target == null)
++			{
++				reason = "unknown_actor";
+ 				return null;
++			}
++
++			if (target == subject || subject.TraitOrDefault<Guard>() == null || target.TraitOrDefault<Guardable>() == null
++				|| !target.Owner.IsAlliedWith(player))
++				return Invalid(out reason);
+ 
+ 			return new Order("Guard", subject, Target.FromActor(target), cmd.Queued);
+ 		}
+ 
+-		Order CreateSetStanceOrder(RLProto.Command cmd)
++		Order CreateSetStanceOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
++			if (subject.TraitOrDefault<AutoTarget>() == null)
++				return Invalid(out reason);
++
+ 			// Stance encoded in target_x: 0=HoldFire, 1=ReturnFire, 2=Defend, 3=AttackAnything
+ 			return new Order("SetUnitStance", subject, false)
+ 			{
+@@ -414,44 +469,50 @@ Order CreateSetStanceOrder(RLProto.Command cmd)
+ 			};
+ 		}
+ 
+-		Order CreateEnterTransportOrder(RLProto.Command cmd)
++		Order CreateEnterTransportOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
+-			var target = world.GetActorById(cmd.TargetActorId);
+-			if (target == null || target.IsDead || !target.IsInWorld)
++			var target = LiveActor(cmd.TargetActorId);
++			if (target == null)
++			{
++				reason = "unknown_actor";
+ 				return null;
++			}
++
++			var cargo = target.TraitOrDefault<Cargo>();
++			if (target == subject || subject.TraitOrDefault<Passenger>() == null || cargo == null || !cargo.CanLoad(subject))
++				return Invalid(out reason);
+ 
+ 			return new Order("EnterTransport", subject, Target.FromActor(target), cmd.Queued);
+ 		}
+ 
+-		Order CreateUnloadOrder(RLProto.Command cmd)
++		Order CreateUnloadOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
++			if (subject.TraitOrDefault<Cargo>() == null)
++				return Invalid(out reason);
++
+ 			return new Order("Unload", subject, false);
+ 		}
+ 
+-		Order CreatePowerDownOrder(RLProto.Command cmd)
++		Order CreatePowerDownOrder(RLProto.Command cmd, out string reason)
+ 		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
++			var subject = Subject(cmd.ActorId, out reason);
++			if (subject == null)
+ 				return null;
+ 
+-			return new Order("PowerDown", subject, false);
+-		}
+-
+-		Order CreateSetPrimaryOrder(RLProto.Command cmd)
+-		{
+-			var subject = world.GetActorById(cmd.ActorId);
+-			if (subject == null || subject.IsDead || !subject.IsInWorld)
+-				return null;
++			var toggle = subject.TraitsImplementing<ToggleConditionOnOrder>()
++				.FirstOrDefault(t => t.Info.OrderName == "PowerDown" && !t.IsTraitDisabled && !t.IsTraitPaused);
++			if (toggle == null)
++				return Invalid(out reason);
+ 
+-			return new Order("PrimaryProducer", subject, false);
++			return new Order("PowerDown", subject, false);
+ 		}
+ 	}
+ }
+diff --git a/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs b/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
+index c11dec0..cfcdaa9 100644
+--- a/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
++++ b/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
+@@ -116,6 +116,13 @@ public sealed class ExternalBotBridge : ITick, IBot, INotifyCreated
+ 		volatile bool agentConnected;
+ 		bool connectionLostHandled;
+ 
++		// friendly-fighter sim: actions wait here until their apply_at_tick; engine verdicts of
++		// recent commands are repeated in every observation (the reader drops duplicates).
++		readonly List<RLProto.AgentAction> heldActions = new();
++		readonly List<RLProto.CommandResult> recentResults = new();
++		const int ResultKeepTicks = 150;
++		int observationInterval;
++
+ 		// Fast-forward: when > 0, game runs at max speed until this tick is reached.
+ 		// Volatile: written by gRPC thread in RequestFastAdvance, read by game thread in Tick.
+ 		volatile int pendingFastAdvanceTarget;
+@@ -252,6 +259,10 @@ public void Activate(Player p)
+ 			player = p;
+ 			observationSerializer = new ObservationSerializer(world, player, episodeId);
+ 			actionHandler = new ActionHandler(world, player);
++			observationInterval = info.ObservationInterval;
++			var envInterval = Environment.GetEnvironmentVariable("RL_OBS_INTERVAL");
++			if (!string.IsNullOrEmpty(envInterval) && int.TryParse(envInterval, out var oi) && oi > 0)
++				observationInterval = oi;
+ 
+ 			// Register in the session registry
+ 			Sessions[episodeId] = this;
+@@ -265,9 +276,9 @@ public void Activate(Player p)
+ 			}
+ 			else
+ 			{
+-				// In single-session mode, use SetPauseState so the pause order
+-				// is recorded in the replay for correct playback.
+-				world.SetPauseState(true);
++				// friendly-fighter sim: pause locally (no PauseGame order that could re-pause the game
++				// after the agents connect; two bridges share one world).
++				world.SetLocalPauseState(true);
+ 			}
+ 
+ 			Log.Write("rl-bridge", "Game paused — waiting for RL agent to connect");
+@@ -480,8 +491,18 @@ void ITick.Tick(Actor self)
+ 			try
+ 			{
+ 				// Process all pending actions from agent (non-blocking drain)
+-				while (actionChannel.Reader.TryRead(out var agentAction))
++				while (actionChannel.Reader.TryRead(out var incoming))
++					heldActions.Add(incoming);
++
++				// friendly-fighter sim: apply each action at its apply_at_tick, in arrival order
++				for (var i = 0; i < heldActions.Count; i++)
+ 				{
++					var agentAction = heldActions[i];
++					if (agentAction.ApplyAtTick > world.WorldTick)
++						continue;
++
++					heldActions.RemoveAt(i--);
++
+ 					// Intercept FAST_ADVANCE before ActionHandler
+ 					foreach (var cmd in agentAction.Commands)
+ 					{
+@@ -494,8 +515,10 @@ void ITick.Tick(Actor self)
+ 						}
+ 					}
+ 
+-					actionHandler.ProcessAction(agentAction, this);
++					actionHandler.ProcessAction(agentAction, this, recentResults);
+ 				}
++
++				recentResults.RemoveAll(r => r.Tick < world.WorldTick - ResultKeepTicks);
+ 			}
+ 			catch (ChannelClosedException)
+ 			{
+@@ -508,7 +531,7 @@ void ITick.Tick(Actor self)
+ 				world.IssueOrder(orders.Dequeue());
+ 
+ 			// Only send observations at the configured interval
+-			if (world.WorldTick % info.ObservationInterval != 0)
++			if (world.WorldTick % observationInterval != 0 && !world.IsGameOver)
+ 				return;
+ 
+ 			if (!agentConnected)
+@@ -518,6 +541,7 @@ void ITick.Tick(Actor self)
+ 			{
+ 				// Serialize and push observation (DropOldest — never blocks)
+ 				var observation = observationSerializer.Serialize(world.WorldTick);
++				observation.CommandResults.AddRange(recentResults);
+ 				observationChannel.Writer.TryWrite(observation);
+ 			}
+ 			catch (ChannelClosedException)
+@@ -538,6 +562,16 @@ internal void OnAgentConnected()
+ 		{
+ 			agentConnected = true;
+ 
++			// friendly-fighter sim: unpause only when every agent of this world is connected
++			foreach (var other in Sessions.Values)
++			{
++				if (other.world == world && other.IsEnabled && !other.agentConnected)
++				{
++					Log.Write("rl-bridge", $"RL agent connected for {player?.InternalName}; waiting for {other.player?.InternalName}");
++					return;
++				}
++			}
++
+ 			// Use SetLocalPauseState for immediate effect — SetPauseState issues an Order
+ 			// which requires the game loop to process it, but Tick() doesn't run while
+ 			// Paused is true, creating a deadlock for custom maps where loading is slow.
+@@ -545,6 +579,16 @@ internal void OnAgentConnected()
+ 			Log.Write("rl-bridge", "RL agent connected — game unpaused");
+ 		}
+ 
++		/// <summary>friendly-fighter sim: the bridge playing the player with this internal name (Multi0, Multi1).</summary>
++		internal static ExternalBotBridge LookupByPlayer(string playerName)
++		{
++			foreach (var kvp in Sessions)
++				if (kvp.Value.player != null && kvp.Value.player.InternalName == playerName)
++					return kvp.Value;
++
++			return null;
++		}
++
+ 		/// <summary>
+ 		/// Called by RLBridgeService to signal that the agent has disconnected.
+ 		/// In multi-session mode, deactivates the session. In legacy mode, exits the process.
+diff --git a/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs b/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
+index 69cea95..1af47b7 100644
+--- a/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
++++ b/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
+@@ -34,6 +34,10 @@ public sealed class ObservationSerializer
+ 		Locomotor locomotor;
+ 		bool traitsCached;
+ 
++		// friendly-fighter sim: the spatial tensor is costly; only built when RL_SPATIAL=1
++		static readonly bool SpatialEnabled = Environment.GetEnvironmentVariable("RL_SPATIAL") == "1";
++		PowerManager powerManager;
++
+ 		public ObservationSerializer(World world, Player player, string episodeId)
+ 		{
+ 			this.world = world;
+@@ -76,7 +80,36 @@ public RLProto.GameObservation Serialize(int tick)
+ 			SerializeOwnedActors(obs);
+ 			SerializeVisibleEnemies(obs);
+ 			SerializeProduction(obs);
+-			SerializeSpatialMap(obs);
++			if (SpatialEnabled)
++				SerializeSpatialMap(obs);
++
++			// friendly-fighter sim: who this is, factions, winner, explored share
++			obs.PlayerName = player.InternalName;
++			obs.Faction = player.Faction?.InternalName ?? "";
++			foreach (var p in world.Players)
++			{
++				if (p != player && !p.NonCombatant && p.Playable && obs.EnemyFaction == "")
++					obs.EnemyFaction = p.Faction?.InternalName ?? "";
++				if (p.WinState == WinState.Won && obs.Winner == "")
++					obs.Winner = p.InternalName;
++			}
++
++			var shroud = player.Shroud;
++			if (shroud != null)
++			{
++				var total = 0;
++				var explored = 0;
++				foreach (var c in world.Map.AllCells)
++				{
++					if (!world.Map.Contains(c))
++						continue;
++					total++;
++					if (shroud.IsExplored(c))
++						explored++;
++				}
++
++				obs.ExploredPercent = total > 0 ? 100f * explored / total : 0f;
++			}
+ 
+ 			return obs;
+ 		}
+@@ -254,6 +287,16 @@ RLProto.RlBuildingInfo SerializeBuilding(Actor actor, float hpPercent, string ow
+ 			// Power
+ 			var powerTrait = actor.TraitOrDefault<Power>();
+ 			bldg.IsPowered = powerTrait == null || !powerTrait.IsTraitDisabled;
++
++			// friendly-fighter sim: powered down by order, and disabled (powered down or low power)
++			var toggle = actor.TraitsImplementing<ToggleConditionOnOrder>().FirstOrDefault(t => t.Info.OrderName == "PowerDown");
++			bldg.PoweredDown = toggle != null && toggle.Enabled;
++			if (powerManager == null)
++				powerManager = player.PlayerActor.TraitOrDefault<PowerManager>();
++			var ownerPower = actor.Owner == player ? powerManager : actor.Owner.PlayerActor.TraitOrDefault<PowerManager>();
++			var lowPower = ownerPower != null && ownerPower.PowerState != PowerState.Normal
++				&& actor.Info.HasTraitInfo<GrantConditionOnPowerStateInfo>();
++			bldg.Disabled = bldg.PoweredDown || lowPower;
+ 			if (powerTrait != null)
+ 				bldg.PowerAmount = powerTrait.GetEnabledPower();
+ 
+@@ -365,6 +408,9 @@ RLProto.RlUnitInfo SerializeUnit(Actor actor, float hpPercent, string owner)
+ 			// Building flag (for distinguishing in mixed lists)
+ 			unit.IsBuilding = actor.Info.HasTraitInfo<BuildingInfo>();
+ 
++			// friendly-fighter sim: wrecks
++			unit.IsHusk = actor.Info.HasTraitInfo<HuskInfo>();
++
+ 			return unit;
+ 		}
+ 
+diff --git a/OpenRA.Mods.Common/Traits/Player/Protos/rl_bridge.proto b/OpenRA.Mods.Common/Traits/Player/Protos/rl_bridge.proto
+index 1017ebe..c2e65d8 100644
+--- a/OpenRA.Mods.Common/Traits/Player/Protos/rl_bridge.proto
++++ b/OpenRA.Mods.Common/Traits/Player/Protos/rl_bridge.proto
+@@ -63,6 +63,25 @@ message GameObservation {
+   bool interrupted = 18;           // true if advance ended early due to interrupt
+   string interrupt_reason = 19;    // signal name (e.g. "enemy_spotted")
+   int32 actual_ticks_advanced = 20; // ticks actually advanced (may be < requested)
++
++  // friendly-fighter sim: the engine's verdict on each command it processed recently
++  repeated CommandResult command_results = 21;
++  // friendly-fighter sim: player internal name (Multi0/Multi1) and faction of this observation
++  string player_name = 22;
++  string faction = 23;
++  string enemy_faction = 24;
++  string winner = 25;
++}
++
++// friendly-fighter sim: one engine verdict for one command (one unit of one order).
++message CommandResult {
++  int32 batch = 1;          // AgentAction.batch it came with
++  int32 index = 2;          // Command.index (the order's index in the platform batch)
++  uint32 actor_id = 3;      // the command's subject (0 for production / placement)
++  string status = 4;        // "ok" or "rejected"
++  string reason = 5;        // "ok", "invalid", "unknown_actor", "not_owned"
++  int32 tick = 6;           // engine tick when the order was issued
++  string detail = 7;        // e.g. where a building was placed
+ }
+ 
+ message RlEconomy {
+@@ -110,6 +129,7 @@ message RlUnitInfo {
+   int32 attack_range = 17;     // Max attack range in WDist units
+   int32 passenger_count = 18;  // Cargo count (0 if not transport, -1 if N/A)
+   bool is_building = 19;       // false for units (helps distinguish in visible_enemies)
++  bool is_husk = 20;           // friendly-fighter sim: a wreck (Husk trait)
+ }
+ 
+ message RlBuildingInfo {
+@@ -133,6 +153,8 @@ message RlBuildingInfo {
+   repeated string can_produce = 16; // Items this building can produce
+   int32 cell_x = 17;              // Cell position X
+   int32 cell_y = 18;              // Cell position Y
++  bool powered_down = 19;         // friendly-fighter sim: switched off with PowerDown
++  bool disabled = 20;             // friendly-fighter sim: not working (powered down or low power)
+ }
+ 
+ message RlProductionInfo {
+@@ -154,6 +176,8 @@ message RlMapInfo {
+ 
+ message AgentAction {
+   repeated Command commands = 1;
++  int32 batch = 2;          // friendly-fighter sim: echoed in CommandResult
++  int32 apply_at_tick = 3;  // friendly-fighter sim: hold until this engine tick (0 = next tick)
+ }
+ 
+ message Command {
+@@ -165,6 +189,8 @@ message Command {
+   string item_type = 6;       // For build/train: actor type to produce
+   bool queued = 7;             // Queue after current activity vs interrupt
+   int32 ticks = 8;             // For FAST_ADVANCE: number of ticks to fast-forward
++  int32 index = 9;             // friendly-fighter sim: echoed in CommandResult
++  int32 count = 10;            // friendly-fighter sim: TRAIN count (default 1)
+ }
+ 
+ enum ActionType {
+diff --git a/OpenRA.Mods.Common/Traits/Player/RLBridgeService.cs b/OpenRA.Mods.Common/Traits/Player/RLBridgeService.cs
+index 582a0b7..fd80db9 100644
+--- a/OpenRA.Mods.Common/Traits/Player/RLBridgeService.cs
++++ b/OpenRA.Mods.Common/Traits/Player/RLBridgeService.cs
+@@ -71,8 +71,23 @@ public override async Task GameSession(
+ 			IServerStreamWriter<RLProto.GameObservation> responseStream,
+ 			ServerCallContext context)
+ 		{
+-			// For streaming, we don't have session_id upfront — use legacy lookup
+-			var bridge = await WaitForBridge("", context.CancellationToken);
++			// For streaming, we don't have session_id upfront — use legacy lookup.
++			// friendly-fighter sim: an "rl-player" header (Multi0, Multi1) picks that player's bridge.
++			var playerName = context.RequestHeaders.GetValue("rl-player");
++			ExternalBotBridge bridge = null;
++			if (!string.IsNullOrEmpty(playerName))
++			{
++				for (var i = 0; i < 600 && bridge == null; i++)
++				{
++					var b = ExternalBotBridge.LookupByPlayer(playerName);
++					if (b != null && b.IsEnabled)
++						bridge = b;
++					else
++						await Task.Delay(100, context.CancellationToken);
++				}
++			}
++			else
++				bridge = await WaitForBridge("", context.CancellationToken);
+ 
+ 			if (bridge == null)
+ 			{

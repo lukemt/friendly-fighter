@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -28,7 +29,7 @@ from pathlib import Path
 import httpx
 
 ROOT = Path(__file__).resolve().parent.parent
-REMOTE = ROOT / "remote"
+REMOTE = Path(os.environ.get("FF_REMOTE_DIR") or ROOT / "remote")
 sys.path.insert(0, str(ROOT))
 
 

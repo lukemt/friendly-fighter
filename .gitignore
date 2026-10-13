@@ -35,3 +35,6 @@ recordings/
 
 # remote-control files for scripts/ff_play.py
 remote/
+
+# local simulator (ffsim) output
+sim/results/

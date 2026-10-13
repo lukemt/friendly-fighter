@@ -134,68 +134,33 @@ use; Red Alert as the only game we optimise for.
   Using the layout (ore fields, chokepoints, staging spots) is a
   to-do.
 
-## Local simulator plan
+## Local simulator (built 2026-10-14)
 
-**Goal:** practise and A/B-test without the platform, by rebuilding its
-private game server (`Agent_ACP`, not public) as closely as we can.
+The local platform is built and tested; see **docs/SIMULATOR.md**.
 
-**Evidence the platform is plain OpenRA:**
+- It runs on the platform's own engine fork (`yxc20089/OpenRA@9b271c1`) plus
+  `sim/openra-fork/ff-sim.patch`, headless.
+- `ffsim/` is a Python copy of the private GameAPI layer: control plane, `/mcp` with
+  the 11 tools, pacing, the verdict book, events, `legal_actions` and results.
+- Our **unchanged runtime** plays on it.
+- `python scripts/ffsim.py run` plays games: self-play, A/B between labels, or against
+  OpenRA's AIs (`ai:normal`, `rush`, `turtle`, `naval`). Each game uses about 0.3 core
+  and 240 MB.
 
-- 25 ticks/s is OpenRA's "Normal" speed.
-- The seat names `Multi0`/`Multi1` are OpenRA's.
-- The match rules (`starting_cash`, `starting_units`, `explored_map`,
-  `kill_bounties`, `crates`) are OpenRA lobby options.
-- The rule fields (`cost`, `build_time_s`, `power`, `prerequisites`, ...)
-  look like OpenRA's YAML.
-- The tournament maps `sidestep`, `trapped` and `shadowfiend-II` **ship with
-  OpenRA**.
+**Fidelity checks.**
 
-**Planned architecture:**
+- `tests/test_ffsim.py`: 48 tests, including all 29 probe-matrix orders with the
+  platform's exact answers, plus real state shapes.
+- `tests/test_ffsim_engine.py` (`FF_SIM_ENGINE=1`): the engine's verdicts on the
+  pass-through orders, the clock, deploy timing, placement and `power_toggle`.
+- `python -m ffsim.conformance` and `python -m ffsim.probe_compare`: a real game or
+  probe log against a local one.
 
-```text
-our bot (unchanged runtime) --MCP--> local "gameapi" (Python, built from
-  skill/redalert.md + real recordings) --socket--> OpenRA + an ExternalBot
-  C# component per seat (observation out every 5 ticks, orders in)
-orchestrator: parallel matches, random factions and maps, opponents =
-  our variants / OpenRA AIs (rush, normal, turtle, naval) / starter LLM bot
-```
+**First local results (2026-10-14).**
 
-**Phases:**
-
-- **Phase 0 (done):** recorder, so real server data is available as ground
-  truth.
-- **Phase 1 (mostly done):**
-  - OpenRA `release-20250330` built from source in `~/openra-sim`, with .NET
-    6 installed in `~/openra-sim/dotnet`.
-  - Freeware RA content installed through OpenRA's quick-install package,
-    SHA1 checked.
-  - Patch `sim/openra/aimatch.patch`: `OPENRA_AI_MATCH=normal,rush` with
-    `Launch.Map=<map>` seats two bots, makes the host a spectator, starts
-    the game, and prints `AIMATCH start` / `AIMATCH end ... result=...`.
-  - `sim/openra/setup.sh` reproduces all of this on Debian/Ubuntu.
-  - Runs under Xvfb with software GL.
-  - Measured: **~110% CPU and ~600 MB RAM per match** with
-    `LP_NUM_THREADS=1` (~280% without it).
-  - **Still open:**
-    - The first AI match had no time limit and ran 15+ minutes;
-      `AIMATCH end` hasn't been seen yet.
-    - Set a time limit via `OPENRA_AI_OPTIONS`.
-    - Measure 2 matches at once.
-    - Optionally build a null renderer to save the ~1 core spent on
-      rendering.
-- **Phase 2:** ExternalBot C# component (observation JSON and order
-  execution, modelled on OpenRA's `ModularBot`).
-- **Phase 3:** local game server matching `skill/redalert.md`, checked
-  against the recordings.
-- **Phase 4:**
-  - Orchestrator and scoreboard.
-  - A Docker image that runs on all machines (this container: 6 cores and
-    ~3 GB free; the user's Intel Mac host and M2 MacBook Air, 16 GB each).
-  - Keep CPU below about 70%, so the bots' reaction times stay realistic.
-
-**Cheaper alternative (not yet built):** A/B tests on the real platform. In
-self-play, each seat runs a different strategy variant (picked by
-`seat_position`); several test matches run in parallel.
+- Self-play on trapped: a win by victory at 8:49.
+- **Against OpenRA's Normal AI on sidestep: we lost on the time-limit tiebreak,
+  −10,600.** The bot needs work against a competent opponent.
 
 ## How to
 

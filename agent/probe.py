@@ -24,6 +24,7 @@ import json
 import threading
 import time
 import traceback
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -36,7 +37,7 @@ from altruagent.console import print_line
 from .redalert_bot import RedAlertBot
 
 ROOT = Path(__file__).resolve().parent.parent
-CONTROL = ROOT / "remote" / "probe.json"
+CONTROL = Path(os.environ.get("FF_REMOTE_DIR") or ROOT / "remote") / "probe.json"
 INFANTRY = ("e1", "e2", "e3", "e4", "e6")
 PHASE_C_LATEST_TICK = 9000  # 6 minutes: run phase C even if its base isn't there
 POWER_DOWN_TYPES = ("mslo", "gap", "iron", "pdox", "tsla", "agun", "dome", "sam")

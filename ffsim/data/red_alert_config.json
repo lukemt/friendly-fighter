@@ -1,0 +1,2363 @@
+{
+ "game_type": "red_alert",
+ "long_name": "Red Alert (OpenRA)",
+ "runtime_adapter": "openra",
+ "action_model": "structured",
+ "min_players": 2,
+ "max_players": 2,
+ "description": "Real-time Command & Conquer: Red Alert (OpenRA engine), one agent per side. The game never waits: read get_game_state, decide, and send a batch of orders with play_action(state_version=<that state's state_version>, action={'type': 'orders', 'orders': [...]}) whenever you are ready (one at a time, at least 0.2 s apart), then read the new state and act again; faster decisions mean more actions. Build a base, gather ore, train an army and destroy the enemy; at the time limit the tiebreak decides. See realtime, order_schema, rules and timeouts below.",
+ "phases": [
+  "queued",
+  "starting",
+  "waiting_for_agents",
+  "playing",
+  "finished"
+ ],
+ "maps": [
+  "sidestep",
+  "trapped",
+  "shadowfiend-ii"
+ ],
+ "game_params": {
+  "map": "optional, one of this server's map pool ['sidestep', 'trapped', 'shadowfiend-ii']; absent = picked for you from the pool",
+  "max_minutes": "optional integer 10-20, default 20"
+ },
+ "realtime": {
+  "pacing": "realtime",
+  "ticks_per_second": 25,
+  "world_never_waits": "The game runs in real time and never waits for you: while you think, the world keeps moving. Act as often as you like.",
+  "one_batch_at_a_time": true,
+  "min_batch_interval_seconds": 0.2,
+  "state_version": "the tick of the state you acted on: send the state_version of the get_game_state you based your orders on (0 before the game starts)",
+  "stale_seconds": 120,
+  "staleness": "orders based on a state more than 120 s (3000 ticks) old are rejected (STALE_STATE); orders are absolute, so a state a few seconds old is fine",
+  "speed_matters": "faster decisions mean more actions: an agent that reads, decides and sends in 2 s acts about 15 times as often as one that takes 30 s",
+  "loop": "get_game_state -> decide -> play_action(orders, state_version) -> get_game_state -> decide -> ...; to wait for the next fresh state without calling get_game_state in a tight loop, call wait_for_update(since_version=<state_version>): it returns as soon as a newer state exists (about every 0.2 s)",
+  "answers": "play_action answers at once, with your orders' verdicts only (no state: read the next one with get_game_state). Pending orders are queued: the engine applies them within about 0.2-0.4 s, and its verdict shows in last_orders (any rejection also in recent_order_problems) of a later state. Your next decision is never held up by the engine",
+  "limits": "unchanged: 1-20 orders per batch, 1-50 units per order, train count 1-10",
+  "windows_mode": {
+   "description": "An operator can switch a server to 5-second windows (get_game_state then shows pacing.mode 'windows' and a window object). Then the old rules apply: state_version is the window index, one batch per window (a second one is NOT_YOUR_TURN), orders based on a state up to 24 windows old, and wait_for_update(since_version=<window>) after each batch.",
+   "ticks_per_window": 125,
+   "window_seconds": 5.0,
+   "stale_windows": 24
+  }
+ },
+ "order_schema": {
+  "envelope": {
+   "play_action": "play_action(session_id, state_version=<state_version of the get_game_state you acted on>, action={\"type\": \"orders\", \"orders\": [<order>, ...]}, reasoning_summary?)",
+   "notes": [
+    "get_game_state's legal_actions lists what you can do now (items to build, train and place, MCVs to deploy, buildings to repair, enemies to attack, your idle units and harvesters); write your orders with the fields below. examples shows one order for every command, then one whole action of 3 orders; its ids and cells are placeholders: use the ids in your own state.",
+    "reasoning_summary is optional (up to 500 characters). It is public, but spectators see it only after the match ends.",
+    "A batch is 1-20 orders. In real time send one whenever you are ready (one at a time, at least 0.2 s apart; a batch sent sooner is held for the rest of that gap, a second batch sent while the first is still being answered is NOT_YOUR_TURN). Under 5-second windows (an operator setting, see realtime.windows_mode) it is one batch per window.",
+    "In real time play_action answers as soon as your orders are checked and queued: each order is 'rejected' (with a reason) or 'pending'. The engine applies pending orders within about 0.2-0.4 s; its verdict ('ok', 'partial', or 'rejected' with the engine's reason) shows in last_orders of your next get_game_state.",
+    "Each order is checked on its own; an invalid order is rejected without rejecting the rest. A batch where nothing is valid does not count as a batch (and does not use up a window).",
+    "A unit order runs with the units it can still use. Each other listed id is skipped and reported in that order's failed list as {unit, reason}: not_owned (gone, inside a transport, or not yours), wreck (a wreck takes no orders) or is_building (a building cannot take this order; attack, stop, set_stance and guard also accept your own buildings, e.g. defenses). The order is then partial (in real time its pending row already lists the skipped ids). It is rejected when none of its units is left, and failed then lists every skipped id. Its final verdict is also rejected when the engine refuses every command it was sent.",
+    "Cells are [x, y] map cells inside map.bounds.",
+    "Item names (build/train/place/cancel) are the lowercase type names from available_production, e.g. powr, barr, e1."
+   ]
+  },
+  "orders": {
+   "move": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)",
+     "to": "[x, y]",
+     "queued": "bool, default false"
+    }
+   },
+   "attack_move": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)",
+     "to": "[x, y]",
+     "queued": "bool, default false"
+    },
+    "notes": "Move, attacking enemies met on the way."
+   },
+   "attack": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)",
+     "target": "enemy actor id (visible), or",
+     "to": "[x, y] to attack the ground (give exactly one of target/to)",
+     "queued": "bool, default false"
+    }
+   },
+   "stop": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)"
+    }
+   },
+   "deploy": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)"
+    },
+    "notes": "e.g. deploy the MCV into a construction yard."
+   },
+   "unload": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)"
+    }
+   },
+   "guard": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)",
+     "target": "own actor id",
+     "queued": "bool, default false"
+    }
+   },
+   "enter_transport": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)",
+     "target": "own transport id",
+     "queued": "bool, default false"
+    }
+   },
+   "harvest": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)",
+     "to": "[x, y], optional",
+     "queued": "bool, default false"
+    },
+    "notes": "Without to, harvesters go back to harvesting anywhere."
+   },
+   "set_stance": {
+    "fields": {
+     "units": "units: 1-50 distinct own unit ids (ids that are gone, wrecks or buildings are skipped, see notes)",
+     "stance": "hold_fire | return_fire | defend | attack_anything"
+    }
+   },
+   "build": {
+    "fields": {
+     "item": "building/defense name"
+    },
+    "notes": "Appends one item to its production queue (never jumps the queue). When finished it waits in the queue until you place it."
+   },
+   "train": {
+    "fields": {
+     "item": "unit name",
+     "count": "1-10, default 1"
+    },
+    "notes": "Appends count items to the queue."
+   },
+   "place": {
+    "fields": {
+     "item": "finished building name",
+     "at": "[x, y] top-left cell, optional"
+    },
+    "notes": "at is only a hint: if that spot is blocked or missing, the engine places the building automatically near your construction yard."
+   },
+   "cancel": {
+    "fields": {
+     "item": "name"
+    },
+    "notes": "Cancels one queued item of that type."
+   },
+   "sell": {
+    "fields": {
+     "building": "own building id"
+    }
+   },
+   "repair": {
+    "fields": {
+     "building": "own building id",
+     "on": "bool, default true"
+    },
+    "notes": "on true starts repairing, on false stops. Idempotent: if the building is already in that state (or you ordered it in the last 2 s), nothing is sent and the result is ok with detail already_repairing or not_repairing. Repeating a repair never switches it off."
+   },
+   "power_toggle": {
+    "fields": {
+     "building": "own building id",
+     "on": "bool, optional: true = powered on, false = powered down"
+    },
+    "notes": "Powers a building down (it stops working and drains no power) or back on. With on it is idempotent: if the building is already in that state (or you ordered it in the last 2 s), nothing is sent and the result is ok with detail already_on or already_off. Without on it switches the state."
+   },
+   "set_primary": {
+    "fields": {
+     "building": "own production building id"
+    }
+   },
+   "rally": {
+    "fields": {
+     "building": "own production building id",
+     "to": "[x, y]"
+    }
+   }
+  },
+  "examples": [
+   {
+    "cmd": "move",
+    "units": [
+     220,
+     221
+    ],
+    "to": [
+     28,
+     26
+    ]
+   },
+   {
+    "cmd": "attack_move",
+    "units": [
+     220,
+     221,
+     223,
+     227
+    ],
+    "to": [
+     46,
+     46
+    ]
+   },
+   {
+    "cmd": "attack",
+    "units": [
+     223,
+     227
+    ],
+    "target": 902
+   },
+   {
+    "cmd": "attack",
+    "units": [
+     223
+    ],
+    "to": [
+     33,
+     31
+    ]
+   },
+   {
+    "cmd": "stop",
+    "units": [
+     222
+    ]
+   },
+   {
+    "cmd": "deploy",
+    "units": [
+     201
+    ]
+   },
+   {
+    "cmd": "unload",
+    "units": [
+     228
+    ]
+   },
+   {
+    "cmd": "guard",
+    "units": [
+     225
+    ],
+    "target": 223
+   },
+   {
+    "cmd": "enter_transport",
+    "units": [
+     220,
+     221
+    ],
+    "target": 228
+   },
+   {
+    "cmd": "set_stance",
+    "units": [
+     220,
+     221
+    ],
+    "stance": "hold_fire"
+   },
+   {
+    "cmd": "harvest",
+    "units": [
+     211
+    ],
+    "to": [
+     26,
+     20
+    ]
+   },
+   {
+    "cmd": "build",
+    "item": "proc"
+   },
+   {
+    "cmd": "train",
+    "item": "e1",
+    "count": 5
+   },
+   {
+    "cmd": "place",
+    "item": "powr"
+   },
+   {
+    "cmd": "place",
+    "item": "ftur",
+    "at": [
+     20,
+     18
+    ]
+   },
+   {
+    "cmd": "cancel",
+    "item": "weap"
+   },
+   {
+    "cmd": "sell",
+    "building": 306
+   },
+   {
+    "cmd": "repair",
+    "building": 303,
+    "on": false
+   },
+   {
+    "cmd": "power_toggle",
+    "building": 307,
+    "on": false
+   },
+   {
+    "cmd": "set_primary",
+    "building": 305
+   },
+   {
+    "cmd": "rally",
+    "building": 303,
+    "to": [
+     22,
+     22
+    ]
+   },
+   {
+    "type": "orders",
+    "orders": [
+     {
+      "cmd": "deploy",
+      "units": [
+       203
+      ]
+     },
+     {
+      "cmd": "train",
+      "item": "3tnk",
+      "count": 2
+     },
+     {
+      "cmd": "attack_move",
+      "units": [
+       220,
+       221,
+       223,
+       227
+      ],
+      "to": [
+       46,
+       46
+      ]
+     }
+    ]
+   }
+  ],
+  "results": "play_action returns one result per order: {index, cmd, status, reason, detail, commands, failed}. status ok | partial | rejected | pending, with reason ok | not_owned | wreck | is_building | target_not_visible | not_available | not_ready | invalid | unknown_actor | no_feedback (or the engine's own reason). failed lists {unit, reason} per unit: the skipped ids first, then the engine's refusals (unit null for item orders). partial: the order ran, but some units were skipped or some commands refused; reason is the first failed entry. A repair or power_toggle that changes nothing is ok with detail already_repairing, not_repairing, already_on or already_off. In real time the engine's verdict on pending orders arrives in last_orders a moment later; status 'lost' (reason not_applied) means the orders never reached the engine: send them again (a repair or power_toggle resent within 2 s of a lost batch may read as a no-op; check the building and resend after 2 s). recent_order_problems lists the rejected, partial and lost orders of your last few batches, so a verdict is not missed when you send the next batch before it arrives.",
+  "limits": {
+   "max_orders_per_batch": 20,
+   "max_units_per_order": 50,
+   "max_train_count": 10,
+   "min_batch_interval_s": 0.2,
+   "stale_seconds": 120
+  }
+ },
+ "legal_actions": "While you can act, get_game_state includes legal_actions (get_legal_actions returns it too): short lists of what you can do now, from your current state. build and train: the items you can start now (build holds buildings and defenses). place: finished items waiting to be placed. deploy: your MCVs. repair: your damaged buildings that are not repairing, lowest hp first. attack: the enemy units and buildings you can see. attack_now: one ready-to-send attack order whenever you have units that can fight: an attack_move of your combat units (the idle ones, or all of them if none is idle; at most 50) to the nearest enemy you can see, or to enemy_base when you see none; put it in your batch as it is, or change it (null when you have no combat units). enemy_base: the enemy's start cell [x, y] (the map spawn farthest from your base). combat_units: your idle units that can fight (no MCVs, harvesters, medics, engineers or ships). idle_units: your idle units, including non-combat units (MCVs, harvesters, medics, engineers), so check each id's type in observation.units before you send units to attack. harvesters: your harvesters. production_buildings: {id, type} of your buildings that produce. Wrecks are left out. Every list is there, empty when there is nothing (all of them once the match is over). Apart from attack_now there are no ready-made orders: write your own batch of 1-20 orders as how_to_send says, with the formats and examples in order_schema. Which ids each order takes: move, attack_move, stop, guard and set_stance take any of your units; sell, repair and power_toggle take any of your buildings; set_primary and rally take your production_buildings.",
+ "observation_fields": {
+  "tick": "engine tick (25 per second)",
+  "faction / enemy_faction": "your and your opponent's faction",
+  "economy": "cash, ore, power_provided, power_drained, resource_capacity, harvesters",
+  "military": "kills_cost, deaths_cost, assets_value, army_value, units/buildings killed and lost",
+  "units": "your units: id, type, x, y (cell), hp (percent), act (current activity), idle, stance, and wreck: true on a wreck (a destroyed vehicle burning out for a while; it takes no orders; the key is absent on everything else)",
+  "buildings": "your buildings: id, type, x, y, hp, powered (it works: not powered down and not disabled by low power), powered_down (you switched it off with power_toggle), repairing, producing, rally",
+  "production": "queued items: queue, item, progress (0-1), remaining_s, paused, ready (ready to place)",
+  "available_production": "what you can build or train right now",
+  "visible_enemies / visible_enemy_buildings": "enemies you can see (fog of war applies): id, type, x, y, hp, and wreck: true on a wreck (no threat; not worth attacking). Enemy buildings show no power state.",
+  "map": "id, width, height (full size; only cells inside get_game_state map.bounds are playable). A picture of the map is in get_game_config('red_alert') rules.maps.<id>.layout.",
+  "base_center": "cell of your construction yard (or your buildings/units' centre)",
+  "explored_percent": "share of the map you have explored",
+  "events": "the last 20 events for you: unit_created, unit_lost (with wreck_id when the unit left a wreck), building_created, building_lost, building_sold (a building you had ordered sold), production_ready, enemy_spotted, enemy_killed, under_attack, low_power, power_restored. Wrecks give no other events, and an enemy wreck is never spotted."
+ },
+ "match_rules": "Starting conditions are server settings, the same for every match: get_game_state.match_rules shows this match's starting_cash (5000 on the hosted platform), starting_units (none = only your MCV, the default; light or heavy = a starting army), explored_map (whether the engine starts with the whole map explored, so explored_percent starts at 100; fog of war always applies, so you see enemies only near your own units and buildings; the map's layout picture in rules.maps.<id>.layout is yours either way), kill_bounties (cash for kills) and crates (random bonus crates).",
+ "results_policy": {
+  "win": "winner 1.0, loser 0.0. You win by destroying every enemy building and the enemy's MCV (base vehicle); units left over do not matter. Or the enemy resigns.",
+  "draw": "0.5 / 0.5",
+  "time_limit_and_idle_tiebreak": "higher kills_cost - deaths_cost wins; if equal, higher assets_value; if still equal, a draw",
+  "failures": "a failed match (server error, no agents) gives no result"
+ },
+ "timeouts": {
+  "auto_start_seconds": 120,
+  "auto_start": "the game starts when both agents have called get_game_state, or 120 s after the match is ready if at least one has",
+  "no_agents_seconds": 300,
+  "no_agents": "no agent at all within 300 s: cancelled with no result",
+  "idle_seconds": 1200,
+  "idle": "neither agent sends an accepted order for 20 minutes: the game ends (tiebreak)",
+  "max_minutes": {
+   "min": 10,
+   "max": 20,
+   "default": 20
+  }
+ },
+ "rules": {
+  "engine_commit": "9b271c1a5562a07deeb1c3f81d9a556cd563a676",
+  "units": {
+   "1tnk": {
+    "cost": 700,
+    "build_time_s": 16.8,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Vehicle",
+    "hp": 23000,
+    "speed": 2.76,
+    "weapon": {
+     "weapon": "25mm",
+     "range_cells": 4.75,
+     "damage": 2500
+    },
+    "factions": [
+     "allies"
+    ]
+   },
+   "2tnk": {
+    "cost": 850,
+    "build_time_s": 20.4,
+    "power": 0,
+    "prerequisites": [
+     "fix"
+    ],
+    "queue": "Vehicle",
+    "hp": 46000,
+    "speed": 1.76,
+    "weapon": {
+     "weapon": "90mm",
+     "range_cells": 4.75,
+     "damage": 4000
+    },
+    "factions": [
+     "allies"
+    ]
+   },
+   "3tnk": {
+    "cost": 1150,
+    "build_time_s": 27.6,
+    "power": 0,
+    "prerequisites": [
+     "fix"
+    ],
+    "queue": "Vehicle",
+    "hp": 60000,
+    "speed": 1.56,
+    "weapon": {
+     "weapon": "105mm",
+     "range_cells": 4.75,
+     "damage": 4000
+    },
+    "factions": [
+     "soviet"
+    ]
+   },
+   "4tnk": {
+    "cost": 2000,
+    "build_time_s": 48.0,
+    "power": 0,
+    "prerequisites": [
+     "fix",
+     "stek"
+    ],
+    "queue": "Vehicle",
+    "hp": 90000,
+    "speed": 1.05,
+    "weapon": {
+     "weapon": "120mm",
+     "range_cells": 4.75,
+     "damage": 6000
+    },
+    "factions": [
+     "soviet"
+    ]
+   },
+   "ant": {
+    "cost": 300,
+    "build_time_s": 7.2,
+    "power": 0,
+    "prerequisites": [
+     "any barracks (barr/tent)",
+     "bio"
+    ],
+    "queue": "Infantry",
+    "hp": 75000,
+    "speed": 2.25,
+    "weapon": {
+     "weapon": "mandible",
+     "range_cells": 1.5,
+     "damage": 6000
+    }
+   },
+   "apc": {
+    "cost": 850,
+    "build_time_s": 20.4,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Vehicle",
+    "hp": 35000,
+    "speed": 3.12,
+    "weapon": {
+     "weapon": "M60mg",
+     "range_cells": 4.0,
+     "damage": 1000
+    },
+    "factions": [
+     "soviet"
+    ]
+   },
+   "arty": {
+    "cost": 850,
+    "build_time_s": 20.4,
+    "power": 0,
+    "prerequisites": [
+     "dome"
+    ],
+    "queue": "Vehicle",
+    "hp": 10000,
+    "speed": 1.76,
+    "weapon": {
+     "weapon": "155mm",
+     "range_cells": 12.0,
+     "damage": 23000
+    },
+    "factions": [
+     "allies"
+    ]
+   },
+   "ca": {
+    "cost": 2400,
+    "build_time_s": 57.6,
+    "power": 0,
+    "prerequisites": [
+     "syrd",
+     "atek"
+    ],
+    "queue": "Ship",
+    "hp": 80000,
+    "speed": 1.07,
+    "weapon": {
+     "weapon": "8Inch",
+     "range_cells": 20.0,
+     "damage": 2500
+    }
+   },
+   "ctnk": {
+    "cost": 1350,
+    "build_time_s": 32.4,
+    "power": 0,
+    "prerequisites": [
+     "atek"
+    ],
+    "queue": "Vehicle",
+    "hp": 40000,
+    "speed": 2.1,
+    "weapon": {
+     "weapon": "APTusk",
+     "range_cells": 6.0,
+     "damage": 5000
+    },
+    "factions": [
+     "germany"
+    ]
+   },
+   "dd": {
+    "cost": 1000,
+    "build_time_s": 24.0,
+    "power": 0,
+    "prerequisites": [
+     "syrd",
+     "dome"
+    ],
+    "queue": "Ship",
+    "hp": 40000,
+    "speed": 2.25,
+    "weapon": {
+     "weapon": "Stinger",
+     "range_cells": 7.5,
+     "damage": 2500
+    }
+   },
+   "dog": {
+    "cost": 200,
+    "build_time_s": 4.8,
+    "power": 0,
+    "prerequisites": [
+     "kenn"
+    ],
+    "queue": "Infantry",
+    "hp": 1800,
+    "speed": 2.44,
+    "weapon": {
+     "weapon": "DogJaw",
+     "range_cells": 3.0,
+     "damage": 100000
+    }
+   },
+   "dtrk": {
+    "cost": 2500,
+    "build_time_s": 60.0,
+    "power": 0,
+    "prerequisites": [
+     "stek"
+    ],
+    "queue": "Vehicle",
+    "hp": 2800,
+    "speed": 1.64,
+    "weapon": {
+     "weapon": "DemoTruckTargeting",
+     "range_cells": 2.0,
+     "damage": 0
+    },
+    "factions": [
+     "ukraine"
+    ]
+   },
+   "e1": {
+    "cost": 100,
+    "build_time_s": 2.4,
+    "power": 0,
+    "prerequisites": [
+     "any barracks (barr/tent)"
+    ],
+    "queue": "Infantry",
+    "hp": 5000,
+    "speed": 1.32,
+    "weapon": {
+     "weapon": "M1Carbine",
+     "range_cells": 5.0,
+     "damage": 1000
+    }
+   },
+   "e2": {
+    "cost": 150,
+    "build_time_s": 3.6,
+    "power": 0,
+    "prerequisites": [
+     "barr"
+    ],
+    "queue": "Infantry",
+    "hp": 5000,
+    "speed": 1.66,
+    "weapon": {
+     "weapon": "Grenade",
+     "range_cells": 4.0,
+     "damage": 6000
+    }
+   },
+   "e3": {
+    "cost": 300,
+    "build_time_s": 7.2,
+    "power": 0,
+    "prerequisites": [
+     "any barracks (barr/tent)"
+    ],
+    "queue": "Infantry",
+    "hp": 4500,
+    "speed": 1.32,
+    "weapon": {
+     "weapon": "RedEye",
+     "range_cells": 7.5,
+     "damage": 2400
+    }
+   },
+   "e4": {
+    "cost": 300,
+    "build_time_s": 7.2,
+    "power": 0,
+    "prerequisites": [
+     "barr",
+     "ftur"
+    ],
+    "queue": "Infantry",
+    "hp": 4000,
+    "speed": 1.32,
+    "weapon": {
+     "weapon": "Flamer",
+     "range_cells": 5.0,
+     "damage": 1000
+    }
+   },
+   "e6": {
+    "cost": 400,
+    "build_time_s": 9.6,
+    "power": 0,
+    "prerequisites": [
+     "any barracks (barr/tent)"
+    ],
+    "queue": "Infantry",
+    "hp": 2500,
+    "speed": 1.32,
+    "weapon": null
+   },
+   "e7": {
+    "cost": 1800,
+    "build_time_s": 43.2,
+    "power": 0,
+    "prerequisites": [
+     "tent",
+     "atek"
+    ],
+    "queue": "Infantry",
+    "hp": 10000,
+    "speed": 1.66,
+    "weapon": {
+     "weapon": "Colt45",
+     "range_cells": 7.0,
+     "damage": 10000
+    }
+   },
+   "ftrk": {
+    "cost": 600,
+    "build_time_s": 14.4,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Vehicle",
+    "hp": 15000,
+    "speed": 2.76,
+    "weapon": {
+     "weapon": "FLAK-23-AA",
+     "range_cells": 8.0,
+     "damage": 1200
+    },
+    "factions": [
+     "soviet"
+    ]
+   },
+   "harv": {
+    "cost": 1100,
+    "build_time_s": 26.4,
+    "power": 0,
+    "prerequisites": [
+     "proc"
+    ],
+    "queue": "Vehicle",
+    "hp": 60000,
+    "speed": 1.76,
+    "weapon": null
+   },
+   "heli": {
+    "cost": 2000,
+    "build_time_s": 48.0,
+    "power": 0,
+    "prerequisites": [
+     "hpad",
+     "atek"
+    ],
+    "queue": "Aircraft",
+    "hp": 12000,
+    "speed": 3.64,
+    "weapon": {
+     "weapon": "HellfireAA",
+     "range_cells": 4.0,
+     "damage": 3000
+    }
+   },
+   "jeep": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Vehicle",
+    "hp": 15000,
+    "speed": 4.0,
+    "weapon": {
+     "weapon": "M60mg",
+     "range_cells": 4.0,
+     "damage": 1000
+    },
+    "factions": [
+     "allies"
+    ]
+   },
+   "lst": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Ship",
+    "hp": 40000,
+    "speed": 2.81,
+    "weapon": null
+   },
+   "mcv": {
+    "cost": 2000,
+    "build_time_s": 40.0,
+    "power": 0,
+    "prerequisites": [
+     "fix"
+    ],
+    "queue": "Vehicle",
+    "hp": 60000,
+    "speed": 1.46,
+    "weapon": null
+   },
+   "mech": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": 0,
+    "prerequisites": [
+     "tent",
+     "fix"
+    ],
+    "queue": "Infantry",
+    "hp": 8000,
+    "speed": 1.2,
+    "weapon": {
+     "weapon": "Repair",
+     "range_cells": 4.0,
+     "damage": -2000
+    }
+   },
+   "medi": {
+    "cost": 200,
+    "build_time_s": 4.8,
+    "power": 0,
+    "prerequisites": [
+     "tent"
+    ],
+    "queue": "Infantry",
+    "hp": 6000,
+    "speed": 1.2,
+    "weapon": {
+     "weapon": "Heal",
+     "range_cells": 4.0,
+     "damage": -5000
+    }
+   },
+   "mgg": {
+    "cost": 1000,
+    "build_time_s": 24.0,
+    "power": 0,
+    "prerequisites": [
+     "atek"
+    ],
+    "queue": "Vehicle",
+    "hp": 22000,
+    "speed": 1.76,
+    "weapon": null,
+    "factions": [
+     "england"
+    ]
+   },
+   "mh60": {
+    "cost": 1500,
+    "build_time_s": 36.0,
+    "power": 0,
+    "prerequisites": [
+     "hpad"
+    ],
+    "queue": "Aircraft",
+    "hp": 10000,
+    "speed": 2.73,
+    "weapon": {
+     "weapon": "ChainGun",
+     "range_cells": 5.0,
+     "damage": 2500
+    }
+   },
+   "mig": {
+    "cost": 2000,
+    "build_time_s": 48.0,
+    "power": 0,
+    "prerequisites": [
+     "afld",
+     "stek"
+    ],
+    "queue": "Aircraft",
+    "hp": 8000,
+    "speed": 5.44,
+    "weapon": {
+     "weapon": "Maverick",
+     "range_cells": 9.0,
+     "damage": 7000
+    }
+   },
+   "mnly": {
+    "cost": 800,
+    "build_time_s": 19.2,
+    "power": 0,
+    "prerequisites": [
+     "fix"
+    ],
+    "queue": "Vehicle",
+    "hp": 30000,
+    "speed": 2.76,
+    "weapon": null
+   },
+   "mrj": {
+    "cost": 1000,
+    "build_time_s": 24.0,
+    "power": 0,
+    "prerequisites": [
+     "atek"
+    ],
+    "queue": "Vehicle",
+    "hp": 22000,
+    "speed": 1.66,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ]
+   },
+   "msub": {
+    "cost": 2000,
+    "build_time_s": 48.0,
+    "power": 0,
+    "prerequisites": [
+     "spen",
+     "stek"
+    ],
+    "queue": "Ship",
+    "hp": 40000,
+    "speed": 1.07,
+    "weapon": {
+     "weapon": "SubMissile",
+     "range_cells": 20.0,
+     "damage": 2500
+    }
+   },
+   "pt": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": 0,
+    "prerequisites": [
+     "syrd"
+    ],
+    "queue": "Ship",
+    "hp": 20000,
+    "speed": 3.47,
+    "weapon": {
+     "weapon": "2Inch",
+     "range_cells": 5.5,
+     "damage": 2500
+    }
+   },
+   "qtnk": {
+    "cost": 2000,
+    "build_time_s": 48.0,
+    "power": 0,
+    "prerequisites": [
+     "fix",
+     "stek"
+    ],
+    "queue": "Vehicle",
+    "hp": 90000,
+    "speed": 1.12,
+    "weapon": null,
+    "factions": [
+     "soviet"
+    ]
+   },
+   "shok": {
+    "cost": 350,
+    "build_time_s": 8.4,
+    "power": 0,
+    "prerequisites": [
+     "barr",
+     "stek",
+     "tsla"
+    ],
+    "queue": "Infantry",
+    "hp": 5000,
+    "speed": 1.32,
+    "weapon": {
+     "weapon": "PortaTesla",
+     "range_cells": 6.0,
+     "damage": 4500
+    },
+    "factions": [
+     "russia"
+    ]
+   },
+   "spy": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": 0,
+    "prerequisites": [
+     "dome",
+     "tent"
+    ],
+    "queue": "Infantry",
+    "hp": 2500,
+    "speed": 1.32,
+    "weapon": {
+     "weapon": "SilencedPPK",
+     "range_cells": 2.5,
+     "damage": 15000
+    }
+   },
+   "spy.england": {
+    "cost": 250,
+    "build_time_s": 6.0,
+    "power": 0,
+    "prerequisites": [
+     "dome",
+     "tent"
+    ],
+    "queue": "Infantry",
+    "hp": 2500,
+    "speed": 1.32,
+    "weapon": {
+     "weapon": "SilencedPPK",
+     "range_cells": 2.5,
+     "damage": 15000
+    },
+    "factions": [
+     "england"
+    ]
+   },
+   "ss": {
+    "cost": 950,
+    "build_time_s": 22.8,
+    "power": 0,
+    "prerequisites": [
+     "spen"
+    ],
+    "queue": "Ship",
+    "hp": 25000,
+    "speed": 1.9,
+    "weapon": {
+     "weapon": "TorpTube",
+     "range_cells": 9.0,
+     "damage": 18000
+    }
+   },
+   "stnk": {
+    "cost": 1000,
+    "build_time_s": 24.0,
+    "power": 0,
+    "prerequisites": [
+     "atek"
+    ],
+    "queue": "Vehicle",
+    "hp": 35000,
+    "speed": 3.12,
+    "weapon": {
+     "weapon": "APTusk.stnk",
+     "range_cells": 6.0,
+     "damage": 5000
+    },
+    "factions": [
+     "france"
+    ]
+   },
+   "thf": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": 0,
+    "prerequisites": [
+     "barr",
+     "dome"
+    ],
+    "queue": "Infantry",
+    "hp": 8000,
+    "speed": 1.76,
+    "weapon": null
+   },
+   "tran": {
+    "cost": 900,
+    "build_time_s": 21.6,
+    "power": 0,
+    "prerequisites": [
+     "hpad"
+    ],
+    "queue": "Aircraft",
+    "hp": 14000,
+    "speed": 3.12,
+    "weapon": null
+   },
+   "truk": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Vehicle",
+    "hp": 11000,
+    "speed": 2.76,
+    "weapon": null
+   },
+   "ttnk": {
+    "cost": 1350,
+    "build_time_s": 32.4,
+    "power": 0,
+    "prerequisites": [
+     "tsla",
+     "stek"
+    ],
+    "queue": "Vehicle",
+    "hp": 40000,
+    "speed": 2.25,
+    "weapon": {
+     "weapon": "TTankZap",
+     "range_cells": 7.0,
+     "damage": 10000
+    },
+    "factions": [
+     "russia"
+    ]
+   },
+   "v2rl": {
+    "cost": 900,
+    "build_time_s": 21.6,
+    "power": 0,
+    "prerequisites": [
+     "dome"
+    ],
+    "queue": "Vehicle",
+    "hp": 20000,
+    "speed": 1.76,
+    "weapon": {
+     "weapon": "SCUD",
+     "range_cells": 10.0,
+     "damage": 4500
+    },
+    "factions": [
+     "soviet"
+    ]
+   },
+   "yak": {
+    "cost": 1350,
+    "build_time_s": 32.4,
+    "power": 0,
+    "prerequisites": [
+     "afld"
+    ],
+    "queue": "Aircraft",
+    "hp": 6000,
+    "speed": 4.35,
+    "weapon": {
+     "weapon": "ChainGun.Yak",
+     "range_cells": 5.0,
+     "damage": 4000
+    }
+   },
+   "zombie": {
+    "cost": 100,
+    "build_time_s": 2.4,
+    "power": 0,
+    "prerequisites": [
+     "any barracks (barr/tent)",
+     "bio"
+    ],
+    "queue": "Infantry",
+    "hp": 25000,
+    "speed": 0.95,
+    "weapon": {
+     "weapon": "claw",
+     "range_cells": 1.5,
+     "damage": 3000
+    }
+   }
+  },
+  "buildings": {
+   "afld": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": -20,
+    "prerequisites": [
+     "dome"
+    ],
+    "queue": "Building",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     3,
+     2
+    ]
+   },
+   "afld.ukraine": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": -20,
+    "prerequisites": [
+     "dome"
+    ],
+    "queue": "Building",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "ukraine"
+    ],
+    "footprint": [
+     3,
+     2
+    ]
+   },
+   "agun": {
+    "cost": 800,
+    "build_time_s": 19.2,
+    "power": -50,
+    "prerequisites": [
+     "dome"
+    ],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": {
+     "weapon": "ZSU-23",
+     "range_cells": 10.0,
+     "damage": 900
+    },
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "apwr": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": 200,
+    "prerequisites": [
+     "dome"
+    ],
+    "queue": "Building",
+    "hp": 70000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "atef": {
+    "cost": 150,
+    "build_time_s": 3.6,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "atek": {
+    "cost": 1500,
+    "build_time_s": 36.0,
+    "power": -200,
+    "prerequisites": [
+     "weap",
+     "dome"
+    ],
+    "queue": "Building",
+    "hp": 60000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "barr": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": -20,
+    "prerequisites": [
+     "any power plant (powr/apwr)"
+    ],
+    "queue": "Building",
+    "hp": 60000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "brik": {
+    "cost": 200,
+    "build_time_s": 4.8,
+    "power": 0,
+    "prerequisites": [
+     "fact"
+    ],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "dome": {
+    "cost": 1500,
+    "build_time_s": 36.0,
+    "power": -40,
+    "prerequisites": [
+     "proc"
+    ],
+    "queue": "Building",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "domf": {
+    "cost": 180,
+    "build_time_s": 4.3,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "facf": {
+    "cost": 200,
+    "build_time_s": 4.8,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 150000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     3,
+     4
+    ]
+   },
+   "fapw": {
+    "cost": 50,
+    "build_time_s": 1.2,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 70000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "fenc": {
+    "cost": 30,
+    "build_time_s": 0.7,
+    "power": 0,
+    "prerequisites": [
+     "fact"
+    ],
+    "queue": "Defense",
+    "hp": 15000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "fix": {
+    "cost": 1200,
+    "build_time_s": 28.8,
+    "power": -30,
+    "prerequisites": [
+     "weap"
+    ],
+    "queue": "Building",
+    "hp": 80000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "fixf": {
+    "cost": 120,
+    "build_time_s": 2.9,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 80000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "fpwr": {
+    "cost": 30,
+    "build_time_s": 0.7,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "ftur": {
+    "cost": 600,
+    "build_time_s": 14.4,
+    "power": -20,
+    "prerequisites": [
+     "barr"
+    ],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": {
+     "weapon": "FireballLauncher",
+     "range_cells": 5.0,
+     "damage": 15000
+    },
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "gap": {
+    "cost": 800,
+    "build_time_s": 19.2,
+    "power": -60,
+    "prerequisites": [
+     "atek"
+    ],
+    "queue": "Defense",
+    "hp": 50000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "gun": {
+    "cost": 800,
+    "build_time_s": 19.2,
+    "power": -40,
+    "prerequisites": [
+     "tent"
+    ],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": {
+     "weapon": "TurretGun",
+     "range_cells": 6.5,
+     "damage": 6000
+    },
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "hbox": {
+    "cost": 750,
+    "build_time_s": 18.0,
+    "power": -20,
+    "prerequisites": [
+     "tent"
+    ],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "hpad": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": -10,
+    "prerequisites": [
+     "dome"
+    ],
+    "queue": "Building",
+    "hp": 80000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "iron": {
+    "cost": 2000,
+    "build_time_s": 48.0,
+    "power": -200,
+    "prerequisites": [
+     "stek"
+    ],
+    "queue": "Defense",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     2,
+     2
+    ]
+   },
+   "kenn": {
+    "cost": 200,
+    "build_time_s": 4.8,
+    "power": -10,
+    "prerequisites": [
+     "any power plant (powr/apwr)"
+    ],
+    "queue": "Building",
+    "hp": 30000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "mslf": {
+    "cost": 250,
+    "build_time_s": 6.0,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     2,
+     1
+    ]
+   },
+   "mslo": {
+    "cost": 2500,
+    "build_time_s": 60.0,
+    "power": -150,
+    "prerequisites": [
+     "any tech center (atek/stek)"
+    ],
+    "queue": "Defense",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     2,
+     1
+    ]
+   },
+   "pbox": {
+    "cost": 600,
+    "build_time_s": 14.4,
+    "power": -20,
+    "prerequisites": [
+     "tent"
+    ],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "pdof": {
+    "cost": 150,
+    "build_time_s": 3.6,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     2,
+     2
+    ]
+   },
+   "pdox": {
+    "cost": 1500,
+    "build_time_s": 36.0,
+    "power": -200,
+    "prerequisites": [
+     "atek"
+    ],
+    "queue": "Defense",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     2,
+     2
+    ]
+   },
+   "powr": {
+    "cost": 300,
+    "build_time_s": 7.2,
+    "power": 100,
+    "prerequisites": [],
+    "queue": "Building",
+    "hp": 40000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "proc": {
+    "cost": 1400,
+    "build_time_s": 33.6,
+    "power": -30,
+    "prerequisites": [
+     "any power plant (powr/apwr)"
+    ],
+    "queue": "Building",
+    "hp": 90000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     3,
+     4
+    ]
+   },
+   "sam": {
+    "cost": 700,
+    "build_time_s": 16.8,
+    "power": -40,
+    "prerequisites": [
+     "dome"
+    ],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": {
+     "weapon": "Nike",
+     "range_cells": 7.5,
+     "damage": 4500
+    },
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     2,
+     1
+    ]
+   },
+   "sbag": {
+    "cost": 30,
+    "build_time_s": 0.7,
+    "power": 0,
+    "prerequisites": [
+     "fact"
+    ],
+    "queue": "Defense",
+    "hp": 15000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "silo": {
+    "cost": 150,
+    "build_time_s": 3.6,
+    "power": -10,
+    "prerequisites": [
+     "proc"
+    ],
+    "queue": "Defense",
+    "hp": 30000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "spen": {
+    "cost": 800,
+    "build_time_s": 19.2,
+    "power": -20,
+    "prerequisites": [
+     "any power plant (powr/apwr)"
+    ],
+    "queue": "Building",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "stek": {
+    "cost": 1500,
+    "build_time_s": 36.0,
+    "power": -100,
+    "prerequisites": [
+     "weap",
+     "dome"
+    ],
+    "queue": "Building",
+    "hp": 80000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "syrd": {
+    "cost": 1000,
+    "build_time_s": 24.0,
+    "power": -20,
+    "prerequisites": [
+     "any power plant (powr/apwr)"
+    ],
+    "queue": "Building",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "syrf": {
+    "cost": 100,
+    "build_time_s": 2.4,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 100000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "tenf": {
+    "cost": 50,
+    "build_time_s": 1.2,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 60000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "tent": {
+    "cost": 500,
+    "build_time_s": 12.0,
+    "power": -20,
+    "prerequisites": [
+     "any power plant (powr/apwr)"
+    ],
+    "queue": "Building",
+    "hp": 60000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "allies"
+    ],
+    "footprint": [
+     2,
+     3
+    ]
+   },
+   "tsla": {
+    "cost": 1200,
+    "build_time_s": 28.8,
+    "power": -80,
+    "prerequisites": [
+     "weap"
+    ],
+    "queue": "Defense",
+    "hp": 40000,
+    "speed": null,
+    "weapon": {
+     "weapon": "TeslaZap",
+     "range_cells": 7.0,
+     "damage": 10000
+    },
+    "factions": [
+     "soviet"
+    ],
+    "footprint": [
+     1,
+     1
+    ]
+   },
+   "weaf": {
+    "cost": 200,
+    "build_time_s": 4.8,
+    "power": 0,
+    "prerequisites": [],
+    "queue": "Defense",
+    "hp": 150000,
+    "speed": null,
+    "weapon": null,
+    "factions": [
+     "france"
+    ],
+    "footprint": [
+     3,
+     3
+    ]
+   },
+   "weap": {
+    "cost": 2000,
+    "build_time_s": 48.0,
+    "power": -30,
+    "prerequisites": [
+     "proc"
+    ],
+    "queue": "Building",
+    "hp": 150000,
+    "speed": null,
+    "weapon": null,
+    "footprint": [
+     3,
+     3
+    ]
+   }
+  },
+  "maps": {
+   "sidestep": {
+    "title": "Sidestep",
+    "width": 98,
+    "height": 98,
+    "bounds": [
+     1,
+     1,
+     96,
+     96
+    ],
+    "spawns": [
+     [
+      23,
+      44
+     ],
+     [
+      74,
+      53
+     ]
+    ],
+    "layout": {
+     "origin": [
+      1,
+      1
+     ],
+     "width": 96,
+     "height": 96,
+     "ruler": "123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456",
+     "rows": [
+      "~~~~~~~~~~~~^^^^^^^^^^~~^^~~^^.^T^T^^^^^^^^^^^^^^^^^^^^^^,.^^^^^^^^^..........^=.....T.#........",
+      "~~~~~~~~~~~~^^^^^,,^^^~~~~~^^,TTTTT^^,.....^^^^^^^^,.........^^^^,........T.============...#....",
+      "~~~~~~~~~~~~^^^^^^^^~~~~~~~^^TTTTTT...........,,.....................TT.........,.#....#=T...#.#",
+      "~~~~~~~~~~~~~~~~^^^~~~~~~~~^^TT.....TT............................T.T.....##....####..#.^==.....",
+      "~~~~~~~~~~~~~~~~~~~~~~~^^~~^^T.TT.T......................................,###.T.........#...#...",
+      "~~~~~~~~~~~~~~~~~~~~~~~^^^^^^TT............................................##..##....^^^,T......",
+      "~~~~~~~~~~~~~~~~~~~~~~~^^^^^^........................^^^...........T...T.......##.TTT^^^^^^#....",
+      "~~~~~~~~_~^^^~~~~~~~~~~~^^.T.........................$^^,...........TTT.T.TT......T.^^^##^^.....",
+      "~~~~~~~~,_____~~~~~~~_^^^^...........,^^^...........$$,^^^.............TT...........^^##^^,.#...",
+      "~~~~~~~~~___,_~~~^^~_.^^^^.........^^^^^^..........$$$$^^^,........T.TTTTT..........^^##^^,.....",
+      "~~~~~~~~_......__^^_,..............^^^.T..........$$$$$^^^^..........T..............^^^^^^......",
+      "~~~~~~~__..##..._,,__............^^^^.T...........$$$$$^^^^........TT..................^^^......",
+      "~~~~~~~__..##....................^^,..............$$M$$^^,............TT........................",
+      "~~~~~~~__....#....................................$$$$$^^..........T............................",
+      "~~~~~~~_....#.^...................................$$$$$^^.......................................",
+      "#~~~~~__.......^^....^^^...........................$$$^^^.........T.............................",
+      "##~~~~~__...........^^^.............................$$^^,.^.......T.............................",
+      "##~~~~,__...........^^,..............................^^^^...........^...........................",
+      "##~~~~~~__.........^^^,.......^^......................^^^.......................$$$.$$$.........",
+      "#~~~~~~~_........^^^^^........^^^^.................^^^^^.................^.....$$$$$$$$$........",
+      "#~~~~~~~^^...^^^^^^^^^........^^^T..................^^,..................^^^^,$$$M$$$M$$$.......",
+      "#~~~~~~~^^....^^^,^^........,^^^...................^^^....................^^^^$$$$$$$$$$^^......",
+      "~~~~~~~~^^..^^^^^.........^^^^,.T.T.......................................^^^^,$$$$$$$$$^^......",
+      "^~~~^^^^^^..^^^^^.........^^^.TT............................................^^^^^^,$$^^^^^^.....",
+      "~~~~^^^,....^.............^^TTT................................................^^^^^^^^^^^......",
+      "~~~^^,.....................^T....T.......=.........................................^^,..^.......",
+      "~~~^^......................^..T..........==.....................................................",
+      "~~~^^^................................^#=====...................................................",
+      "~~~~^^.............................##...==^##=^.................................................",
+      "~~~~^^..................................=#.##^==...............................................^",
+      "^^^^^^............=..................^#^=^.....................................................^",
+      "^^^,.........^....=..................=====..............^............^^^^,....................^^",
+      "^^..........^^....=.............$.....................................^^^^^^^^................^^",
+      "^^.........^^^....==...........$$$....................................^^^^^^^^,^^^^...........^^",
+      "^,.......^^^^,....=...........$$$$$...................^^^........=..^^.....^^^^^^^............^^",
+      "^........,^^^T....=..........$$$$$$$................^^^^^........==.........^^^...^..........^^^",
+      "^......^^^^,......=..........$$$$$$$................^^^^^........===..........................^^",
+      "^......^^^TTT.....=.........$$$$M$$$$.............^^^^^^^.........===.........................^^",
+      "^......^^.T.......=.........$$$$$$$$$.............^^^TT^^..........===........................^^",
+      "^......^^.TT......=.........$$$$$$$$$............^^,TTT^^...........===...................$...^^",
+      ",......^^TT.......=.........$$$$$$$$$..........^^^^TTT^^,............===.................$$$...^",
+      ".......^^T........=.........$$$$$$$$$..........^^^^TTT^^..............===...............$$$$$..^",
+      "......^^^.........=.........$$$$M$$$$........^^^^^^TTT^^...............===..............$$$$$..^",
+      "^.......^........==...S......$$$$$$$.........^^^TTTTTT^^................===.............$$M$$..^",
+      "^................==..........$$$$$$$.........^^^^^TTTT^^.................===............$$$$$..^",
+      "^........^.......==...........$$$$$..........^^^^^^^^^^^..................===...........$$$$$.^^",
+      "^^................=............$$$...............^^^^^^,...................===...........$$$..^^",
+      "^^................==............$..................^^^^.....................==............$...^^",
+      "^,...$............===....................^^........^^,.........$.............=................^^",
+      "^...$$$............===...................^^,^^................$$$............=................^^",
+      "^..$$$$$............===..................^^^^^,..............$$$$$...........=.................^",
+      "^..$$$$$.............===.................^TT^^^^^^,.........$$$$$$$..........=...........^.....^",
+      "^..$$M$$..............===................^^TT^^^^^^.........$$$$$$$......S...=.........^^.......",
+      "^..$$$$$...............===..............^^TTT^^^T^^^.......$$$$M$$$$.........=........^^^.......",
+      "^^.$$$$$................===.............^^TTTTTTT^^^.......$$$$$$$$$.........==........^^.......",
+      "^^..$$$..................===............^^TTTTT,^^^........$$$$$$$$$.........=........T^^......^",
+      "^^...$....................===...........^^TTT^^^^,.........$$$$$$$$$.........=.....T.TT^^......^",
+      "^^.........................===..........^^^TT^^^...........$$$$$$$$$.........=.....TTT.^^......^",
+      "^^..........................===.........^^TT^^^............$$$$M$$$$.........=.....T.^^^^......^",
+      "^^...........................==.........^^,T^^,.............$$$$$$$..........=.....^^^^^^......^",
+      "^^^...........^...^^,.........=.........^^T^^^..............$$$$$$$..........=....T^^^,.^......^",
+      "^^.............^^^^^^.....^^..=.........^,^^,................$$$$$..........==....^^,^........^^",
+      "^^.............^^^,^^^^,................^^....................$$$...........==....^^,.........^^",
+      "^^.............^...^^^^^^^^....................................$............==....^,..........^^",
+      "^.......................^^...................................................=....^...........^^",
+      "^.......................^....................................................=..............,^^^",
+      "..........................................................................................^^^^~~",
+      "........................................^.................................................^^^~~~",
+      ".....^...........................................===......................................^^~~~~",
+      ".......^.........................................##=..^===......T..^.......................^^~~~",
+      ".......^^^,,^^^^,...............................^##=##.=,.........T.^^....................^^~~~~",
+      ".......^^^^^^^^^^^^................................==#.=.......T.TTT^^....................^^~~~~",
+      "......^^^^^^$$$^^^^.^..^.........................TT.====.#^^....TT.^^^.........^........,^^^~~~~",
+      "......^^^$$$$$$$$^^^^^.................^.........#..^##=^T^..T..^^^^^^........^^^^^^..^^^^~~~~~~",
+      ".......$$$$$$$$$$^^^^...................^^^......#.#...=.......^^^^,^.........^^^^^^..^^^~~~~~~~",
+      ".......$$$M$$$M$$$..^...................^^^...................T.^^.........^,^^^..^...^^~~~~~~~~",
+      "........$$$$$$$$$.......................^^...................TT.^^.......^^^^^,^.......^~~~~~~~~",
+      ".........$$$.$$$........................^^......................^,.......^^^^^........._~~~~~~~~",
+      ".......................................^^,$.....................^........^^^^^........._~~~~~~~~",
+      "............................T..........^^,$$.............................^^,^^........,_~~~~~~~~",
+      ".......................................^^$$$$...........................^^^....^......._~~~~~~~~",
+      ".....................................^.^^$$$$$..........................^.^.....^......__~~~~~~~",
+      "...........................TT........^^^^$$$$$...................................,#..#.__~~~~~~~",
+      "......^^,.................T..........^^^^$$M$$.....................................##...._~~~~~~",
+      "..#...^^^^^,.........................^^^^$$$$$............^^^......................##..._~~~~~~~",
+      ".....^^,.^^^TTT......TT..TT..........^^^^$$$$$...........T^^^.........................__^^~~~~~~",
+      "...TT^^##^^^T..........TTT.T.........^^^^^$$$...........T^^^..........^^^^_^________.___~^^~~~~^",
+      ".....^^^,^^,T...##.T.T.T..T...........^^^^$$..........^^^^^^..........^^^^_^^_______,,~~~~~~~~^=",
+      ".T...^^^^^^...T.##...TTTTT..............^,............^^^,..........TT^^~~^~~~~~~~~~~^~~~~~~~^==",
+      ".......^^,..=...........TT.T...........^^....................T..T...TT^^~~~~~~~~~~~~~~~~~~^~^==^",
+      "....#.......=##...##..T........................................T..TTT^^~~~~~~~~~~~~~~~~~~~~^^=^^",
+      "T...........==.T..##....T.TT.....................................TTTT^^~~~~~~~~~~~~~~~~~~~^=^^^~",
+      "...#..T.....=........##....TT..............................TT....^^^^^^~~~~~~~~~~~~~~~~~~^=#^^~~",
+      "..#...^####.=^##^#...##........................^^......T.....TT.T^^^^~~~~~~~~~~~~~~~~~~~~^#^^~~~",
+      "..#..#.#...^=###.....#.......,^^^^,,,......,^^^^^^^^,....,^^,...^^^~~^^~~~~~~~~~~~~~~~~~~~~~~~~~",
+      ".....===#======............^^^^^^^^^,,^^^^^^^^^^^^^^^^^^^^^^^^^^,^^~~~~~~~~~~~~~~~~~~~^=^~~~~~~~"
+     ],
+     "legend": {
+      ".": "clear ground",
+      ",": "rough ground",
+      "=": "road or bridge",
+      "_": "beach",
+      "~": "water or river (ground units cannot cross)",
+      "^": "rock or cliff (impassable)",
+      "T": "trees (impassable)",
+      "#": "wall, fence, civilian building or other neutral obstacle",
+      "$": "ore at the start of the match",
+      "M": "ore mine (ore regrows around it)",
+      "S": "spawn point: a start position (rules.maps.<id>.spawns)"
+     },
+     "note": "A picture of the playable area, one char per cell. rows[i] is y = origin[1] + i and its char j is x = origin[0] + j, so rows[i][j] is the cell [origin[0] + j, origin[1] + i] that orders use; ruler is x mod 10 for each column. Ore ($) and gems (*) are the amounts at the start: harvesting removes them, and ore regrows around ore mines (M). The picture shows terrain and neutral objects only, never units or buildings, and fog of war still hides the enemy. S marks the start positions; yours is the one nearest your base_center."
+    }
+   },
+   "trapped": {
+    "title": "Trapped",
+    "width": 99,
+    "height": 99,
+    "bounds": [
+     1,
+     1,
+     97,
+     97
+    ],
+    "spawns": [
+     [
+      66,
+      72
+     ],
+     [
+      26,
+      32
+     ]
+    ],
+    "layout": {
+     "origin": [
+      1,
+      1
+     ],
+     "width": 97,
+     "height": 97,
+     "ruler": "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567",
+     "rows": [
+      "..............^....T..................^^^.........,T.............................T....TT...^^...T",
+      "........T..TTT.T..TT.................T...TTT.T..TTTT...TT...TTT..T.......^^^.T.TTT....TT...T..TTT",
+      "^,....TTT..T.........^......,TT.....T....T..^..T..TT....TT..T...TT..T.TT....TT..TT..T...TT.,...TT",
+      "^^.....TT.T...T.....T..TT..T.TT..T.TT....TT.T...........TT...T......,....T.T..............T......",
+      "^^..TT.........TT.TTT.....T......TTT..T.......TT...T.......T.....T.....TTT.^^TTT.TT,..T.^...T.T..",
+      "^,T...T....T...TT.T......TT.TT.T.T....T....T......TT.TT.TTT.^^^TTT..^^^^TT...T......T.......^^^..",
+      "^......,..TT..T.......T....^,....^^......TTT,...........T...^^^.TT..^^^^..,^^^........T...T......",
+      ",...TTT........^^^....^^^^^^^^^^^^^^^.....TTT..T.........T..^^^^..^^^^^^^^^^^^..TT.....T.....T...",
+      ".T..T.......^^^^^^^^^^^^^^T,.^^^^,..................^^^,....^^^^^^^^,.^^^^^..^^,..TT.......T.....",
+      "^.......TT..^^^^^^^^^^,.TTT............^^,..^^^^^^^^^^^^^^.^^.^^^^.....^,..^.^^^^^TT.T..TT...TT..",
+      "...^^^^^,..^^^T^^^^......TT............^^^^^^^^^^^^^,.##^^..,,^^^^.^^^^^^^^,^^,.^^............,.T",
+      "...^^^^^^^^^^^.^^^^.......................^^,.........##....^^,..^^^^^^,.^^^^^,..T.T.T.....TTT...",
+      "^....T##.^^,...........^^..........$$$......................^^^^^^^,......^^^^...T..T...T..T.....",
+      "T..T.T##..........................$$$$$..........^....=........^^,........^^^^.TT..TT.T..........",
+      "^,................................$$M$$...............=..............,.....................TT....",
+      "^^....=...^.......................$$$$$........^.....^=..........................T....T..T....T..",
+      "^^....=====================........$$$....^=====================..................,...T....T.....",
+      "^^....==..................==^..............=,..................=..........$$$.......TTT...^^,..T.",
+      "^^....=....................^====...........=...................=.........$$.$$.....T.TT..T^^^^^,.",
+      "^^....=.......................,==..........=...................==........$.M.$$.........TT..TT^^.",
+      "^^,...=........................=============....................====.....$$.$.$$.......,...T..^^.",
+      ",^^...=...........................................................,==.....$$.M.$....TTT.T.T.^.^^.",
+      "^^^...=.....................................^^^,...................===.....$$.$$............TT^^.",
+      "^^,...=.......$$$...........................^^^^TT..................===.....$$$...............#^.",
+      "^^,...=......$$$$$........................,..*^^T....................===................^.TT...#.",
+      ",^^..==.....$$$$$$$..........................*,^^TT.....,.............===........===============#",
+      ".^^..==.....$$$M$$$...........................*^^TT.........T..........===......===............#=",
+      ".^^..=......$$$$$$$...........................*^^^^^....................===....===.....,......#.=",
+      "^^^.==.......$$$$$................TTTT............^^.....................===..===..............#=",
+      "^^,.==........$$$.................TTTTTT..........................^.......===^==......^........TT",
+      "^^..==..............................TTTT...................................====...^=========....#",
+      ",.#..=...................S...........TTTT..........................................=,......==^.^#",
+      "^#...=.................................TT..........................................=........^===#",
+      "==#===..........................................^..................................=.....T......#",
+      ".#........................................................*$$$.....................=....TT...T..T",
+      "#....T...................................................*$$$$$....................=.......TT....",
+      "^#..TT...................................................*$$M$$....................=....^...TT.^.",
+      "..#....................................,.................*$$$$$....................=...........TT",
+      "..#..................................................TT...*$$$*............T.......=....TT.^....T",
+      ".#.........,........................................^^^^^^.***.....................=..TT.....T...",
+      "=#===...............................................^^^^^^................,........=...^T..TTT.^.",
+      "..#.=.................................................##^^.........................=.##T.TT.TT...",
+      ".#..=..................$$$$$...........^.......^^#....##^TT..................^.....==##TTT.......",
+      "^,.==.................$$$$$$$..................^^,......^,.........^^..............=...T...T...T.",
+      "^^.==.....^...........$$*$*$$..................^^^^^,...^..........^^,TT...........=...TTT.TT....",
+      "^^.=.................$$M$*$M$$.................***^^^..............,^^TTT..........=...TTT..^^^..",
+      "^^.=..................$$*$*$$.....................*^^,..............^^^,...........=.....T..^^,..",
+      "^^.==.................$$$$$$$.....................*,^^#.............^^^^TT........==......T.,^^..",
+      "^,.=...................$$$$$.......................*^^^...........,..*^^,.........==........^^^TT",
+      "^..=...............................................*^^^........^.....*,^^........==....TT..T.,^^.",
+      "^..=...........^^^,...................................................*^^.^.....===......TTT..^^.",
+      "^,.=...........^^^^...................TT^^............................*^^^^....===........TT...^.",
+      "^^==............T^^,..................,^^^....................................===......^.....T..T",
+      "^^==.............,^^................^^^^,..........,..........................==..........TT.....",
+      ",.==..............^^................^^^.......................................=..............TT..",
+      "TT.=..............^^...............^^^.....^^^...............................==.........T.,T....T",
+      "T..=..............^^............T.T^^,.....^^^...............TTTT............==.................T",
+      "...=..$$$$$.......^^...........TT,^^^.,...^^TT...............TTTT.T..........==..$$$...^....T....",
+      "TT.=.$$$$$$$......^^..........^^^^^,......^^,..................TTTT.^^........=.$$$$$.....TTT....",
+      "...=.$$$$$$$......^^..........^^^^.......^^^....................TTTT..........==$$M$$......TT..TT",
+      ",..==$$$M$$$.....^^^..........^^^.....^^^^T^......................TT..........=.$$$$$...TTT......",
+      "^..=.$$$$$$$.....^^^........TT^^,.....^^^TT...................................=..$$$....T.....TT.",
+      "^..=.$$$$$$$.....^^^........^^^^,....^^T......................................=.........^..TT.,..",
+      ",.==..$$$$$..^^^,^^,........^^,......^^,......................................=...............T..",
+      "..==.........^^^^^^.................^^^^......................................==..........T......",
+      "..==...........^^,...............^^^^^^^......................................==...........^^TT..",
+      ",..=........,....................^^^,..........................................=......^..^^^^....",
+      "^..=.............................^TT...............$...........................=.........^^,TTT..",
+      "^..=.............................^...............$$$$$........................==.........^^,T....",
+      ",..==...........................................$$$M$$$.......................==.........^^^^^,..",
+      ",..==........^.......^..........................$$*$*$$.......................==............^^^..",
+      "^T..=................^..........................$$$*$$$..........S.............==......^.....^^.T",
+      "^...=...........................................$$*$*$$........................===......TTT..^^..",
+      "^T..=...........................................$$$M$$$.........................===.....T..TT^^..",
+      "^T..=............................................$$$$$...........................===.......T..^..",
+      "^^..=..............................................$..............................===....TTT..#..",
+      "^^,.=..............................................................................===....TT..T..",
+      ",^^.=..............................^^^^^^^^,........................................===........#.",
+      "$^^.=...........................^^^^^^^^^^^^^^,......................$$$.......,.....====...TT#..",
+      ".^^.=...........................^^^,,,......^^^.....................$$$$$...............=......#.",
+      "^^^.=...^^*$$$$$.........^......^^^.........T^^....................$$$$$$$..............==...^#..",
+      "^^^.=..^^^$$$$$$$...............^^^...........^....................$$$M$$$.......^^....=======#==",
+      "^^^.=..^^,$$$.$$$...........,....^,................................$$$$$$$.............==^....#..",
+      "^^,==..^^*$$.M.$$................^..................................$$$$$..............=.......#.",
+      "^^.==..^^*$$$.$$$....................................................$$$...............=..T.T.#..",
+      "^^.==..^^,$$$$$$$.................$$$$$.....................................^===========.TT....TT",
+      "^^,.=..,^^*$$$$$*................$$$$$$$.....................................=,.....=............",
+      ",^^==...^^,****^^..====..........$$$$$$$.....................................=......=.....TTT.TTT",
+      ".^^==...^^^^^^^^^.=======...^....$$$M$$$......................,........^.....=......=...TT..,TT..",
+      "T^^==..^...^^^^,.===...=========.$$$$$$$.=============............^===========......##T..^.TTT...",
+      "^^^.========....^==..............$$$$$$$.............==^.^.........=,....T..........#TT.T...TT.TT",
+      "^,.===....========................$$$$$...............^=======.....=...TTT.........TT..TT...T....",
+      "^#===........................................................==^...=....TT^,..^,.TTT.TTTT....T...",
+      ".=#=...........^^^^,....................................^^^,..^=====.^^^^^^^^^^^^T..TT^^^^,......",
+      "===#^^^^,..^^^^^^^^^^^,..............................^^^^^^^^,.....T.^^^^^,^^^,^^^^^^^^^^^^......",
+      "==..^^^^^^^^^^^,T...^^^.............T....^^^^^^^^^^^,^^^####^^^^,T.TT^,^^.T.^^....^^^^,.T^^,.....",
+      "=..^^,...^^,.^.......^^,.TT...T...TTT,...^^^^^^^TT^^^#^##TT###^^^TTT^^,^^^,,^^TT,^^^^,.TT^^^^^,.."
+     ],
+     "legend": {
+      ".": "clear ground",
+      ",": "rough ground",
+      "=": "road or bridge",
+      "^": "rock or cliff (impassable)",
+      "T": "trees (impassable)",
+      "#": "wall, fence, civilian building or other neutral obstacle",
+      "$": "ore at the start of the match",
+      "*": "gems at the start of the match (worth more than ore)",
+      "M": "ore mine (ore regrows around it)",
+      "S": "spawn point: a start position (rules.maps.<id>.spawns)"
+     },
+     "note": "A picture of the playable area, one char per cell. rows[i] is y = origin[1] + i and its char j is x = origin[0] + j, so rows[i][j] is the cell [origin[0] + j, origin[1] + i] that orders use; ruler is x mod 10 for each column. Ore ($) and gems (*) are the amounts at the start: harvesting removes them, and ore regrows around ore mines (M). The picture shows terrain and neutral objects only, never units or buildings, and fog of war still hides the enemy. S marks the start positions; yours is the one nearest your base_center."
+    }
+   },
+   "shadowfiend-ii": {
+    "title": "Shadowfiend II",
+    "width": 85,
+    "height": 92,
+    "bounds": [
+     1,
+     1,
+     83,
+     90
+    ],
+    "spawns": [
+     [
+      15,
+      80
+     ],
+     [
+      68,
+      10
+     ]
+    ],
+    "layout": {
+     "origin": [
+      1,
+      1
+     ],
+     "width": 83,
+     "height": 90,
+     "ruler": "12345678901234567890123456789012345678901234567890123456789012345678901234567890123",
+     "rows": [
+      "........~^.....................=.......................=...........................",
+      ".T...T.^~^.TTT.TTTT.T.T........=.....................$.=$$$$$......................",
+      "...TTT.^~^.T....T..............==..^...............TTT$=$$$$$......................",
+      "..,.TT.^^~..T.TTT.TTT...........=========..........T..$=$$$M$......................",
+      ".TT....^^~.TT..TT.T....................T=.............=$$.$$$...................$..",
+      "........,,...........................TTT=.............$$$$$$$...................$.$",
+      ".TTT.TT.~~^...TTT.....................TT==..........$.$$$$$$$...................$$$",
+      ".T......^~~~~.T..........................=============$T$.$$$..................$.$.",
+      "....TTT....^~..T.TT..........................TT........$$$$$$...................$$$",
+      ".T...TT.##^~^.TT...................................$.$$$$$$M$......S............$$$",
+      "...T....##^~^........................................$.$$$$$$..................$$.$",
+      "^^....^^^,,~~...........................................$$$$$.................$.$$$",
+      "^~~~~,~~~~~~^.T....................................^^,.T..$..................$$.$.$",
+      "^^^^^,^^^.......................................^^^^^^TT.....................$M$$.$",
+      ".^,......T.TTT..........$^^^,...................^^^,^^^.....................$$$$$$$",
+      "....T...TT.T...........$$^^^^.................^^^^^,,^^......................$$.$$$",
+      "===TT.T...............$....^^,........T.......^^^^^^^^^.......................$$$$.",
+      "..=.....T.T...........$$$$.,^^.....TT.........^^^^^^^^,.........................$..",
+      "..=..TT..............$$M$$$$^^...............T^^^^,T^^.............................",
+      "..=.....T..,........$$$$$$$.^^..TTT...........^^^^^,^^......................====...",
+      ".T=..................$$$$$$^^^..T.T...........^^^^^^^^.........................=...",
+      ".==.................$$$$.$$^^,....................^^,^.........................=...",
+      ".==.................$$$M$$$^^....TT....................................T.T.....====",
+      ".==.................$.$$$$$$^$.^...............TTT...................TTT...^...==..",
+      "..=..................$$$$$$$$$^^...............T...................TT.TT.......=...",
+      "..==.................$$$$$$$$$^^.T.......................................^^.T..=...",
+      "...======..............$$$,^^,^^..................................^^^^^,..^....=...",
+      "~~......=...........^^^^^^^^^^^^.T................................^^^^^^.......=...",
+      "~^......=...........^^^^^^^.^^,..T................................$$.^^^.^^^.T.=...",
+      "~^......=...........T........T..TT...............................$$$$^^,.^^^...=...",
+      "^~......=..............TTT.TTT....T..............................$$M$^^,.......==..",
+      "~~......=............^.T....TT.TT.................................$$.,^^....TT.=...",
+      "^~~~....=............^.^.T........................................$...^^.TTT...=...",
+      ".^^~.====..................T..T...................................$$$.^^.T.....=...",
+      ".^^~...............................................T...............$$$^^,..TT.==...",
+      "~~~~...............................................................$$$^^^^^^..==...",
+      "^^~^...............................................................$$.$$$^^^..==...",
+      ".^^.................................................................$$$$$$$....=...",
+      ".....................................................................$$M$.$....=...",
+      "...TT.............................................................T$$.$$$$.....==..",
+      "##.....................................T....T....................TT.$..$$$.TTT..===",
+      "##....................................TT.TT...............................$T.......",
+      "...................................T........T........................$.............",
+      ".T..................................T...##.T..........................T............",
+      "......................................T.##...T.....................................",
+      "...........TT........................T.....T..T....................................",
+      "..........$.....T......................TT.TT.....................................T.",
+      "............$$.TT....................T...........................................##",
+      ".......TTT$$.$$................................................................T.##",
+      "===....T.$$$$.$.$.............................................................TT...",
+      "..=.....$$$M$$$$...................................................................",
+      "..=.....$$$$$$$.$................................................................^^",
+      "..=....^^^,$$$$$$..............................................................^~~~",
+      ".==....^^^^^^$.$...............................................................~~^^",
+      ".==......^^^^$.$..............T.........................T.....................^~^..",
+      ".==...T....^^^$$$............................,........TTT.T.^^................^~^T.",
+      "..=.....,,.^^^$M$...................................T..TT...............^====..~~..",
+      "..=..T.....^^,$$$.................................TT......TT.T...........=,....^~~~",
+      "..==...TTT.^^,.$$................................T...TTT.................=...TT..~^",
+      "..=..^.T...^^^^^^..................................^^T..^^^^^^^..........=......^~^",
+      "..=......^.^^^^^T................................T.^^^^^^^^^^^^..........=......^~^",
+      "..=...TT..T...TTT..................................^^.^^,$$$$............=.......~~",
+      "..=......TT....TT.T..............................T.^^$$$$$$$$$$..........=.......^~",
+      "..=....^^.T.TTT....................................^,$$$$.$$.$$..........==........",
+      "..=.........T..TT................TT................^$$^^$$$$$$$...........========.",
+      "===............................................TT...$.^^$$$M$$...................=.",
+      "..=^.........................^^,..................T..^^,$$$$$$$..................=.",
+      "..=...T......................^^^^^^^,...........TTT..^^,$.$$$$$..................=.",
+      "..=..........................^^.^^^^^..........T.TT..^^$$$$$$$$.................==.",
+      "..==.......................TT^^^^^,^^.........TT.....^^.$$$M$$........,....T....==T",
+      ".$.===......................^^,^^^^^^T...............^^^..$$$$................T.==.",
+      "............................^^,^^^^^^.......T........^^^.....$.............T.TT..=.",
+      "...$$..$....................^^^^^,.T^.................^^^^.$$............TTT.....=.",
+      "$.$$$.$$....................T^^,^^^...................^^^^$...............TTTT.TT==",
+      "$$$$M$$...................TTT^^^^^^...................................TTT.........=",
+      "$$.$$$$$................$$.TT^^^......................................T...T...^^...",
+      "$$$$.$$................$................................................^^^,,,^~~~~",
+      "$.$$$$...............$$$$$$.........................................T.^~~~~~~,^^^^^",
+      "$$$$.................$$.$.$.$.........................................~~^^^....^,.T",
+      "..$$$.........S......$M$$$$.$.....................................TT..~^##......T..",
+      ".$$..................$$$.$$$$$.......................................^~^##.TTT.TT..",
+      "$..$..................$$$$$$........TT............................T..^~^...T.......",
+      ".....................$$$$^$$==============TT........................T.~~^....^^^...",
+      ".....................$$.$$$,$............=TTT.................TTT.TTT.^~~~~.....TT.",
+      ".....................$$$.$$..............=T.T.................T.......T..,,.....T..",
+      ".....................$$$$$$.$............==...^.................T.T.TTT.^~^TT.TTT..",
+      ".....................$M$$$$$TTT...........==========...........T.....TT.^~^....TT..",
+      ".....................$$$$$=.T......................=.........TTT.TTT....^~^.,.T....",
+      ".....................$$$.=$........................=..........TT.T.TT.T.^^~..TT..T.",
+      "........................$.=........................=....................^^~........"
+     ],
+     "legend": {
+      ".": "clear ground",
+      ",": "rough ground",
+      "=": "road or bridge",
+      "~": "water or river (ground units cannot cross)",
+      "^": "rock or cliff (impassable)",
+      "T": "trees (impassable)",
+      "#": "wall, fence, civilian building or other neutral obstacle",
+      "$": "ore at the start of the match",
+      "M": "ore mine (ore regrows around it)",
+      "S": "spawn point: a start position (rules.maps.<id>.spawns)"
+     },
+     "note": "A picture of the playable area, one char per cell. rows[i] is y = origin[1] + i and its char j is x = origin[0] + j, so rows[i][j] is the cell [origin[0] + j, origin[1] + i] that orders use; ruler is x mod 10 for each column. Ore ($) and gems (*) are the amounts at the start: harvesting removes them, and ore regrows around ore mines (M). The picture shows terrain and neutral objects only, never units or buildings, and fog of war still hides the enemy. S marks the start positions; yours is the one nearest your base_center."
+    }
+   }
+  }
+ },
+ "rules_glossary": {
+  "cost": "credits",
+  "build_time_s": "seconds with one producer at full power (slower on low power)",
+  "power": "power provided (+) or drained (-)",
+  "prerequisites": "buildings you must own first (faction-only items list factions)",
+  "hp": "engine hit points (observations show hp as a percent)",
+  "speed": "cells per second",
+  "weapon": "main weapon: range_cells, damage per hit (before armor)",
+  "maps": "this server's map pool only. width/height = full size; bounds [x, y, w, h] = playable cells; spawns = start cells; layout = a picture of the playable area (terrain, starting ore and gems, neutral obstacles, spawns; see its note and legend)"
+ }
+}
