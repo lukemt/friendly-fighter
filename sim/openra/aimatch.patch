@@ -1,0 +1,48 @@
+diff --git a/OpenRA.Game/Game.cs b/OpenRA.Game/Game.cs
+index db21002..c8773e0 100644
+--- a/OpenRA.Game/Game.cs
++++ b/OpenRA.Game/Game.cs
+@@ -989,9 +989,43 @@ public static void LoadMap(string launchMap)
+ 			if (map == null)
+ 				throw new ArgumentException($"Could not find map '{launchMap}'.");
+ 
++			// friendly-fighter sim: OPENRA_AI_MATCH="botA,botB" seats two bots in Multi0/Multi1,
++			// makes the host a spectator, starts at once, logs the result and exits at game over.
++			var aiMatch = Environment.GetEnvironmentVariable("OPENRA_AI_MATCH");
++			if (!string.IsNullOrEmpty(aiMatch))
++			{
++				var bots = aiMatch.Split(',');
++				orders = new List<Order>
++				{
++					Order.Command("option gamespeed default"),
++					Order.Command("spectate"),
++					Order.Command($"slot_bot Multi0 0 {bots[0]}"),
++					Order.Command($"slot_bot Multi1 0 {(bots.Length > 1 ? bots[1] : bots[0])}"),
++				};
++				foreach (var extra in (Environment.GetEnvironmentVariable("OPENRA_AI_OPTIONS") ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
++					orders.Add(Order.Command($"option {extra}"));
++				orders.Add(Order.Command($"state {Session.ClientState.Ready}"));
++				orders.Add(Order.Command("startgame"));
++				AfterGameStart += AiMatchStarted;
++			}
++
+ 			CreateAndStartLocalServer(map.Uid, orders);
+ 		}
+ 
++		static void AiMatchStarted()
++		{
++			AfterGameStart -= AiMatchStarted;
++			var world = OrderManager.World;
++			var started = DateTime.UtcNow;
++			Console.WriteLine($"AIMATCH start map={world.Map.Title} players={string.Join(",", world.Players.Where(p => p.Playable).Select(p => $"{p.PlayerName}:{p.Faction.InternalName}:{p.BotType}"))}");
++			world.GameOver += () =>
++			{
++				var result = string.Join(",", world.Players.Where(p => p.Playable).Select(p => $"{p.PlayerName}:{p.WinState}"));
++				Console.WriteLine($"AIMATCH end ticks={world.WorldTick} wall_s={(DateTime.UtcNow - started).TotalSeconds:F0} result={result}");
++				Exit();
++			};
++		}
++
+ 		public static void FinishBenchmark()
+ 		{
+ 			if (benchmark != null)

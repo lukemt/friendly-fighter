@@ -18,6 +18,7 @@ Recording never breaks play: any write error disables the recorder.
 
 from __future__ import annotations
 
+import atexit
 import gzip
 import json
 import os
@@ -62,6 +63,9 @@ class Recorder:
             folder.mkdir(parents=True, exist_ok=True)
             path = folder / f"seat{_safe(context.seat_position)}.jsonl.gz"
             self._file = gzip.open(path, "ab")
+            # Close (flush + gzip trailer) at exit: left to the garbage collector,
+            # the underlying file can be finalized first and the tail is lost.
+            atexit.register(self.close)
             print_line(f"[ff] recording to {path}")
         except OSError as exc:
             self._disable(exc)
