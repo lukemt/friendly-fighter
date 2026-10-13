@@ -54,6 +54,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import threading
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -259,6 +261,138 @@ def _wrap_http_status_error(name: str, exc: httpx.HTTPStatusError) -> MCPToolErr
     )
 
 
+# --- Fast path: one JSON-RPC POST per call over a kept-open connection ---------------
+#
+# friendly-fighter: the SDK path above opens a fresh connection and MCP session
+# for every call (TCP + TLS + initialize + call), which measured ~1.9 s per call
+# from a European host: a real-time Red Alert agent then acts only every ~2 s.
+# GameAPI is stateless, and its docs (skill/mcp.md, "Raw JSON-RPC") describe a
+# single POST with no initialize as supported, recommending one kept-alive HTTP
+# client. That is this path: one round trip per call. Errors map to exactly the
+# same MCPToolError shapes as the SDK path. If the server ever refuses the raw
+# form (a 4xx other than 401/429, or a JSON-RPC protocol error), this process
+# falls back to the SDK path for good. FF_MCP_TRANSPORT=sdk forces the SDK path.
+
+_raw_client: httpx.Client | None = None
+_raw_lock = threading.Lock()
+_raw_disabled = os.environ.get("FF_MCP_TRANSPORT", "").lower() == "sdk"
+_raw_ids = iter(range(1, 1 << 62))
+
+
+class _RawUnsupported(Exception):
+    """The server answered the raw JSON-RPC form in a way that suggests it
+    doesn't accept it; the caller falls back to the SDK path."""
+
+
+def _shared_raw_client() -> httpx.Client:
+    global _raw_client
+    with _raw_lock:
+        if _raw_client is None:
+            _raw_client = httpx.Client(
+                timeout=httpx.Timeout(MCP_READ_TIMEOUT_SECONDS, connect=MCP_CONNECT_TIMEOUT_SECONDS),
+                limits=httpx.Limits(max_keepalive_connections=4, keepalive_expiry=60.0),
+                http2=False,
+            )
+        return _raw_client
+
+
+def _parse_rpc_body(response: httpx.Response) -> dict:
+    """The JSON-RPC envelope from a plain JSON reply or a one-event SSE reply."""
+    content_type = response.headers.get("content-type", "")
+    text = response.text
+    if "text/event-stream" in content_type:
+        data = [line[5:].strip() for line in text.splitlines() if line.startswith("data:")]
+        text = data[-1] if data else ""
+    envelope = json.loads(text) if text else {}
+    if not isinstance(envelope, dict):
+        raise ValueError("JSON-RPC reply is not an object")
+    return envelope
+
+
+def _payload_from_result(name: str, result: Any) -> dict:
+    if not isinstance(result, dict):
+        return {}
+    if result.get("isError"):
+        content = result.get("content") or [{}]
+        text = content[0].get("text") if isinstance(content[0], dict) else None
+        raise MCPToolError(
+            f"MCP tool {name!r} failed at the protocol level: {text or result}",
+            status_code=None,
+            error_code=None,
+            protocol_error=True,
+        )
+    payload = result.get("structuredContent")
+    if payload is None:
+        content = result.get("content") or []
+        text = content[0].get("text") if content and isinstance(content[0], dict) else None
+        try:
+            payload = json.loads(text) if text else {}
+        except ValueError:
+            payload = {}
+    if isinstance(payload, dict) and "error" in payload:
+        raise MCPToolError(
+            payload.get("detail") or f"MCP tool {name!r} returned error {payload['error']!r}.",
+            status_code=None,
+            error_code=payload["error"],
+            next_action=(payload.get("next_actions") or [None])[0],
+        )
+    return payload if isinstance(payload, dict) else {}
+
+
+def _call_tool_raw(http: httpx.Client, mcp_url: str, token: str, name: str, arguments: dict) -> dict:
+    """One tools/call POST. Raises MCPToolError like the SDK path, httpx's
+    HTTPStatusError for a 401 (the caller re-logs in), or _RawUnsupported."""
+    body = {"jsonrpc": "2.0", "id": next(_raw_ids), "method": "tools/call",
+            "params": {"name": name, "arguments": arguments}}
+    try:
+        response = http.post(
+            mcp_url,
+            json=body,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            },
+        )
+    except httpx.HTTPError as exc:  # connect/read timeouts, dropped connections
+        raise MCPToolError(f"MCP tool {name!r} failed: {exc!r}", status_code=None, error_code=None) from exc
+    status = response.status_code
+    if status == 401:
+        raise httpx.HTTPStatusError("401 Unauthorized", request=response.request, response=response)
+    if status >= 500 or status in (408, 429):
+        raise MCPToolError(
+            f"MCP tool {name!r} request failed with HTTP {status}: {response.text[:500]}",
+            status_code=status,
+            error_code=None,
+        )
+    if status >= 400:
+        raise _RawUnsupported(f"HTTP {status}: {response.text[:200]}")
+    try:
+        envelope = _parse_rpc_body(response)
+    except ValueError as exc:
+        raise _RawUnsupported(f"unreadable reply: {exc}") from exc
+    if "error" in envelope and "result" not in envelope:
+        raise _RawUnsupported(f"JSON-RPC error: {str(envelope['error'])[:200]}")
+    return _payload_from_result(name, envelope.get("result"))
+
+
+def _call_tool_fast(client: "AltruAgentClient", mcp_url: str, name: str, arguments: dict) -> dict:
+    http = _shared_raw_client()
+    token = client._current_access_token()
+    try:
+        return _call_tool_raw(http, mcp_url, token, name, arguments)
+    except httpx.HTTPStatusError:
+        token = client._current_access_token(force_relogin=True)
+        try:
+            return _call_tool_raw(http, mcp_url, token, name, arguments)
+        except httpx.HTTPStatusError as exc:
+            raise MCPToolError(
+                f"MCP tool {name!r} request failed with HTTP 401 after re-login",
+                status_code=401,
+                error_code=None,
+            ) from exc
+
+
 def call_tool(
     client: "AltruAgentClient",
     mcp_url: str,
@@ -278,7 +412,16 @@ def call_tool(
     ``httpx_client_factory`` is a test-only seam (see ``_call_tool_once``) —
     production callers never pass it.
     """
+    global _raw_disabled
     _check_arguments(name, arguments)
+    if httpx_client_factory is None and not _raw_disabled:
+        try:
+            return _call_tool_fast(client, mcp_url, name, arguments)
+        except _RawUnsupported as exc:
+            _raw_disabled = True
+            from .console import print_line
+
+            print_line(f"[mcp] raw JSON-RPC calls refused ({exc}); using full MCP sessions from now on")
     token = client._current_access_token()
     try:
         return asyncio.run(
