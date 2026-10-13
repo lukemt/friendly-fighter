@@ -386,10 +386,10 @@ class _FakeGame:
                 self.production = []
             rows = [{"index": i, "cmd": o.get("cmd") if isinstance(o, dict) else None, "status": "pending",
                      "reason": "pending"} for i, o in enumerate(orders)]
-            self.last = {"state_version": args.get("state_version"), "pending": False,
-                         "applied_at_tick": (args.get("state_version") or 0) + 12,
+            # Like the real server: the batch is stamped with the arrival tick, not the version sent.
+            self.last = {"state_version": self.tick, "pending": False, "applied_at_tick": self.tick + 12,
                          "results": [dict(r, status="ok", reason="ok") for r in rows]}
-            return {"payload": {"accepted": True, "results": rows}, "dt": 0.05}
+            return {"payload": {"accepted": True, "state_version": self.tick, "results": rows}, "dt": 0.05}
         return {"payload": {"is_terminal": name == "resign"}, "dt": 0.05}
 
 
@@ -413,6 +413,8 @@ def test_probe_runs_every_step_then_hands_over(tmp_path, monkeypatch):
     assert [r["step"] for r in records] == [s[0] for s in probe.steps] + ["zz_end"]
     assert any(p.get("name") == "resign" for m, p in game.calls if m == "tools/call")
     assert probe.finished
+    latency = next(r for r in records if r["step"] == "a04_latency_vs_delay")["result"]["rows"]
+    assert all(row["applied_at"] for row in latency)  # verdicts found, no timeouts
 
 
 def test_console_seat_serves_creds_calls_and_bot_switch(tmp_path, monkeypatch):

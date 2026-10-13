@@ -163,8 +163,15 @@ class Probe:
         action = orders if isinstance(orders, dict) and "type" in orders else {"type": "orders", "orders": orders}
         return self.tool("play_action", http, state_version=sv, action=action, **extra)
 
-    def settle(self, sv: int, timeout: float = 6.0) -> dict:
-        """Read views until the batch sent with state_version ``sv`` has its final verdict."""
+    def settle(self, sv: Any, timeout: float = 6.0) -> dict:
+        """Read views until a batch has its final verdict. ``sv`` is play_action's
+        answer (its ``state_version`` is the tick the server stamped the batch
+        with: the arrival tick, not the state_version we sent) or that tick."""
+        if isinstance(sv, dict):
+            payload = sv.get("payload", sv)
+            sv = payload.get("state_version") if isinstance(payload, dict) else None
+            if sv is None:
+                return {"final": None, "not_accepted": True}
         seen = []
         end = time.time() + timeout
         while time.time() < end:
@@ -249,13 +256,13 @@ class Probe:
 
     def _latency_series(self, raw):
         rows = []
-        for delay in (0.0, 0.1, 0.3, 0.6, 1.0, 2.0, 4.0):
+        for delay in (0.0, 0.5, 2.0):
             first = self.state()
             mcv = self._mcv(first)
             time.sleep(delay)
             now = self.state()
             sent = self.play([{"cmd": "stop", "units": [mcv]}], first["state_version"])
-            verdict = self.settle(first["state_version"])
+            verdict = self.settle(sent)
             final = verdict.get("final") or {}
             rows.append({"delay": delay, "sv": first["state_version"], "tick_at_send": now["state_version"],
                          "applied_at": final.get("applied_at_tick"), "seen_final_at": verdict.get("seen_at"),
@@ -344,7 +351,7 @@ class Probe:
         for name, bad in cases.items():
             cur = self.state()
             sent = self.play([bad, good], cur["state_version"])
-            verdict = self.settle(cur["state_version"]) if isinstance(sent["payload"], dict) and sent["payload"].get("accepted") else {}
+            verdict = self.settle(sent) if isinstance(sent["payload"], dict) and sent["payload"].get("accepted") else {}
             final = (verdict.get("final") or {}).get("results") or []
             rows[name] = {"order": bad, "immediate": _rows(sent["payload"]), "final": _rows({"results": final}),
                           "error": (sent["payload"] or {}).get("error") if isinstance(sent["payload"], dict) else None,
@@ -388,9 +395,12 @@ class Probe:
 
     # -- phase C: a small base ------------------------------------------------------------
 
-    def _infantry(self, st: dict) -> list[dict]:
-        return [u for u in (st.get("observation") or {}).get("units") or []
-                if u.get("type") in INFANTRY and not u.get("wreck")]
+    def _infantry(self, st: dict, need: int = 1) -> list[dict]:
+        units = [u for u in (st.get("observation") or {}).get("units") or []
+                 if u.get("type") in INFANTRY and not u.get("wreck")]
+        if len(units) < need:
+            raise ProbeError(f"needs {need} infantry, has {len(units)}")
+        return units
 
     def _building(self, st: dict, *types: str) -> dict | None:
         return next((b for b in (st.get("observation") or {}).get("buildings") or [] if b.get("type") in types), None)
@@ -415,16 +425,17 @@ class Probe:
         sv = st["state_version"]
         a = self.play([{"cmd": "stop", "units": [unit]}], sv - 3001)
         self.gap()
-        b = self.play([{"cmd": "stop", "units": [unit]}], sv - 2990)
-        verdict = self.settle(sv - 2990)
+        # The window is measured at arrival (current tick - 3000), so leave room for the round trip.
+        b = self.play([{"cmd": "stop", "units": [unit]}], sv - 2950)
+        verdict = self.settle(b)
         self.gap()
-        return {"summary": {"3001_old": _short(a["payload"]), "2990_old": _short(b["payload"]),
-                            "applied_minus_sv": ((verdict.get("final") or {}).get("applied_at_tick") or 0) - (sv - 2990)},
+        return {"summary": {"3001_old": _short(a["payload"]), "2950_old": _short(b["payload"]),
+                            "final": _rows((verdict.get("final") or {}))},
                 "a": a, "b": b, "verdict": verdict}
 
     def _stance_guard_queue(self, raw):
         st = self.state()
-        inf = self._infantry(st)
+        inf = self._infantry(st, 3)
         fact = self._building(st, "fact")
         a, b, c = (u["id"] for u in inf[:3])
         fx, fy = fact["x"], fact["y"]
@@ -434,7 +445,7 @@ class Probe:
                   {"cmd": "move", "units": [c], "to": p1},
                   {"cmd": "move", "units": [c], "to": p2, "queued": True}]
         sent = self.play(orders, st["state_version"])
-        verdict = self.settle(st["state_version"])
+        verdict = self.settle(sent)
         track = self._track([a, b, c], 8.0)
         self.gap()
         return {"summary": {"immediate": _rows(sent["payload"]), "final": _rows(verdict.get("final") or {}),
@@ -453,7 +464,7 @@ class Probe:
         for name, order in cases.items():
             cur = self.state()
             sent = self.play([order], cur["state_version"])
-            verdict = self.settle(cur["state_version"]) if (sent["payload"] or {}).get("accepted") else {}
+            verdict = self.settle(sent)
             rows[name] = {"immediate": _rows(sent["payload"]), "final": _rows(verdict.get("final") or {}),
                           "error": (sent["payload"] or {}).get("error"), "detail": (sent["payload"] or {}).get("detail")}
             self.gap()
@@ -488,20 +499,20 @@ class Probe:
         ):
             cur = self.state()
             sent = self.play(orders, cur["state_version"])
-            rows[name] = {"immediate": _rows(sent["payload"]), "verdict": self.settle(cur["state_version"])}
+            rows[name] = {"immediate": _rows(sent["payload"]), "verdict": self.settle(sent)}
             self.gap()
         rows["while_off"] = self._track([], 6.0)
         cur = self.state()
         sent = self.play([{"cmd": "power_toggle", "building": p["id"], "on": True} for p in plants], cur["state_version"])
-        rows["on"] = {"immediate": _rows(sent["payload"]), "verdict": self.settle(cur["state_version"])}
+        rows["on"] = {"immediate": _rows(sent["payload"]), "verdict": self.settle(sent)}
         self.gap()
         cur = self.state()
         sent = self.play([{"cmd": "power_toggle", "building": plants[0]["id"]}], cur["state_version"])
-        rows["toggle_no_on"] = {"immediate": _rows(sent["payload"]), "verdict": self.settle(cur["state_version"])}
+        rows["toggle_no_on"] = {"immediate": _rows(sent["payload"]), "verdict": self.settle(sent)}
         self.gap()
         cur = self.state()
         sent = self.play([{"cmd": "power_toggle", "building": plants[0]["id"], "on": True}], cur["state_version"])
-        rows["on_again"] = {"immediate": _rows(sent["payload"]), "verdict": self.settle(cur["state_version"])}
+        rows["on_again"] = {"immediate": _rows(sent["payload"]), "verdict": self.settle(sent)}
         rows["after"] = self._track([], 3.0)
         events = sorted({e.get("kind") for r in rows["while_off"] + rows["after"] for e in r["events"]})
         econ = [r["economy"] for r in rows["while_off"][:1] + rows["after"][-1:]]
@@ -523,7 +534,7 @@ class Probe:
         for name, orders in cases.items():
             cur = self.state()
             sent = self.play(orders, cur["state_version"])
-            verdict = self.settle(cur["state_version"]) if (sent["payload"] or {}).get("accepted") else {}
+            verdict = self.settle(sent)
             rows[name] = {"immediate": _rows(sent["payload"]), "final": _rows(verdict.get("final") or {}),
                           "error": (sent["payload"] or {}).get("error"), "detail": (sent["payload"] or {}).get("detail")}
             self.gap()
@@ -542,7 +553,7 @@ class Probe:
             cur = self.state()
             before = (cur.get("observation") or {}).get("production")
             sent = self.play(orders, cur["state_version"])
-            verdict = self.settle(cur["state_version"]) if (sent["payload"] or {}).get("accepted") else {}
+            verdict = self.settle(sent)
             after = (self.state().get("observation") or {}).get("production")
             steps[name] = {"immediate": _rows(sent["payload"]), "final": _rows(verdict.get("final") or {}),
                            "error": (sent["payload"] or {}).get("error"), "before": before, "after": after}
@@ -578,7 +589,7 @@ class Probe:
             before = {b["id"] for b in (self.state().get("observation") or {}).get("buildings") or []}
             cur = self.state()
             sent = self.play([{"cmd": "place", "item": "powr", "at": at}], cur["state_version"])
-            verdict = self.settle(cur["state_version"])
+            verdict = self.settle(sent)
             time.sleep(0.5)
             after = [b for b in (self.state().get("observation") or {}).get("buildings") or [] if b["id"] not in before]
             rows[name] = {"at": at, "landed": [[b["type"], b["x"], b["y"]] for b in after],
@@ -606,7 +617,7 @@ class Probe:
         target = plants[-1]
         cash_before = (st.get("observation") or {}).get("economy")
         sent = self.play([{"cmd": "sell", "building": target["id"]}], st["state_version"])
-        verdict = self.settle(st["state_version"])
+        verdict = self.settle(sent)
         track = self._track([], 4.0)
         events = [e for r in track for e in r["events"] if e.get("id") == target["id"]]
         self.gap()
@@ -622,7 +633,7 @@ class Probe:
         h = harv[0]
         to = self._clamp(st, h["x"] + 3, h["y"] + 3)
         sent = self.play([{"cmd": "harvest", "units": [h["id"]], "to": to}], st["state_version"])
-        verdict = self.settle(st["state_version"])
+        verdict = self.settle(sent)
         track = self._track([h["id"]], 4.0)
         self.gap()
         cur = self.state()

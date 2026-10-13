@@ -81,7 +81,7 @@ so it can be rewritten as a thin Python layer.
 | Engine speed | 25.05 ticks per wall-clock second |
 | Observation cadence | **every 6 ticks (0.24 s)**, the same ticks for both seats (one engine, one clock). Our loop saw 98% of them (step 6; 3% step 12) |
 | `state_version` | always equals `observation.tick` |
-| Order latency | `applied_at_tick − state_version` = **exactly 12 ticks** for every settled batch (p10 = p50 = p90). The final verdict appears in the first view ≥ 12 ticks later |
+| Order latency | Orders run **exactly 12 ticks after the batch reaches the server** (`applied_at_tick` = arrival tick + 12, all 113 probe-match batches). The server stamps the batch with the arrival tick: `play_action`'s answer and `last_orders` carry that tick as `state_version`, **not the one sent**. A 2 s-old view is applied at arrival + 12 too. The final verdict shows in the first view ≥ 12 ticks after arrival |
 | Kills | `seat0.kills_cost == seat1.deaths_cost` (and vice versa) at all 2,958 shared ticks |
 | `assets_value` | the exact sum of the costs of own units and buildings, with `fact` counted at $2,000 (the MCV's cost; `fact` isn't in `rules`) |
 | Fog | enemies are listed exactly when within sight; positions agree with the other seat's own view. Sight ranges seen: ~6–9 cells |
@@ -173,3 +173,103 @@ The plan shrinks:
 
   Validate it against these recordings: the schema, cadence, latency,
   `assets_value` and fog checks above become its tests.
+
+## 6. Probe match results (session `70aee597-…`, 2026-10-13)
+
+Seat 0 ran `agent/probe.py`; seat 1 ran the bot. Raw data:
+`recordings/70aee597-…/probe-seat0.jsonl` plus `wire-*.jsonl.gz`.
+
+**What went wrong:** the probe waited for verdicts under the version it had
+sent, but the server files them under the arrival tick (fixed since). Every
+wait ran into its 6 s timeout, so the opening tests took ~4 minutes. Seat 0
+deployed only at 4:10 and lost at ~6:30, so most phase-C tests didn't run.
+
+### Tools
+
+`tools/list` has 11 tools:
+
+- `get_agent_status`, `list_games`, `get_game_config`;
+- `get_game_state`, `wait_for_update`, `get_legal_actions`;
+- `play_action`, `send_message`, `get_messages`;
+- `get_result`, `resign`.
+
+### Pacing
+
+- **Batches too close:** a second batch 0 s after the first took 0.31 s
+  instead of 0.20 s. The server held it for the gap; no error.
+- **Two batches at once:** one is accepted, the other gets `NOT_YOUR_TURN`
+  ("Your previous batch is still being applied…").
+- **Staleness:** a `state_version` in the future, or more than 3000 ticks
+  old, gets `STALE_STATE`.
+  - The detail names the current tick and the oldest tick accepted.
+  - It's measured at arrival: a view read 2990 ticks back was already stale
+    on arrival.
+- **Negative `state_version`:** `INVALID_ACTION` (schema).
+
+### Batch-level errors
+
+All of these get `INVALID_ACTION`, with readable details:
+
+- empty, 21 orders, or `orders` not a list: "non-empty list … (at most
+  20)";
+- wrong `type`;
+- no valid order: lists `[i] cmd: reason` for each order.
+
+Other answers:
+
+- **Engine-command cap:** 250 commands of unknown unit ids never reached it.
+  Ownership is checked first, so the batch was simply all `not_owned`.
+- **`action_id` (an int) or a missing `state_version`:** answered as an MCP
+  text error ("Error executing tool … validation error"), not as JSON.
+- **Unknown tool:** "Unknown tool: teleport".
+- **Wrong session:** `SESSION_NOT_FOUND`.
+- **700-character reasoning:** accepted.
+
+### Per-order checks
+
+These are answered at once, as `rejected` with a reason and detail:
+
+| Order | Reason | Detail |
+|---|---|---|
+| Unknown field | `invalid` | "unknown field(s) for stop: ['foo']" |
+| Unknown `cmd` | `invalid` | lists the 19 valid ones |
+| `to` outside width × height | `invalid` | |
+| Non-integer cell | `invalid` | |
+| Duplicate ids | `invalid` | "units must be distinct" |
+| 51 units | `invalid` | |
+| String id, empty units | `invalid` | |
+| `count: 11` | `invalid` | |
+| Unknown or unavailable item | `not_available` | "… is not in available_production" |
+| `place` with nothing ready | `not_ready` | "… is not in any production queue" |
+| `cancel` with nothing queued | `not_available` | |
+| `attack` on an unseen id | `target_not_visible` | |
+| Both `target` and `to` | `invalid` | |
+| Bad stance | `invalid` | lists the 4 stances |
+| repair/sell/rally on a unit | `not_owned` | "… is not one of your buildings" |
+| Unknown unit id | `not_owned` | listed in `failed` |
+| `move` on a building | `is_building` | |
+
+These pass the runner's checks (`pending`) and are left to the engine:
+
+- `to` inside the map but outside `bounds`;
+- `attack` of your own unit (`target`: self);
+- `guard` self;
+- `unload` / `enter_transport` / `harvest` on an MCV;
+- `queued: true`;
+- `stop` / `set_stance` on a building.
+
+The final verdicts of these are in the probe log.
+
+### Not yet measured
+
+Phase C didn't run, so these remain:
+
+- stance, guard and queued moves;
+- unit speed;
+- power toggle;
+- repair / primary / rally;
+- queue and cancel;
+- where `place at` puts a building;
+- sell;
+- harvest `to`;
+- the end-of-game answers after `resign`.
