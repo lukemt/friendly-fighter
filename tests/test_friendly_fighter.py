@@ -413,3 +413,33 @@ def test_probe_runs_every_step_then_hands_over(tmp_path, monkeypatch):
     assert [r["step"] for r in records] == [s[0] for s in probe.steps] + ["zz_end"]
     assert any(p.get("name") == "resign" for m, p in game.calls if m == "tools/call")
     assert probe.finished
+
+
+def test_console_seat_serves_creds_calls_and_bot_switch(tmp_path, monkeypatch):
+    import httpx
+    from agent.console import ConsoleSeat
+    from altruagent import mcp_transport
+
+    class FakeClient:
+        def _current_access_token(self):
+            return "tok"
+
+    monkeypatch.setattr(mcp_transport, "last_endpoint", (FakeClient(), "https://example/mcp"))
+
+    class Caller:
+        def rpc(self, method, params):
+            return {"payload": {"method": method, "params": params}}
+
+    bot, _ = make_bot()
+    ctx = DecisionContext(session_id="s1", tournament_id=None, game_type="red_alert", agent_id="a",
+                          game_config=CONFIG, seat_position=0)
+    seat = ConsoleSeat(bot, ctx, root=tmp_path, port=0, caller=Caller())
+    try:
+        assert httpx.get(seat.address + "/creds").json()["token"] == "tok"
+        answer = httpx.post(seat.address + "/call", json={"tool": "get_game_state"}).json()
+        assert answer["payload"]["params"] == {"name": "get_game_state", "arguments": {"session_id": "s1"}}
+        assert httpx.post(seat.address + "/bot", json={"on": False}).json() == {"on": False}
+        assert seat.choose_action(state(), ctx) is WAIT
+        assert json.loads((tmp_path / "console-seat0.json").read_text())["url"] == seat.address
+    finally:
+        seat.close()

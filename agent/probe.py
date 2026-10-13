@@ -42,9 +42,9 @@ PHASE_C_LATEST_TICK = 9000  # 6 minutes: run phase C even if its base isn't ther
 _ids = itertools.count(1)
 
 
-def read_probe_control(path: Path = CONTROL) -> dict:
+def read_probe_control(path: Path | None = None) -> dict:
     try:
-        return json.loads(path.read_text())
+        return json.loads((path or CONTROL).read_text())
     except (OSError, ValueError):
         return {}
 

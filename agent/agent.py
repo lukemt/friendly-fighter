@@ -25,6 +25,7 @@ from altruagent import TERMINATE_MESSAGING, DecisionContext, GameState
 
 from .commander import Commander, commander_from_env
 from .recorder import Recorder
+from .console import ConsoleSeat, read_console_control
 from .probe import Probe, read_probe_control
 from .remote import RemoteSeat, read_control
 from .redalert_bot import RedAlertBot
@@ -47,6 +48,7 @@ class FriendlyFighter:
         self._remote: RemoteSeat | None = None
         self._probe: Probe | None = None
         self._probe_checked = False
+        self._console: ConsoleSeat | None = None
 
     # -- moves ----------------------------------------------------------------------
 
@@ -61,11 +63,18 @@ class FriendlyFighter:
             bot = self._red_alert()
             if not self._probe_checked:  # decided once per match, at its first view
                 self._probe_checked = True
-                probe = read_probe_control()
-                if probe.get("enabled") and str(probe.get("seat")) == str(context.seat_position):
-                    self._probe = Probe(bot, context, resign_at_end=probe.get("resign_at_end", True) is not False)
-            if self._probe is not None:
+                mine = lambda c: c.get("enabled") and str(c.get("seat")) == str(context.seat_position)  # noqa: E731
+                console, probe = read_console_control(), read_probe_control()
+                if mine(console):
+                    self._console = ConsoleSeat(bot, context, bot_on=console.get("bot", True) is not False)
+                if mine(probe):
+                    # With a console on this seat, the probe hands over instead of resigning.
+                    resign = probe.get("resign_at_end", True) is not False and self._console is None
+                    self._probe = Probe(bot, context, resign_at_end=resign)
+            if self._probe is not None and not self._probe.finished:
                 return self._probe.choose_action(state, context)
+            if self._console is not None:
+                return self._console.choose_action(state, context)
             control = read_control()
             if control.get("enabled") and str(control.get("seat")) == str(context.seat_position):
                 if self._remote is None:
@@ -79,14 +88,18 @@ class FriendlyFighter:
 
     def on_action_result(self, result: dict, context: DecisionContext) -> None:
         self._recorder.result(result, context)
-        if self._probe is not None:
-            self._probe.on_action_result(result, context)
+        if self._probe is not None or self._console is not None:
+            self.bot_result(result, context)
         elif self._remote is not None:
             self._remote.on_action_result(result, context)
         elif self._bot is not None:
             self._bot.on_action_result(result, context)
         elif self._fallback is not None and hasattr(self._fallback, "on_action_result"):
             self._fallback.on_action_result(result, context)
+
+    def bot_result(self, result: dict, context: DecisionContext) -> None:
+        if self._bot is not None:
+            self._bot.on_action_result(result, context)
 
     def choose_message(self, state: GameState, context: DecisionContext):
         other = self._other()

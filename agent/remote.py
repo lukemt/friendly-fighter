@@ -39,9 +39,9 @@ STATE_EVERY_SECONDS = 1.0
 MAX_ORDERS = 20
 
 
-def read_control(root: Path = ROOT) -> dict:
+def read_control(root: Path | None = None) -> dict:
     try:
-        return json.loads((root / "control.json").read_text())
+        return json.loads(((root or ROOT) / "control.json").read_text())
     except (OSError, ValueError):
         return {}
 
