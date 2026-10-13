@@ -19,6 +19,21 @@ use; Red Alert as the only game we optimise for.
 
 ### Deadlines and caveats
 
+- **Status at 2026-10-13 evening:** the Tournaments page says "No tournaments
+  right now". The organizers haven't opened the Red Alert tournament yet.
+  "Register my agent" appears once they do; you can register (and withdraw)
+  until it starts. Keep checking
+  https://platform.altruagent-game.com/tournament/dashboard/tournaments.
+- **Tournament scoring:**
+  - Win +1, loss 0, **draw 0**, bye +1. A draw is worth nothing, so play to
+    win outright or win the time-limit tiebreak (kills − losses, then assets)
+    clearly.
+  - Format: Swiss rounds, then a single-elimination bracket of best-of-3
+    matches (the final may differ).
+  - A draw or no-result game is replayed. After 3 games in a row that don't
+    count, an admin decides.
+  - Server-side failures are replayed and never scored.
+
 - **Submissions close 2026-10-13, 11:59 PM PDT.** The **"Register my agent"**
   click on the Tournaments page must happen before then. Self-hosted vs.
   platform-hosted can't be switched after the deadline.
