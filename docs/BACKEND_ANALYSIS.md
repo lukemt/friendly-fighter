@@ -260,16 +260,60 @@ These pass the runner's checks (`pending`) and are left to the engine:
 
 The final verdicts of these are in the probe log.
 
-### Not yet measured
+### Not yet measured in this match
 
-Phase C didn't run, so these remain:
+Phase C didn't run here. It ran in the next match; see section 7.
 
-- stance, guard and queued moves;
-- unit speed;
-- power toggle;
-- repair / primary / rally;
-- queue and cancel;
-- where `place at` puts a building;
-- sell;
-- harvest `to`;
-- the end-of-game answers after `resign`.
+## 7. Second probe match (session `8d78b9e8-…`, 2026-10-13)
+
+Seat 0 was England on the map `trapped`, played by the probe plus console. The probe now waits on the server-stamped arrival tick, so phase A took about 16 s of game time (it finished by tick ~400). Phase C started at tick ~3850. All 19 steps passed.
+
+### Timing
+
+- An order takes effect **18 ticks after the tick we sent from**, at every delay we tried (0 s, 0.5 s, 2 s). That is about 6 ticks for the batch to arrive and 12 ticks of fixed delay.
+- `e3` (rocket infantry) moves about **1.07 cells/s** (12.9 cells in 300 ticks).
+
+### Orders
+
+| Order | Result |
+|---|---|
+| `set_stance`, `guard`, `move` with `queued: true` | all `ok`; the queued move runs after the first |
+| `set_primary` on a barracks / war factory | `ok` |
+| `set_primary` on the construction yard | engine `invalid` |
+| `repair` on an undamaged building, on or off | `ok` (no `already_*` detail) |
+| `rally` to a far cell | `ok`; the building's `rally` field shows the cell |
+| `train` with count 5, then `cancel` 1 | both `ok` |
+| `build` the same building twice, then `cancel` | all `ok`, so the queue accepts repeats |
+| `sell` | `ok`; a `building_sold` event follows about 66 ticks after the order |
+| `harvest` with `to` | `ok`; the harvester walks toward the cell |
+
+**`place` with `at` is only a hint.** The verdict is always `ok`, but the building lands on a valid cell picked by the engine, not on the requested one:
+- asked for (62,75), it went to (64,69);
+- asked for the construction yard's own cell (66,72), it went to (62,72);
+- asked for (49,49), far away, it went to (66,76).
+
+Don't count on exact placement. To know where a building really went, read `buildings` afterwards.
+
+**`power_toggle` works only on buildings that can be powered down.** Its fields are `building` and `on`; sending `units` is refused as an unknown field. Asking for off on `fact`, `powr`, `proc`, `tent` or `weap` gives engine `invalid`, each time.
+
+The runner answers `on: true` on a building that's already on itself: `ok` with detail `already_on`, and nothing is sent. In the fork's `mods/ra/rules`, `ToggleConditionOnOrder: PowerDown` comes from `^DisableOnLowPowerOrPowerDown`, which only these inherit:
+
+- MSLO (missile silo)
+- GAP (gap generator)
+- IRON (iron curtain)
+- PDOX (chronosphere)
+- TSLA (tesla coil)
+- AGUN (anti-aircraft gun)
+- DOME (radar dome)
+- SAM (SAM site)
+
+So a bot can only free power by switching off a dome, a tesla coil or an anti-air defence.
+
+### Tools
+
+- `list_games` lists 110 game types. `red_alert` is the only one on the `openra` adapter, with `action_model: structured`; all the others are on `openspiel`.
+- `send_message` and `get_messages` answer `RUNTIME_UNAVAILABLE`: "Runtime adapter 'openra' does not support …". Red Alert has no chat.
+- Two `play_action` arguments we hadn't used:
+  - `action_id` is only a label and is ignored when `action` is given, so it is no idempotency key;
+  - `reasoning_summary` is stored for spectators.
+- `wait_for_update` also takes `since_message_seq`, `since_is_current_actor`, `since_phase` and `timeout_seconds` (max 25). The docs say at most 2 waits per game can run at once (`TOO_MANY_WAITS`). This wasn't observed: in Red Alert every wait returns within one view (0.24 s), so 4 parallel waits all succeeded.

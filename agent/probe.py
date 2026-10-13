@@ -39,6 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CONTROL = ROOT / "remote" / "probe.json"
 INFANTRY = ("e1", "e2", "e3", "e4", "e6")
 PHASE_C_LATEST_TICK = 9000  # 6 minutes: run phase C even if its base isn't there
+POWER_DOWN_TYPES = ("mslo", "gap", "iron", "pdox", "tsla", "agun", "dome", "sam")
 _ids = itertools.count(1)
 
 
@@ -491,7 +492,12 @@ class Probe:
 
     def _power_toggle(self, raw):
         st = self.state()
-        plants = [b for b in (st.get("observation") or {}).get("buildings") or [] if b.get("type") in ("powr", "apwr")]
+        # Only these can power down in the RA rules (^DisableOnLowPowerOrPowerDown); others get engine `invalid`.
+        own = (st.get("observation") or {}).get("buildings") or []
+        plants = ([b for b in own if b.get("type") in POWER_DOWN_TYPES]
+                  or [b for b in own if b.get("type") in ("powr", "apwr")])
+        if not plants:
+            raise ProbeError("no building to power down")
         rows = {}
         for name, orders in (
             ("off", [{"cmd": "power_toggle", "building": p["id"], "on": False} for p in plants]),
