@@ -33,6 +33,7 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
+from altruagent.console import print_line
 from altruagent import WAIT, DecisionContext, GameState, WithReasoning
 from examples.llm.redalert import order_key, refusal_rows, reason_still_holds
 
@@ -74,7 +75,9 @@ PENDING_SECONDS = 3.0         # a sent build/train/place counts as queued this l
 POWER_MARGIN = 20             # keep at least this much spare power
 HARVESTERS_PER_REFINERY = 2
 MAX_HARVESTERS = 6
-EARLY_INFANTRY_CAP = 4        # infantry before the first refinery is placed
+EARLY_INFANTRY_CAP = 5        # infantry before the war factory is placed
+FIRST_WAVE_VEHICLES = 3       # the first wave waits for this many vehicles...
+FIRST_WAVE_SECONDS = 360      # ...or until this much game time has passed
 DEFEND_RADIUS = 16            # enemies this close to home are a threat
 HOME_RADIUS = 25              # our units this close to home help defend
 REORDER_SECONDS = 6.0         # don't re-order the same unit more often than this
@@ -88,6 +91,7 @@ MAX_COMMANDS = 180            # the server allows 200 engine commands per batch
 MAX_UNITS_PER_ORDER = 50
 TIEBREAK_HOLD_SECONDS = 60    # last minute: no new waves when ahead on kills
 SCOUT_GRID = 4                # sweep cells: an N x N grid over the playable area
+STATUS_SECONDS = 30.0         # a status line in the log this often
 VISION_CHECK_RADIUS = 5       # a remembered building cell this close to our unit is "seen"
 
 
@@ -162,7 +166,7 @@ class RedAlertBot:
     def __init__(
         self,
         *,
-        log: Callable[[str], None] = print,
+        log: Callable[[str], None] = print_line,
         clock: Callable[[], float] = time.monotonic,
         knobs: Knobs | None = None,
     ) -> None:
@@ -190,6 +194,7 @@ class RedAlertBot:
         self._vehicles_ordered = 0
         self._infantry_ordered = 0
         self._last_note = ""
+        self._last_status = -1e9
         self.snapshot: dict[str, Any] = {}                    # read by the commander
         self.batches = 0
 
@@ -213,6 +218,17 @@ class RedAlertBot:
             return WAIT
         self._use_config(context.game_config, raw)
         orders, notes = self.decide(raw)
+        now = self._clock()
+        if now - self._last_status >= STATUS_SECONDS:
+            self._last_status = now
+            economy = _dict(obs.get("economy"))
+            military = _dict(obs.get("military"))
+            self._log(
+                f"[ff] status t={_dict(raw.get('time')).get('game_seconds')}s {obs.get('faction')}: "
+                f"cash={economy.get('cash')} power={economy.get('power_provided')}/{economy.get('power_drained')} "
+                f"buildings={len(_list(obs.get('buildings')))} units={len(_list(obs.get('units')))} "
+                f"k/d={military.get('kills_cost')}/{military.get('deaths_cost')} waves={self._waves}"
+            )
         if not orders:
             return WAIT
         self._last_sent = orders
@@ -306,12 +322,15 @@ class RedAlertBot:
         # 3-4. Base building: power first, then the build order.
         queued = self._queued(production, now)
         building_busy = queued["Building"] > 0
+        # Money still owed to queued items (OpenRA takes it as production runs):
+        # units are only bought from what is left, so buildings never starve.
+        free = cash - self._owed(production, now)
         if "fact" in types and not building_busy:
             pick = self._next_building(types, available, economy, production, cash, knobs)
             if pick and add({"cmd": "build", "item": pick}, f"build {pick}"):
                 self._mark("build", pick, now)
         if "fact" in types and queued["Defense"] == 0 and knobs.posture != "eco":
-            pick = self._next_defense(types, available, cash)
+            pick = self._next_defense(types, available, free)
             if pick and add({"cmd": "build", "item": pick}, f"build {pick}"):
                 self._mark("build", pick, now)
 
@@ -327,11 +346,12 @@ class RedAlertBot:
                 self._unit_ordered[uid] = now
 
         # 6. Army production.
-        if want_harv and "harv" in available and queued["Vehicle"] == 0 and cash >= 600:
+        if want_harv and "harv" in available and queued["Vehicle"] == 0 and free >= 300:
             if add({"cmd": "train", "item": "harv", "count": 1}, "train harv"):
                 self._mark("train", "harv", now)
                 queued["Vehicle"] += 1
-        self._train_army(add, available, queued, cash, types, knobs, now, building_busy)
+                free -= self._costs.get("harv", 1100)
+        self._train_army(add, available, queued, free, types, knobs, now)
 
         # Rally new units to a staging point on the way to the enemy.
         stage = self._staging(home, enemy_base, raw)
@@ -375,10 +395,10 @@ class RedAlertBot:
         plan: list[str | None] = []
         if not have.get("powr") and not have.get("apwr"):
             plan.append("powr")
-        if not has_barracks:
-            plan.append(barracks)
         if not have.get("proc"):
             plan.append("proc")
+        if not has_barracks:
+            plan.append(barracks)
         if not have.get("weap"):
             plan.append("weap")
         if have.get("proc", 0) < 2:
@@ -405,13 +425,13 @@ class RedAlertBot:
                 return power
         return nxt
 
-    def _next_defense(self, types, available, cash) -> str | None:
+    def _next_defense(self, types, available, free) -> str | None:
+        """At most two defenses, only once the economy is up (war factory and two
+        refineries), and only from money nothing else is waiting for."""
         have = sum(types.count(d) for d in DEFENSES)
-        if have >= 2 or not any(t in types for t in ("proc",)) or cash < 1200:
+        if have >= 2 or "weap" not in types or types.count("proc") < 2:
             return None
-        if have >= 1 and "weap" not in types:
-            return None
-        return next((d for d in DEFENSES if d in available and self._costs.get(d, 600) <= cash - 600), None)
+        return next((d for d in DEFENSES if d in available and self._costs.get(d, 600) + 500 <= free), None)
 
     def _place_spot(self, name, queue, home, enemy_base, raw) -> tuple[int, int] | None:
         """Defenses go a few cells toward the enemy; buildings use the engine's
@@ -425,17 +445,20 @@ class RedAlertBot:
 
     # -- army -------------------------------------------------------------------------
 
-    def _train_army(self, add, available, queued, cash, types, knobs: Knobs, now, building_busy) -> None:
-        reserve = 300 if building_busy else 0
+    def _train_army(self, add, available, queued, free, types, knobs: Knobs, now) -> None:
+        """Units from free money only. Until the war factory stands, a few
+        infantry for defense and the rest saved for the factory."""
         has_proc = "proc" in types
+        reserve = 0 if "weap" in types else self._costs.get("weap", 2000) // 2
         # Infantry: alternate rifles and rockets.
         infantry = [i for i in INFANTRY_PRIORITY if i in available]
         want_infantry = knobs.unit_focus != "vehicles" or "weap" not in types
         if infantry and queued["Infantry"] == 0 and want_infantry:
-            early_cap = not has_proc and self._infantry_ordered >= EARLY_INFANTRY_CAP
+            early_cap = self._infantry_ordered >= (EARLY_INFANTRY_CAP if "weap" not in types else 10**6)
+            early_cap = early_cap or (not has_proc and self._infantry_ordered >= 2)
             pick = infantry[self._infantry_ordered % len(infantry)]
-            if not early_cap and cash - reserve >= self._costs.get(pick, 100) * 2:
-                count = 3 if cash > 2000 else 1
+            if not early_cap and free - reserve >= self._costs.get(pick, 100) * 2:
+                count = 3 if free - reserve > 2000 else 1
                 if add({"cmd": "train", "item": pick, "count": count}):
                     self._mark("train", pick, now)
                     self._infantry_ordered += count
@@ -446,7 +469,7 @@ class RedAlertBot:
             support = [v for v in SUPPORT_VEHICLES if v in available]
             if support and self._vehicles_ordered % SUPPORT_EVERY == SUPPORT_EVERY - 1:
                 pick = support[0]
-            if cash - reserve >= self._costs.get(pick, 800):
+            if free >= self._costs.get(pick, 800) * 0.6:
                 if add({"cmd": "train", "item": pick, "count": 1}):
                     self._mark("train", pick, now)
                     self._vehicles_ordered += 1
@@ -486,7 +509,11 @@ class RedAlertBot:
         if knobs.posture == "defend" or hold:
             self._wave_active = False
             return
-        if not self._wave_active and len(combat) >= threshold:
+        vehicles = sum(1 for u in combat if self._queue_of(str(u.get("type") or "").lower()) == "Vehicle")
+        game_seconds = time_info.get("game_seconds")
+        late = isinstance(game_seconds, (int, float)) and game_seconds >= FIRST_WAVE_SECONDS
+        ready = self._waves > 0 or vehicles >= FIRST_WAVE_VEHICLES or late
+        if not self._wave_active and ready and len(combat) >= threshold:
             self._wave_active = True
             self._waves += 1
             self._wave_size = len(combat)
@@ -597,6 +624,21 @@ class RedAlertBot:
     def _count_queued(self, production, item, now) -> int:
         n = sum(1 for p in production if str(p.get("item") or "").lower() == item)
         return n or (1 if self._is_pending("train", item, now) else 0)
+
+    def _owed(self, production, now) -> int:
+        """Credits still to be paid for queued items, plus orders not yet shown."""
+        owed = 0.0
+        seen: set[str] = set()
+        for p in production:
+            item = str(p.get("item") or "").lower()
+            seen.add(item)
+            if not p.get("ready"):
+                progress = p.get("progress") if isinstance(p.get("progress"), (int, float)) else 0.0
+                owed += self._costs.get(item, 0) * max(0.0, 1.0 - progress)
+        for (cmd, item), _ in self._pending.items():
+            if cmd in ("build", "train") and item not in seen:
+                owed += self._costs.get(item, 0)
+        return int(owed)
 
     def _queue_of(self, item: str) -> str:
         if item in self._queues:

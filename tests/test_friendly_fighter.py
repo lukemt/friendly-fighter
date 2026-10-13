@@ -31,8 +31,10 @@ def make_bot(**kwargs) -> tuple[RedAlertBot, Clock]:
     return RedAlertBot(log=lambda _: None, clock=clock, **kwargs), clock
 
 
-def state(**obs_changes) -> GameState:
+def state(time=None, **obs_changes) -> GameState:
     payload = ra_payload()
+    if time is not None:
+        payload["time"] = time
     payload["observation"] = {**copy.deepcopy(payload["observation"]), **obs_changes}
     return GameState.from_mcp_state(payload)
 
@@ -86,7 +88,7 @@ def test_low_power_builds_a_power_plant_before_the_build_order():
     assert {"cmd": "build", "item": "powr"} in orders_of(bot.choose_action(s, CTX))
 
 
-def test_follows_the_build_order():
+def test_follows_the_build_order_refinery_before_barracks():
     bot, _ = make_bot()
     s = state(
         economy={"cash": 5000, "power_provided": 200, "power_drained": 20},
@@ -94,13 +96,13 @@ def test_follows_the_build_order():
         available_production=["powr", "tent", "proc", "e1"],
         units=[],
     )
-    assert {"cmd": "build", "item": "tent"} in orders_of(bot.choose_action(s, CTX))
+    assert {"cmd": "build", "item": "proc"} in orders_of(bot.choose_action(s, CTX))
 
 
 def test_launches_a_wave_at_the_threshold_and_respects_limits():
     bot, _ = make_bot(knobs=Knobs(attack_threshold=4))
     units = [{"id": 200 + i, "type": "e1", "x": 14, "y": 17, "hp": 100, "idle": True} for i in range(120)]
-    s = state(units=units)
+    s = state(units=units, time={"game_seconds": 400, "remaining_seconds": 800})
     orders = orders_of(bot.choose_action(s, CTX))
     attacks = cmds(orders, "attack_move")
     assert attacks and all(o["to"] == [95, 11] for o in attacks)  # legal_actions.enemy_base
@@ -180,3 +182,28 @@ def test_other_games_play_the_first_legal_action_without_keys(monkeypatch):
     })
     ctx = DecisionContext(session_id="w", tournament_id=None, game_type="werewolf", agent_id="a")
     assert create_agent().choose_action(s, ctx) == s.legal_actions[0]
+
+
+def test_first_wave_waits_for_tanks_early_in_the_game():
+    bot, _ = make_bot(knobs=Knobs(attack_threshold=4))
+    units = [{"id": 200 + i, "type": "e1", "x": 14, "y": 17, "hp": 100, "idle": True} for i in range(10)]
+    early = state(units=units, time={"game_seconds": 90, "remaining_seconds": 1110})
+    answer = bot.choose_action(early, CTX)
+    assert answer is WAIT or not cmds(orders_of(answer), "attack_move")
+    tanks = units + [{"id": 300 + i, "type": "2tnk", "x": 14, "y": 17, "hp": 100, "idle": True} for i in range(3)]
+    with_tanks = state(units=tanks, time={"game_seconds": 95, "remaining_seconds": 1105})
+    assert cmds(orders_of(bot.choose_action(with_tanks, CTX)), "attack_move")
+
+
+def test_units_wait_while_buildings_are_owed_money():
+    bot, _ = make_bot()
+    s = state(
+        economy={"cash": 1500, "power_provided": 200, "power_drained": 50},
+        buildings=[{"id": 1, "type": "fact", "x": 12, "y": 16}, {"id": 2, "type": "powr", "x": 14, "y": 16},
+                   {"id": 3, "type": "proc", "x": 16, "y": 16}, {"id": 4, "type": "tent", "x": 18, "y": 16}],
+        production=[{"queue": "Building", "item": "weap", "progress": 0.3, "ready": False}],
+        available_production=["powr", "e1", "e3"],
+        units=[],
+    )
+    answer = bot.choose_action(s, CTX)
+    assert answer is WAIT or not cmds(orders_of(answer), "train")

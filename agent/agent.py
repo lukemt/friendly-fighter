@@ -20,6 +20,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from altruagent.console import print_line
 from altruagent import TERMINATE_MESSAGING, DecisionContext, GameState
 
 from .commander import Commander, commander_from_env
@@ -70,9 +71,9 @@ class FriendlyFighter:
             self._commander = commander_from_env(self._bot)
             if self._commander is not None:
                 self._commander.start()
-                print("[ff] red_alert: scripted controller + OpenAI commander")
+                print_line("[ff] red_alert: scripted controller + OpenAI commander")
             else:
-                print("[ff] red_alert: scripted controller (no OPENAI_API_KEY: commander off)")
+                print_line("[ff] red_alert: scripted controller (no OPENAI_API_KEY: commander off)")
         return self._bot
 
     def _other(self) -> Any:

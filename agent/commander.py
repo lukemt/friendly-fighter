@@ -15,6 +15,7 @@ import os
 import threading
 from typing import Callable
 
+from altruagent.console import print_line
 from examples.llm.base import object_schema
 from examples.llm.providers import LLMProvider, ProviderError, provider_from_env
 from examples.llm.redalert import backoff_seconds
@@ -60,7 +61,7 @@ class Commander:
         bot: RedAlertBot,
         provider: LLMProvider,
         *,
-        log: Callable[[str], None] = print,
+        log: Callable[[str], None] = print_line,
         interval: float = INTERVAL_SECONDS,
         max_calls: int = MAX_CALLS,
     ) -> None:
@@ -144,7 +145,7 @@ def knobs_from_answer(answer: dict, current: Knobs) -> Knobs:
     )
 
 
-def commander_from_env(bot: RedAlertBot, *, log: Callable[[str], None] = print) -> Commander | None:
+def commander_from_env(bot: RedAlertBot, *, log: Callable[[str], None] = print_line) -> Commander | None:
     """A commander when ``OPENAI_API_KEY`` is set and ``FF_COMMANDER`` isn't ``0``; else None."""
     if not os.environ.get("OPENAI_API_KEY") or os.environ.get("FF_COMMANDER", "1") == "0":
         return None
