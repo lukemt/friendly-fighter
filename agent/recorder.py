@@ -102,6 +102,8 @@ class Recorder:
             self._config_written = True
             self._write(context, {"kind": "config", "game_type": context.game_type, "config": context.game_config})
         self._write(context, {"kind": "state", "game_type": context.game_type, "raw": state.raw})
+        if isinstance(state.raw, dict) and state.raw.get("result"):
+            self.close()  # game over: finish the file now (a later write appends a new gzip member)
 
     def action(self, move, context) -> None:
         self._write(context, {"kind": "action", "move": _jsonable(move)})
