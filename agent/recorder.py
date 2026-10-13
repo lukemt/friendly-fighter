@@ -43,7 +43,7 @@ def _jsonable(value: Any) -> Any:
         return value
     action = getattr(value, "action", None)
     if action is not None:
-        return {"action": _jsonable(action), "reasoning": getattr(value, "reasoning", None)}
+        return {"action": _jsonable(action), "reasoning": getattr(value, "reasoning_summary", None)}
     return repr(value)
 
 

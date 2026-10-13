@@ -234,3 +234,40 @@ def test_recorder_is_off_with_ff_record_0(tmp_path):
     rec = Recorder(root=tmp_path)
     rec.state(state(), CTX)
     assert not any(tmp_path.iterdir())
+
+
+def test_remote_control_sends_queued_orders_first_and_logs_them(tmp_path, monkeypatch):
+    import json as _json
+
+    from agent import agent as agent_module
+    from agent import remote
+
+    monkeypatch.setattr(remote, "ROOT", tmp_path)
+    monkeypatch.setattr(agent_module, "read_control", lambda: remote.read_control(tmp_path))
+    monkeypatch.setattr(agent_module, "RemoteSeat", lambda bot, seat: remote.RemoteSeat(bot, seat, root=tmp_path))
+    (tmp_path / "control.json").write_text(_json.dumps({"enabled": True, "seat": 0, "autopilot": True}))
+    inbox = tmp_path / "seat0" / "inbox"
+    inbox.mkdir(parents=True)
+    mine = {"cmd": "attack_move", "units": [120], "to": [50, 20]}
+    (inbox / "1.json").write_text(_json.dumps({"orders": [mine], "knobs": {"posture": "defend"}}))
+
+    ctx = DecisionContext(session_id="ra", tournament_id=None, game_type="red_alert", agent_id="a",
+                          seat_position=0, game_config=CONFIG)
+    ff = create_agent()
+    orders = orders_of(ff.choose_action(state(), ctx))
+    assert orders[0] == mine and len(orders) > 1          # mine first, autopilot fills the rest
+    assert ff._bot.knobs.posture == "defend"
+    assert (tmp_path / "seat0" / "done" / "1.json").exists()
+    summary = _json.loads((tmp_path / "seat0" / "state.json").read_text())
+    assert summary["faction"] == "england" and summary["combat_unit_ids"] == [120, 121]
+
+    ff.on_action_result({"accepted": True, "results": [
+        {"index": 0, "cmd": "attack_move", "status": "pending", "reason": "pending"},
+        {"index": 1, "cmd": "build", "status": "rejected", "reason": "not_available"}]}, ctx)
+    log = [_json.loads(x) for x in (tmp_path / "seat0" / "log.jsonl").read_text().splitlines()]
+    assert log[0]["files"] == ["1.json"] and log[0]["result"]["results"][0]["cmd"] == "attack_move"
+    # The bot saw only its own row, re-indexed from 0.
+    assert any(r.reason == "not_available" for r in ff._bot._refusals.values())
+
+    (tmp_path / "control.json").write_text(_json.dumps({"enabled": True, "seat": 0, "autopilot": False}))
+    assert ff.choose_action(state(), ctx) is WAIT           # manual and nothing queued: send nothing

@@ -25,6 +25,7 @@ from altruagent import TERMINATE_MESSAGING, DecisionContext, GameState
 
 from .commander import Commander, commander_from_env
 from .recorder import Recorder
+from .remote import RemoteSeat, read_control
 from .redalert_bot import RedAlertBot
 
 RED_ALERT = "red_alert"
@@ -42,6 +43,7 @@ class FriendlyFighter:
         self._fallback: Any = None
         self._fallback_ready = False
         self._recorder = Recorder()
+        self._remote: RemoteSeat | None = None
 
     # -- moves ----------------------------------------------------------------------
 
@@ -53,7 +55,13 @@ class FriendlyFighter:
 
     def _choose(self, state: GameState, context: DecisionContext):
         if context.game_type == RED_ALERT or (context.game_type is None and _is_realtime(state)):
-            return self._red_alert().choose_action(state, context)
+            bot = self._red_alert()
+            control = read_control()
+            if control.get("enabled") and str(control.get("seat")) == str(context.seat_position):
+                if self._remote is None:
+                    self._remote = RemoteSeat(bot, context.seat_position)
+                return self._remote.choose_action(state, context, autopilot=control.get("autopilot", True) is not False)
+            return bot.choose_action(state, context)
         other = self._other()
         if other is not None:
             return other.choose_action(state, context)
@@ -61,7 +69,9 @@ class FriendlyFighter:
 
     def on_action_result(self, result: dict, context: DecisionContext) -> None:
         self._recorder.result(result, context)
-        if self._bot is not None:
+        if self._remote is not None:
+            self._remote.on_action_result(result, context)
+        elif self._bot is not None:
             self._bot.on_action_result(result, context)
         elif self._fallback is not None and hasattr(self._fallback, "on_action_result"):
             self._fallback.on_action_result(result, context)

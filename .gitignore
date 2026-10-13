@@ -32,3 +32,6 @@ htmlcov/
 
 # friendly-fighter match recordings (raw game states, can be large)
 recordings/
+
+# remote-control files for scripts/ff_play.py
+remote/
