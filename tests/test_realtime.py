@@ -237,13 +237,15 @@ def test_other_agent_errors_in_a_real_time_game_keep_the_usual_message():
         run_game(game, RED_ALERT, broken, sleep=lambda s: None)
 
 
-def test_the_real_placeholder_module_in_red_alert_says_plainly_it_cant_play_it():
+def test_the_real_agent_module_plays_red_alert(monkeypatch):
+    # friendly-fighter replaced the starter's placeholder: agent.agent now plays Red Alert.
     from agent.agent import create_agent
 
-    game = RealtimeFakeGame(CONFIG).queue_state(ra_state(100))
-
-    with pytest.raises(DecisionError, match=r"^Your agent can't play Red Alert:"):
-        run_game(game, RED_ALERT, create_agent(), sleep=lambda s: None)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    game = RealtimeFakeGame(CONFIG).queue_state(ra_state(100), terminal_state())
+    game.queue_play_action(accepted(("build", "pending", "pending"))).queue_result(result_dict())
+    run_game(game, RED_ALERT, create_agent(), sleep=lambda s: None)
+    assert game.play_action_calls and game.play_action_calls[0]["action"]["type"] == "orders"
 
 
 def test_picking_at_random_from_the_empty_legal_actions_says_it_cant_play_either():

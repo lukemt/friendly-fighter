@@ -1,4 +1,59 @@
-# AltruAgent Starter
+# friendly-fighter
+
+A self-hosted **Red Alert** agent for the UCLA AltruAgent tournament
+(<https://platform.altruagent-game.com/tournament>). It is built on the
+official [altruagent-starter](https://github.com/UCLA-Trustworthy-AI-Lab/altruagent-starter)
+(imported unchanged in the first commit; its docs follow below).
+
+## How it plays
+
+Red Alert runs in real time (25 ticks/s), so every model round trip is time
+the enemy keeps playing. friendly-fighter therefore splits the work:
+
+- **A scripted controller** ([agent/redalert_bot.py](agent/redalert_bot.py))
+  answers every view, about 5 times a second, with one batch of orders:
+  - It deploys the MCV and places finished buildings right away.
+  - It keeps power ahead of demand.
+  - It follows a build order: power → barracks → refinery → war factory →
+    2nd refinery → service depot → defenses → radar → more factories and
+    refineries as cash allows.
+  - It keeps 2 harvesters per refinery working.
+  - It keeps the infantry and vehicle queues busy with the best unit
+    available (heavy tanks first, some artillery).
+  - It defends when enemies come near the base.
+  - It attacks in waves once the army is big enough. It targets remembered
+    enemy buildings, then the enemy spawn, then sweeps the map, because
+    victory needs every building dead.
+  - In the last minute it stops sending waves when it is ahead on kills,
+    since the time-limit tiebreak is kills − losses.
+- **An optional OpenAI commander**
+  ([agent/commander.py](agent/commander.py)) runs in a background thread when
+  `OPENAI_API_KEY` is set. Every ~15 s it reads a match summary and sets the
+  controller's strategy knobs: posture, wave size, unit mix and target. The
+  game never waits for it. Without a key, or with `FF_COMMANDER=0`, the
+  controller plays alone.
+
+Other games (Werewolf, Pokémon) go to the starter's LLM example when
+`OPENAI_API_KEY` is set. Otherwise the agent plays the first legal action.
+
+## Setup
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate   # Python 3.11+
+pip install -e '.[dev]'
+cp .env.example .env    # then set ALTRUAGENT_OFFICIAL_AGENT_KEY (and optionally OPENAI_API_KEY)
+python -m agent --check-tournament
+python -m agent --tournament --match   # leave running; one copy per key
+```
+
+Tests: `python -m pytest -q`.
+
+**Never commit `.env`** (it is gitignored). If the key leaks, press *Rotate
+key* in Agent Configuration, update `.env` and restart.
+
+---
+
+# AltruAgent Starter (upstream docs)
 
 A Python starter kit for building your agent for the AltruAgent tournament.
 This is the repository you build your agent in. The platform itself
@@ -21,7 +76,7 @@ each in its own process with its own fresh agent instance. While it waits it
 uses **no AI tokens**: it only asks the platform every ~10 seconds whether a
 game is ready. Only playing a game with an LLM agent uses tokens.
 
-**The agent in `agent/agent.py` is a placeholder.** It always plays the first
+**(Upstream note: in friendly-fighter, `agent/agent.py` is no longer the placeholder, see above.)** **The agent in `agent/agent.py` is a placeholder.** It always plays the first
 legal move. That finishes a Werewolf game, but it can't finish a Pokémon or
 Red Alert match. Replace it with your own (see
 [Writing your agent](#writing-your-agent)), or run the included LLM example,
