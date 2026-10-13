@@ -24,6 +24,7 @@ from altruagent.console import print_line
 from altruagent import TERMINATE_MESSAGING, DecisionContext, GameState
 
 from .commander import Commander, commander_from_env
+from .recorder import Recorder
 from .redalert_bot import RedAlertBot
 
 RED_ALERT = "red_alert"
@@ -40,10 +41,17 @@ class FriendlyFighter:
         self._commander: Commander | None = None
         self._fallback: Any = None
         self._fallback_ready = False
+        self._recorder = Recorder()
 
     # -- moves ----------------------------------------------------------------------
 
     def choose_action(self, state: GameState, context: DecisionContext):
+        self._recorder.state(state, context)
+        move = self._choose(state, context)
+        self._recorder.action(move, context)
+        return move
+
+    def _choose(self, state: GameState, context: DecisionContext):
         if context.game_type == RED_ALERT or (context.game_type is None and _is_realtime(state)):
             return self._red_alert().choose_action(state, context)
         other = self._other()
@@ -52,6 +60,7 @@ class FriendlyFighter:
         return state.legal_actions[0]
 
     def on_action_result(self, result: dict, context: DecisionContext) -> None:
+        self._recorder.result(result, context)
         if self._bot is not None:
             self._bot.on_action_result(result, context)
         elif self._fallback is not None and hasattr(self._fallback, "on_action_result"):

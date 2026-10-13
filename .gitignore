@@ -29,3 +29,6 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+# friendly-fighter match recordings (raw game states, can be large)
+recordings/

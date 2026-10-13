@@ -207,3 +207,30 @@ def test_units_wait_while_buildings_are_owed_money():
     )
     answer = bot.choose_action(s, CTX)
     assert answer is WAIT or not cmds(orders_of(answer), "train")
+
+
+def test_recorder_writes_config_states_actions_and_results(tmp_path, monkeypatch):
+    import gzip
+    import json
+
+    from agent.recorder import Recorder
+
+    monkeypatch.setenv("FF_RECORD", "1")
+    rec = Recorder(root=tmp_path)
+    ctx = DecisionContext(session_id="s/1", tournament_id=None, game_type="red_alert", agent_id="a",
+                          seat_position=0, game_config=CONFIG)
+    rec.state(state(), ctx)
+    rec.action(WithReasoning({"type": "orders", "orders": []}, "x"), ctx)
+    rec.result({"accepted": True}, ctx)
+    rec.close()
+    lines = [json.loads(x) for x in gzip.open(tmp_path / "s_1" / "seat0.jsonl.gz").read().splitlines()]
+    assert [r["kind"] for r in lines] == ["config", "state", "action", "result"]
+    assert lines[1]["raw"]["observation"]["faction"] == "england"
+
+
+def test_recorder_is_off_with_ff_record_0(tmp_path):
+    from agent.recorder import Recorder
+
+    rec = Recorder(root=tmp_path)
+    rec.state(state(), CTX)
+    assert not any(tmp_path.iterdir())
