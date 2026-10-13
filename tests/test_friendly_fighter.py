@@ -7,6 +7,7 @@ the clock is fake and no model is ever called.
 from __future__ import annotations
 
 import copy
+import json
 
 from altruagent import WAIT, DecisionContext, WithReasoning
 from altruagent.models import GameState
@@ -329,3 +330,86 @@ def test_wave_focuses_the_construction_yard_unless_enemy_units_are_near():
     orders = orders_of(bot.choose_action(state(units=tanks, time=t, visible_enemy_buildings=base,
                                                visible_enemies=enemy), CTX))
     assert not cmds(orders, "attack") and cmds(orders, "attack_move")[0]["to"] == [63, 15]
+
+
+# -- probe seat (agent/probe.py) against a fake GameAPI ----------------------------------------
+
+class _FakeClock:
+    def __init__(self):
+        self.now = 1000.0
+
+    def time(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.now += max(seconds, 0.01)
+
+
+class _FakeGame:
+    """Just enough of GameAPI for every probe step to run."""
+
+    def __init__(self):
+        self.tick = 11
+        self.last = None
+        self.production = []
+        self.calls = []
+
+    def state(self):
+        self.tick += 6
+        units = [{"id": 100, "type": "mcv", "x": 20, "y": 20, "hp": 100, "idle": True},
+                 {"id": 130, "type": "harv", "x": 22, "y": 22, "hp": 100, "idle": False}]
+        units += [{"id": 120 + i, "type": "e1", "x": 21 + i, "y": 25, "hp": 100, "idle": True, "stance": "defend"}
+                  for i in range(3)]
+        buildings = [{"id": 140, "type": "fact", "x": 20, "y": 20}, {"id": 141, "type": "powr", "x": 23, "y": 20},
+                     {"id": 142, "type": "barr", "x": 25, "y": 20}]
+        return {"state_version": self.tick, "phase": "playing", "map": {"bounds": [1, 1, 80, 80]},
+                "observation": {"tick": self.tick, "units": units, "buildings": buildings, "events": [],
+                                "production": self.production, "available_production": ["e1", "powr"],
+                                "economy": {"cash": 1000}},
+                "last_orders": self.last, "recent_order_problems": []}
+
+    def __call__(self, method, params, http=None):
+        self.calls.append((method, params))
+        if method == "tools/list":
+            return {"payload": {"tools": [{"name": "get_game_state"}]}, "dt": 0.1}
+        name, args = params["name"], params["arguments"]
+        if name in ("get_game_state", "wait_for_update"):
+            return {"payload": self.state(), "dt": 0.05}
+        if name == "play_action":
+            action = args.get("action") or {}
+            orders = action.get("orders") if isinstance(action, dict) else None
+            if not isinstance(orders, list) or not orders:
+                return {"payload": {"error": "INVALID_ACTION", "detail": "bad"}, "dt": 0.05}
+            if any(o.get("cmd") == "build" for o in orders if isinstance(o, dict)):
+                self.production = [{"queue": "Building", "item": "powr", "ready": True}]
+            if any(o.get("cmd") == "place" for o in orders if isinstance(o, dict)):
+                self.production = []
+            rows = [{"index": i, "cmd": o.get("cmd") if isinstance(o, dict) else None, "status": "pending",
+                     "reason": "pending"} for i, o in enumerate(orders)]
+            self.last = {"state_version": args.get("state_version"), "pending": False,
+                         "applied_at_tick": (args.get("state_version") or 0) + 12,
+                         "results": [dict(r, status="ok", reason="ok") for r in rows]}
+            return {"payload": {"accepted": True, "results": rows}, "dt": 0.05}
+        return {"payload": {"is_terminal": name == "resign"}, "dt": 0.05}
+
+
+def test_probe_runs_every_step_then_hands_over(tmp_path, monkeypatch):
+    import agent.probe as probe_mod
+
+    monkeypatch.setattr(probe_mod, "time", _FakeClock())
+    game = _FakeGame()
+    bot, _ = make_bot()
+    ctx = DecisionContext(session_id="s1", tournament_id=None, game_type="red_alert", agent_id="a",
+                          game_config=CONFIG, seat_position=0)
+    probe = probe_mod.Probe(bot, ctx, root=tmp_path)
+    monkeypatch.setattr(probe, "rpc", game)
+    early = state()
+    late = GameState.from_mcp_state({**ra_payload(tick=4000), "observation": game.state()["observation"]})
+    for _ in range(len(probe.steps) + 3):
+        probe.choose_action(late if probe.done >= {s[0] for s in probe.steps if s[0].startswith("a")} else early, ctx)
+    records = [json.loads(line) for line in probe.path.read_text().splitlines()]
+    failed = {r["step"]: r["result"].get("exception") for r in records if not r["ok"]}
+    assert not failed, failed
+    assert [r["step"] for r in records] == [s[0] for s in probe.steps] + ["zz_end"]
+    assert any(p.get("name") == "resign" for m, p in game.calls if m == "tools/call")
+    assert probe.finished

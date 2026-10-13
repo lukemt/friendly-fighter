@@ -393,7 +393,92 @@ def _call_tool_fast(client: "AltruAgentClient", mcp_url: str, name: str, argumen
             ) from exc
 
 
+# -- friendly-fighter: wire log ------------------------------------------------------
+# Every tool call and its answer (or error), with send/receive times, goes to
+# recordings/<session_id>/wire-<pid>.jsonl.gz (one worker process = one seat).
+# Off with FF_RECORD=0 or FF_WIRE=0.
+
+_WIRE_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recordings")
+_wire_lock = threading.Lock()
+_wire_files: dict[str, Any] = {}
+_wire_pending = 0
+last_endpoint: tuple[Any, str] | None = None  # (client, mcp_url) of the latest call, for agent/probe.py
+
+
+def _wire_on() -> bool:
+    return os.environ.get("FF_RECORD", "1") != "0" and os.environ.get("FF_WIRE", "1") != "0"
+
+
+def _wire_close() -> None:
+    with _wire_lock:
+        for handle in _wire_files.values():
+            try:
+                handle.close()
+            except Exception:  # noqa: BLE001
+                pass
+        _wire_files.clear()
+
+
+def wire_log(record: dict) -> None:
+    """Append one record to this process's wire log (never raises)."""
+    global _wire_pending
+    if not _wire_on():
+        return
+    session = str(record.get("session_id") or (record.get("arguments") or {}).get("session_id") or "no-session")
+    session = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in session)[:80]
+    try:
+        import gzip
+
+        with _wire_lock:
+            handle = _wire_files.get(session)
+            if handle is None:
+                folder = os.path.join(_WIRE_ROOT, session)
+                os.makedirs(folder, exist_ok=True)
+                handle = gzip.open(os.path.join(folder, f"wire-{os.getpid()}.jsonl.gz"), "ab")
+                if not _wire_files:
+                    import atexit
+
+                    atexit.register(_wire_close)
+                _wire_files[session] = handle
+            handle.write(json.dumps(record, separators=(",", ":"), default=repr).encode() + b"\n")
+            _wire_pending += 1
+            if _wire_pending >= 25 or record.get("tool") in ("get_result", "resign"):
+                handle.flush()
+                _wire_pending = 0
+            answer = record.get("answer")
+            if isinstance(answer, dict) and answer.get("is_terminal"):
+                handle.flush()
+    except Exception:  # noqa: BLE001 - logging must never break play
+        pass
+
+
 def call_tool(
+    client: "AltruAgentClient",
+    mcp_url: str,
+    name: str,
+    arguments: dict,
+    *,
+    httpx_client_factory=None,
+) -> dict:
+    """``_call_tool`` (below) plus the friendly-fighter wire log."""
+    global last_endpoint
+    import time as _time
+
+    last_endpoint = (client, mcp_url)
+    sent = _time.time()
+    try:
+        answer = _call_tool(client, mcp_url, name, arguments, httpx_client_factory=httpx_client_factory)
+    except MCPToolError as exc:
+        wire_log({"t": round(sent, 3), "dt": round(_time.time() - sent, 3), "tool": name, "arguments": arguments,
+                  "error": getattr(exc, "error_code", None), "detail": str(exc)[:2000],
+                  "status_code": getattr(exc, "status_code", None)})
+        raise
+    wire_log({"t": round(sent, 3), "dt": round(_time.time() - sent, 3), "tool": name, "arguments": arguments,
+              "answer": answer})
+    return answer
+
+
+def _call_tool(
     client: "AltruAgentClient",
     mcp_url: str,
     name: str,

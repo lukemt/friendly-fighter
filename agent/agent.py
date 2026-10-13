@@ -25,6 +25,7 @@ from altruagent import TERMINATE_MESSAGING, DecisionContext, GameState
 
 from .commander import Commander, commander_from_env
 from .recorder import Recorder
+from .probe import Probe, read_probe_control
 from .remote import RemoteSeat, read_control
 from .redalert_bot import RedAlertBot
 
@@ -44,6 +45,8 @@ class FriendlyFighter:
         self._fallback_ready = False
         self._recorder = Recorder()
         self._remote: RemoteSeat | None = None
+        self._probe: Probe | None = None
+        self._probe_checked = False
 
     # -- moves ----------------------------------------------------------------------
 
@@ -56,6 +59,13 @@ class FriendlyFighter:
     def _choose(self, state: GameState, context: DecisionContext):
         if context.game_type == RED_ALERT or (context.game_type is None and _is_realtime(state)):
             bot = self._red_alert()
+            if not self._probe_checked:  # decided once per match, at its first view
+                self._probe_checked = True
+                probe = read_probe_control()
+                if probe.get("enabled") and str(probe.get("seat")) == str(context.seat_position):
+                    self._probe = Probe(bot, context, resign_at_end=probe.get("resign_at_end", True) is not False)
+            if self._probe is not None:
+                return self._probe.choose_action(state, context)
             control = read_control()
             if control.get("enabled") and str(control.get("seat")) == str(context.seat_position):
                 if self._remote is None:
@@ -69,7 +79,9 @@ class FriendlyFighter:
 
     def on_action_result(self, result: dict, context: DecisionContext) -> None:
         self._recorder.result(result, context)
-        if self._remote is not None:
+        if self._probe is not None:
+            self._probe.on_action_result(result, context)
+        elif self._remote is not None:
             self._remote.on_action_result(result, context)
         elif self._bot is not None:
             self._bot.on_action_result(result, context)
