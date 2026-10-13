@@ -271,3 +271,61 @@ def test_remote_control_sends_queued_orders_first_and_logs_them(tmp_path, monkey
 
     (tmp_path / "control.json").write_text(_json.dumps({"enabled": True, "seat": 0, "autopilot": False}))
     assert ff.choose_action(state(), ctx) is WAIT           # manual and nothing queued: send nothing
+
+
+# -- spending, reinforcements, focus fire --------------------------------------------------
+
+BASE = [{"id": 1, "type": "fact", "x": 12, "y": 16}, {"id": 2, "type": "powr", "x": 14, "y": 16},
+        {"id": 3, "type": "proc", "x": 16, "y": 16}, {"id": 4, "type": "proc", "x": 16, "y": 19},
+        {"id": 5, "type": "tent", "x": 18, "y": 16}, {"id": 6, "type": "weap", "x": 18, "y": 19},
+        {"id": 7, "type": "fix", "x": 10, "y": 19}, {"id": 8, "type": "dome", "x": 10, "y": 16}]
+
+
+def test_surplus_money_buys_a_second_factory_and_extra_units():
+    bot, _ = make_bot(knobs=Knobs(unit_focus="vehicles"))
+    s = state(economy={"cash": 4000, "power_provided": 400, "power_drained": 100}, buildings=BASE,
+              available_production=["powr", "weap", "proc", "e1", "e3", "2tnk"], units=[])
+    orders = orders_of(bot.choose_action(s, CTX))
+    assert {"cmd": "build", "item": "weap"} in orders
+    trains = {o["item"]: o["count"] for o in cmds(orders, "train")}
+    assert trains.get("2tnk") == 2       # deep pockets: two tanks at once
+    assert "e1" in trains                # and infantry despite the vehicle focus
+
+
+def _wave_bot():
+    bot, clock = make_bot(knobs=Knobs(attack_threshold=4))
+    stage = bot._staging((12, 16), (95, 11), ra_payload())
+    tanks = [{"id": 300 + i, "type": "2tnk", "x": 60, "y": 14, "hp": 100, "idle": False} for i in range(6)]
+    t = {"game_seconds": 400, "remaining_seconds": 800}
+    bot.choose_action(state(units=tanks, time=t), CTX)  # wave 1 launches with these six
+    assert bot._wave_ids == {u["id"] for u in tanks}
+    return bot, clock, stage, tanks, t
+
+
+def test_newcomers_wait_at_the_staging_point_and_join_as_a_group():
+    bot, clock, stage, tanks, t = _wave_bot()
+    lone = {"id": 400, "type": "2tnk", "x": stage[0], "y": stage[1], "hp": 100, "idle": True}
+    clock.t += 10
+    orders = orders_of(bot.choose_action(state(units=tanks + [lone], time=t), CTX))
+    assert all(400 not in o.get("units", []) for o in cmds(orders, "attack_move"))
+    assert 400 not in bot._wave_ids
+    group = [dict(lone, id=400 + i) for i in range(4)]
+    clock.t += 10
+    orders = orders_of(bot.choose_action(state(units=tanks + group, time=t), CTX))
+    assert {400, 401, 402, 403} <= bot._wave_ids
+    assert any(400 in o.get("units", []) for o in cmds(orders, "attack_move"))
+
+
+def test_wave_focuses_the_construction_yard_unless_enemy_units_are_near():
+    bot, clock, _stage, tanks, t = _wave_bot()
+    base = [{"id": 900, "type": "pbox", "x": 62, "y": 14}, {"id": 901, "type": "fact", "x": 66, "y": 12},
+            {"id": 902, "type": "brik", "x": 61, "y": 14}]
+    clock.t += 10
+    orders = orders_of(bot.choose_action(state(units=tanks, time=t, visible_enemy_buildings=base), CTX))
+    focus = cmds(orders, "attack")
+    assert focus and focus[0]["target"] == 901 and set(focus[0]["units"]) == {u["id"] for u in tanks}
+    enemy = [{"id": 950, "type": "3tnk", "x": 63, "y": 15, "hp": 100}]
+    clock.t += 10
+    orders = orders_of(bot.choose_action(state(units=tanks, time=t, visible_enemy_buildings=base,
+                                               visible_enemies=enemy), CTX))
+    assert not cmds(orders, "attack") and cmds(orders, "attack_move")[0]["to"] == [63, 15]

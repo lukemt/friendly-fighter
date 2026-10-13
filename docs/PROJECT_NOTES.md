@@ -70,6 +70,9 @@ use; Red Alert as the only game we optimise for.
 4. **Spending:** units are bought only from *free* money, meaning cash minus
    what's still owed to queued items. At most 5 infantry before the war
    factory. Harvesters (2 per refinery, 6 max) come before tanks.
+   With more than $1,500 free: a 2nd war factory (once 2 refineries stand),
+   two tanks per order, and infantry even with `unit_focus=vehicles`. A 3rd
+   war factory and refinery come above $3,000.
 5. **Units:** the best vehicle available (heavy tanks first), with artillery
    or V2 rockets every 4th vehicle. Infantry alternate rifles and rockets.
 6. **Defense:** enemies within 16 cells of home trigger an attack-move by
@@ -81,6 +84,11 @@ use; Red Alert as the only game we optimise for.
    - Targets in order: remembered enemy buildings → enemy spawn → a 4×4 map
      sweep (victory requires every enemy building dead).
    - In the last 60 s, no new waves if we're ahead on kills.
+   - Units built while a wave is out wait at the staging point and join in
+     groups of 4, never one by one.
+   - With no enemy units within 10 cells of the wave, it focus-fires the most
+     important visible building within 14 cells: construction yard →
+     defenses → war factory/barracks → refinery → the rest (walls ignored).
 8. **Repeats and refusals:** build, train and place orders count as pending
    for 3 s, so they aren't sent twice. Rejected orders back off from 4 s to
    30 s. A building that can't be placed is cancelled after 6 tries.
@@ -111,6 +119,16 @@ use; Red Alert as the only game we optimise for.
   - A 20-minute game at the new rate is ~2,700 states, ~20 MB, ~6 M tokens
     per seat.
   - So never send raw states to an LLM per decision; use summaries.
+- **Test 4 (Claude on seat 1 via `ff_play.py`, Russia vs. the bot as
+  England, shadowfiend-II):**
+  - Decisions every **0.24 s**, so the fast transport is confirmed live.
+  - Claude won by destruction at ~12:50; kills were ~$42k vs. ~$12k.
+  - What won it: tanks plus a 2nd/3rd war factory to spend piled-up money,
+    then focus fire on the construction yard as soon as it was visible.
+  - Bot weaknesses seen: $2–3k left unspent for minutes; reinforcements
+    trickling to the front one at a time; no target priority.
+  - All three are fixed (spending, grouped reinforcements, focus fire).
+    These fixes haven't been tested in a live match yet.
 - **Map:** the live test map was the snow map `sidestep`. The bot only uses
   the spawns and bounds from `get_game_config`, **not the terrain layout**.
   Using the layout (ore fields, chokepoints, staging spots) is a
@@ -218,8 +236,8 @@ python scripts/ff_play.py status | attack X Y [all|ids] | build powr | train 3tn
 
 1. **User:** click "Register my agent" before 11:59 PM PDT. Revoke the
    GitHub token. Consider rotating the agent key.
-2. Run a self-play test match to **confirm the faster transport live** and
-   check decisions per second in the recording.
+2. (Done: fast transport confirmed live, 0.24 s per decision.) Run a
+   self-play match to check the new spending/reinforcement/focus-fire logic.
 3. Optionally play a seat with `ff_play.py`, Claude against the bot.
 4. Use the map layout from the recorded config: ore fields for harvesters,
    defense placement, staging points, the order to sweep for remaining

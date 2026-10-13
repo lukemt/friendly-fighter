@@ -52,6 +52,10 @@ VEHICLE_PRIORITY = ("4tnk", "3tnk", "2tnk", "1tnk", "v2rl", "arty", "ftrk", "jee
 SUPPORT_VEHICLES = ("v2rl", "arty")  # one of every SUPPORT_EVERY vehicles, when available
 SUPPORT_EVERY = 4
 INFANTRY_PRIORITY = ("e1", "e3")  # alternated
+# Focus-fire order for enemy buildings: construction yard (no rebuilding), then
+# defenses, then production, then refineries, then the rest. Walls are ignored.
+FOCUS_PRIORITY = (("fact",), DEFENSES, ("weap", "tent", "barr"), ("proc",))
+WALLS = {"fenc", "brik", "sbag", "cycl", "barb", "wood"}
 DEFAULT_QUEUES = {
     "Infantry": {"e1", "e2", "e3", "e4", "e6", "e7", "medi", "mech", "spy", "thf", "dog", "shok"},
     "Vehicle": {"mcv", "harv", "1tnk", "2tnk", "3tnk", "4tnk", "jeep", "apc", "arty", "v2rl", "ftrk",
@@ -93,6 +97,11 @@ TIEBREAK_HOLD_SECONDS = 60    # last minute: no new waves when ahead on kills
 SCOUT_GRID = 4                # sweep cells: an N x N grid over the playable area
 STATUS_SECONDS = 30.0         # a status line in the log this often
 VISION_CHECK_RADIUS = 5       # a remembered building cell this close to our unit is "seen"
+SURPLUS_CASH = 1500           # free money above this buys more units (any focus) and factories
+REINFORCE_GROUP = 4           # new units join a running wave in groups this big, never one by one
+STAGE_RADIUS = 8              # units this close to the staging point count as gathered
+ENGAGE_RADIUS = 10            # enemy units this close to the wave are fought first (attack-move)
+FOCUS_RADIUS = 14             # visible enemy buildings this close to the wave get focus fire
 
 
 @dataclass
@@ -191,6 +200,8 @@ class RedAlertBot:
         self._wave_active = False
         self._waves = 0
         self._wave_size = 0
+        self._wave_ids: set[int] = set()
+        self._focus_id: int | None = None
         self._vehicles_ordered = 0
         self._infantry_ordered = 0
         self._last_note = ""
@@ -409,10 +420,12 @@ class RedAlertBot:
             plan.append("dome")
         if knobs.posture == "eco" and have.get("proc", 0) < 3:
             plan.append("proc")
-        if cash > 3500 and have.get("weap", 0) < 2:
+        if cash > SURPLUS_CASH and have.get("weap", 0) < 2 and have.get("proc", 0) >= 2:
             plan.append("weap")
         if cash > 3000 and have.get("proc", 0) < 3:
             plan.append("proc")
+        if cash > 3000 and have.get("weap", 0) < 3:
+            plan.append("weap")
         if cash > 2500 and has_barracks and sum(have.get(b, 0) for b in BARRACKS) < 2 and have.get("weap", 0) >= 2:
             plan.append(barracks)
         nxt = next((p for p in plan if can(p)), None)
@@ -452,13 +465,14 @@ class RedAlertBot:
         reserve = 0 if "weap" in types else self._costs.get("weap", 2000) // 2
         # Infantry: alternate rifles and rockets.
         infantry = [i for i in INFANTRY_PRIORITY if i in available]
-        want_infantry = knobs.unit_focus != "vehicles" or "weap" not in types
+        surplus = free - reserve > SURPLUS_CASH
+        want_infantry = knobs.unit_focus != "vehicles" or "weap" not in types or surplus
         if infantry and queued["Infantry"] == 0 and want_infantry:
             early_cap = self._infantry_ordered >= (EARLY_INFANTRY_CAP if "weap" not in types else 10**6)
             early_cap = early_cap or (not has_proc and self._infantry_ordered >= 2)
             pick = infantry[self._infantry_ordered % len(infantry)]
             if not early_cap and free - reserve >= self._costs.get(pick, 100) * 2:
-                count = 3 if free - reserve > 2000 else 1
+                count = 3 if surplus else 1
                 if add({"cmd": "train", "item": pick, "count": count}):
                     self._mark("train", pick, now)
                     self._infantry_ordered += count
@@ -469,10 +483,12 @@ class RedAlertBot:
             support = [v for v in SUPPORT_VEHICLES if v in available]
             if support and self._vehicles_ordered % SUPPORT_EVERY == SUPPORT_EVERY - 1:
                 pick = support[0]
-            if free >= self._costs.get(pick, 800) * 0.6:
-                if add({"cmd": "train", "item": pick, "count": 1}):
+            cost = self._costs.get(pick, 800)
+            if free >= cost * 0.6:
+                count = 2 if free - cost >= SURPLUS_CASH else 1
+                if add({"cmd": "train", "item": pick, "count": count}):
                     self._mark("train", pick, now)
-                    self._vehicles_ordered += 1
+                    self._vehicles_ordered += count
 
     def _threats(self, obs, home) -> list[tuple[int, int]]:
         cells = []
@@ -513,33 +529,88 @@ class RedAlertBot:
         game_seconds = time_info.get("game_seconds")
         late = isinstance(game_seconds, (int, float)) and game_seconds >= FIRST_WAVE_SECONDS
         ready = self._waves > 0 or vehicles >= FIRST_WAVE_VEHICLES or late
+        alive = {u["id"] for u in combat}
         if not self._wave_active and ready and len(combat) >= threshold:
             self._wave_active = True
             self._waves += 1
+            self._wave_ids = set(alive)
             self._wave_size = len(combat)
             notes.append(f"wave {self._waves}: {len(combat)} units attack")
-        elif self._wave_active:
-            self._wave_size = max(self._wave_size, len(combat))
-        if self._wave_active and len(combat) < max(2, self._wave_size // 3):
-            self._wave_active = False
-            notes.append("wave spent, regrouping")
+        if self._wave_active:
+            self._wave_ids &= alive
+            # Newcomers wait at the staging point and join as a group, so they
+            # don't trickle into the enemy base one at a time.
+            gathered = [u["id"] for u in combat if u["id"] not in self._wave_ids
+                        and _cell(u) and _dist(_cell(u), stage) <= STAGE_RADIUS]
+            if len(gathered) >= REINFORCE_GROUP:
+                self._wave_ids.update(gathered)
+                self._wave_size = max(self._wave_size, len(self._wave_ids))
+                notes.append(f"{len(gathered)} reinforcements join wave {self._waves}")
+            if len(self._wave_ids) < max(2, self._wave_size // 3):
+                self._wave_active = False
+                self._wave_ids = set()
+                notes.append("wave spent, regrouping")
 
-        if not self._wave_active:
-            # Gather idle units at the staging point.
-            idle = [u["id"] for u in combat if u.get("idle") and _cell(u) and _dist(_cell(u), stage) > 6
-                    and now - self._unit_ordered.get(u["id"], -1e9) >= REORDER_SECONDS]
-            self._order_units(add, "move", idle, stage, now)
+        wave = [u for u in combat if u["id"] in self._wave_ids]
+        # Everyone outside the wave gathers at the staging point.
+        idle = [u["id"] for u in combat if u["id"] not in self._wave_ids and u.get("idle") and _cell(u)
+                and _dist(_cell(u), stage) > 6 and now - self._unit_ordered.get(u["id"], -1e9) >= REORDER_SECONDS]
+        self._order_units(add, "move", idle, stage, now)
+        if not wave:
+            self._focus_id = None
             return
 
-        army_center = _centroid([c for c in (_cell(u) for u in combat) if c]) or home
-        target = self._target(raw, army_center, enemy_base, knobs)
+        army_center = _centroid([c for c in (_cell(u) for u in wave) if c]) or home
         def due(u: dict[str, Any]) -> bool:
             since = now - self._unit_ordered.get(u["id"], -1e9)
             return since >= WAVE_REORDER_SECONDS or (bool(u.get("idle")) and since >= 2.0)
 
-        movers = [u["id"] for u in combat if due(u)]
+        # No enemy units to fight nearby: focus fire on the most important building in reach.
+        focus = None if self._enemy_units_near(raw, army_center) else self._focus_building(raw, army_center)
+        if focus:
+            bid, kind = focus
+            changed = bid != self._focus_id
+            self._focus_id = bid
+            attackers = [u["id"] for u in wave if changed or due(u)]
+            for start in range(0, len(attackers), MAX_UNITS_PER_ORDER):
+                chunk = attackers[start:start + MAX_UNITS_PER_ORDER]
+                if add({"cmd": "attack", "units": chunk, "target": bid}):
+                    for uid in chunk:
+                        self._unit_ordered[uid] = now
+            if attackers:
+                notes.append(f"focus fire on {kind} #{bid} with {len(attackers)}")
+            return
+        if self._focus_id is not None:
+            self._focus_id = None
+            for u in wave:  # the focus target is gone: move on at once
+                self._unit_ordered.pop(u["id"], None)
+
+        target = self._target(raw, army_center, enemy_base, knobs)
+        movers = [u["id"] for u in wave if due(u)]
         if target and self._order_units(add, "attack_move", movers, target, now):
             notes.append(f"attack-move {len(movers)} to {list(target)}")
+
+    def _enemy_units_near(self, raw, center) -> bool:
+        obs = _dict(raw.get("observation"))
+        return any(
+            (c := _cell(e)) and not e.get("wreck") and not str(e.get("type") or "").endswith("husk")
+            and _dist(c, center) <= ENGAGE_RADIUS
+            for e in _list(obs.get("visible_enemies"))
+        )
+
+    def _focus_building(self, raw, center) -> tuple[int, str] | None:
+        best = None
+        for b in _list(_dict(raw.get("observation")).get("visible_enemy_buildings")):
+            cell, kind = _cell(b), str(b.get("type") or "").lower()
+            if not cell or b.get("wreck") or not isinstance(b.get("id"), int) or kind in WALLS:
+                continue
+            if _dist(cell, center) > FOCUS_RADIUS:
+                continue
+            rank = next((i for i, group in enumerate(FOCUS_PRIORITY) if kind in group), len(FOCUS_PRIORITY))
+            key = (rank, _dist(cell, center))
+            if best is None or key < best[0]:
+                best = (key, b["id"], kind)
+        return (best[1], best[2]) if best else None
 
     def _target(self, raw, center, enemy_base, knobs: Knobs) -> tuple[int, int] | None:
         obs = _dict(raw.get("observation"))
