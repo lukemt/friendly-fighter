@@ -149,6 +149,19 @@ index 9f870c8..1c0408a 100644
  		}
  	}
  }
+diff --git a/OpenRA.Game/Map/MapGrid.cs b/OpenRA.Game/Map/MapGrid.cs
+index f32043c..0fc313b 100644
+--- a/OpenRA.Game/Map/MapGrid.cs
++++ b/OpenRA.Game/Map/MapGrid.cs
+@@ -129,7 +129,7 @@ public class MapGrid : IGlobalModData
+ 
+ 		public ImmutableArray<CellRamp> Ramps { get; }
+ 
+-		internal readonly ImmutableArray<ImmutableArray<CVec>> TilesByDistance;
++		public readonly ImmutableArray<ImmutableArray<CVec>> TilesByDistance; // friendly-fighter sim: public (AffectsShroud.SightOffsets)
+ 
+ 		public int TileScale { get; }
+ 
 diff --git a/OpenRA.Game/ModData.cs b/OpenRA.Game/ModData.cs
 index a267e57..4ada5d8 100644
 --- a/OpenRA.Game/ModData.cs
@@ -289,10 +302,18 @@ index 9bdaea6..f2c2662 100644
  			var worldActorType = type == WorldType.Editor ? SystemActors.EditorWorld : SystemActors.World;
  			WorldActor = CreateActor(worldActorType.ToString(), []);
 diff --git a/OpenRA.Mods.Common/Traits/AffectsShroud.cs b/OpenRA.Mods.Common/Traits/AffectsShroud.cs
-index 6b68de3..f6ade7d 100644
+index 6b68de3..be8babb 100644
 --- a/OpenRA.Mods.Common/Traits/AffectsShroud.cs
 +++ b/OpenRA.Mods.Common/Traits/AffectsShroud.cs
-@@ -39,6 +39,9 @@ public abstract class AffectsShroud : ConditionalTrait<AffectsShroudInfo>, ISync
+@@ -9,6 +9,7 @@
+  */
+ #endregion
+ 
++using System.Collections.Concurrent;
+ using System.Collections.Generic;
+ using System.Linq;
+ using OpenRA.Traits;
+@@ -39,6 +40,9 @@ public abstract class AffectsShroud : ConditionalTrait<AffectsShroudInfo>, ISync
  
  		readonly HashSet<PPos> footprint;
  
@@ -302,7 +323,43 @@ index 6b68de3..f6ade7d 100644
  		[VerifySync]
  		CPos cachedLocation;
  
-@@ -70,20 +73,38 @@ PPos[] ProjectedCells(Actor self)
+@@ -60,6 +64,35 @@ protected AffectsShroud(AffectsShroudInfo info)
+ 				footprint = [];
+ 		}
+ 
++		static readonly ConcurrentDictionary<(MapGrid, int, int), CVec[]> SightOffsetCache = new();
++
++		/// <summary>friendly-fighter sim: the offsets Shroud.ProjectedCellsInRange keeps around a cell's
++		/// center on a rectangular map, in its order; null where it would throw (too far).</summary>
++		static CVec[] SightOffsets(MapGrid grid, WDist minRange, WDist maxRange)
++		{
++			return SightOffsetCache.GetOrAdd((grid, minRange.Length, maxRange.Length), _ =>
++			{
++				var r = (maxRange.Length + 1023 + 512) / 1024;
++				if (r >= grid.TilesByDistance.Length)
++					return null;
++
++				var minLimit = minRange.LengthSquared;
++				var maxLimit = maxRange.LengthSquared;
++				var offsets = new List<CVec>();
++				for (var i = minRange.Length / 1024; i <= r; i++)
++				{
++					foreach (var offset in grid.TilesByDistance[i])
++					{
++						var dist = new WVec(1024 * offset.X, 1024 * offset.Y, 0).HorizontalLengthSquared;
++						if (dist <= maxLimit && (dist == 0 || dist > minLimit))
++							offsets.Add(offset);
++					}
++				}
++
++				return offsets.ToArray();
++			});
++		}
++
+ 		PPos[] ProjectedCells(Actor self)
+ 		{
+ 			var map = self.World.Map;
+@@ -70,20 +103,64 @@ PPos[] ProjectedCells(Actor self)
  
  			if (Info.Type == VisibilityType.Footprint)
  			{
@@ -317,6 +374,32 @@ index 6b68de3..f6ade7d 100644
 +				// one cell's range has no duplicates, so only two or more cells need the set
 +				var occupied = self.OccupiesSpace.OccupiedCells();
 +				cellsInRange.Clear();
++
++				// friendly-fighter sim (PERF): on a rectangular map a cell's center ignores height, so
++				// the cells in range of a cell's center are always the same offsets, in the same order
++				// as Shroud.ProjectedCellsInRange finds them; only the map's edge is checked per cell
++				var offsets = Info.MaxHeightDelta < 0 && map.Grid.Type == MapGridType.Rectangular && RLLockstep.Enabled
++					? SightOffsets(map.Grid, minRange, maxRange) : null;
++				if (offsets != null)
++				{
++					foreach (var kv in occupied)
++					{
++						foreach (var offset in offsets)
++						{
++							var c = kv.Cell + offset;
++							if (!map.Tiles.Contains(c))
++								continue;
++
++							var puv = new PPos(c.X, c.Y);
++							if (occupied.Length == 1 || footprint.Add(puv))
++								cellsInRange.Add(puv);
++						}
++					}
++
++					footprint.Clear();
++					return cellsInRange.ToArray();
++				}
++
 +				if (occupied.Length == 1)
 +				{
 +					foreach (var puv in Shroud.ProjectedCellsInRange(map, map.CenterOfCell(occupied[0].Cell), minRange, maxRange, Info.MaxHeightDelta))
@@ -2103,6 +2186,19 @@ index aa3227a..9ba02bb 100644
 +		}
  	}
  }
+diff --git a/OpenRA.Mods.Common/Traits/Render/WithWallSpriteBody.cs b/OpenRA.Mods.Common/Traits/Render/WithWallSpriteBody.cs
+index 63d1175..975f251 100644
+--- a/OpenRA.Mods.Common/Traits/Render/WithWallSpriteBody.cs
++++ b/OpenRA.Mods.Common/Traits/Render/WithWallSpriteBody.cs
+@@ -112,7 +112,7 @@ protected override void DamageStateChanged(Actor self)
+ 
+ 		void ITick.Tick(Actor self)
+ 		{
+-			if (!dirty)
++			if (!dirty || Game.Unrendered) // (which wall sprite to draw)
+ 				return;
+ 
+ 			// Update connection to neighbours
 diff --git a/OpenRA.Mods.Common/Traits/World/ActorMap.cs b/OpenRA.Mods.Common/Traits/World/ActorMap.cs
 index b3c2b07..1260c15 100644
 --- a/OpenRA.Mods.Common/Traits/World/ActorMap.cs
@@ -2150,3 +2246,18 @@ index b3c2b07..1260c15 100644
  				foreach (var t in bin.ProximityTriggers)
  					t.Dirty = true;
  			}
+diff --git a/OpenRA.Mods.Common/Traits/World/ControlGroups.cs b/OpenRA.Mods.Common/Traits/World/ControlGroups.cs
+index b44c4f3..8d0055e 100644
+--- a/OpenRA.Mods.Common/Traits/World/ControlGroups.cs
++++ b/OpenRA.Mods.Common/Traits/World/ControlGroups.cs
+@@ -107,6 +107,10 @@ public IEnumerable<Actor> GetActorsInControlGroup(int group)
+ 
+ 		void ITick.Tick(Actor self)
+ 		{
++			// friendly-fighter sim: unrendered, nobody makes control groups (keyboard groups of a local player)
++			if (Game.Unrendered)
++				return;
++
+ 			foreach (var cg in controlGroups)
+ 			{
+ 				// note: NOT `!a.IsInWorld`, since that would remove things that are in transports.
