@@ -342,6 +342,13 @@ and 120 s, and to the end.
 - **Same players.** A branch keeps the game's players: an agent seat can get any bot, but an
   OpenRA AI stays the same AI (it lives in the world).
 
+**One moment replays one way.** A branch keeps the game's engine seed (that is what makes it the
+same game), so the same bots from the same moment always play out identically. `--repeats N`
+therefore branches at N moments 2 s apart (`lab coach` uses `--spread`), each a real trajectory of
+its own. A game is also chaotic after a big fight: one recorded game is a single draw from its
+moment, and the control branch can end far from the original. `lab coach` prints this check
+("fidelity") and saves no label when they disagree.
+
 ## Experiments and notes
 
 ```bash

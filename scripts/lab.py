@@ -271,8 +271,15 @@ def cmd_branch(a, db) -> int:
     seconds = parse_time(a.at) / 25
     variants = _split(a.variants)
     _check_bots(variants + ([a.opponent] if a.opponent else []))
-    jobs = branch_jobs(db, a.game, seconds, variants, seat=a.seat, opponent=a.opponent, repeats=a.repeats,
-                       seed=a.seed, stop_after=a.stop_after, control=not a.no_control)
+    # A branch from one moment replays one way (the engine keeps the game's seed), so repeats branch
+    # 2 s apart: T, T+2 s, ... (each a real trajectory of its own).
+    if a.repeats > 1:
+        print(f"note: {a.repeats} repeats branch at {', '.join(clock(seconds + 2 * r) for r in range(a.repeats))} "
+              f"(repeats of one moment would replay identically)")
+    jobs = []
+    for r in range(max(1, a.repeats)):
+        jobs += branch_jobs(db, a.game, seconds + 2.0 * r, variants, seat=a.seat, opponent=a.opponent, repeats=1,
+                            seed=a.seed + r, stop_after=a.stop_after, control=not a.no_control)
     _play(db, jobs, a, "branch", vars(a))
     print()
     print(report.branch_report(db, a.game))
@@ -289,12 +296,20 @@ def cmd_coach(a, db) -> int:
     seconds = parse_time(a.at) / 25
     variants = [f"ff-jev-force-{p}" for p in POSTURES]
     _check_bots(variants)
-    jobs = branch_jobs(db, a.game, seconds, variants, seat=a.seat, repeats=a.repeats, seed=a.seed,
-                       stop_after=a.stop_after, control=True)
+    # Branches from one moment replay the same way (the engine keeps the game's seed): the spread
+    # comes from branching at a few nearby moments instead (T, T+2 s, T+4 s, ...).
+    offsets = [2.0 * k for k in range(max(1, a.spread))]
+    jobs = []
+    for off in offsets:
+        jobs += branch_jobs(db, a.game, seconds + off, variants, seat=a.seat, repeats=1, seed=a.seed,
+                            stop_after=a.stop_after, control=True)
     _play(db, jobs, a, "coach", vars(a))
     g = db.find_game(a.game)
     origin = g["branch_of"] or g["id"]
-    outcomes = report.branch_outcomes(db, origin, game_tick(db.find_game(origin), seconds))
+    outcomes: dict = {}
+    for off in offsets:
+        for label, nets in report.branch_outcomes(db, origin, game_tick(db.find_game(origin), seconds + off)).items():
+            outcomes.setdefault(label, []).extend(nets)
     print()
     print(report.branch_report(db, a.game))
     forced = {lab.split("ff-jev-force-")[1]: sum(v) / len(v) for lab, v in outcomes.items() if "ff-jev-force-" in lab and v}
@@ -302,9 +317,24 @@ def cmd_coach(a, db) -> int:
         return 1
     best = max(forced.values())
     good = [p for p, v in sorted(forced.items(), key=lambda kv: -kv[1]) if v >= best - a.margin]
+    # Fidelity: does the control (the same bot, taking over fresh) play on as the original did?
+    tick = game_tick(db.find_game(origin), seconds)
+    seat_row = db.one("SELECT net FROM seats WHERE game_id = ? AND position = ?", origin, a.seat)
+    at = db.one("SELECT kills_cost - deaths_cost AS net FROM timeline WHERE game_id = ? AND position = ? AND tick <= ? "
+                "ORDER BY tick DESC LIMIT 1", origin, a.seat, tick)
+    control = [v for lab, v in outcomes.items() if lab.startswith("control:")]
+    faithful = True
+    if seat_row and at and control and control[0]:
+        original = (seat_row["net"] or 0) - (at["net"] or 0)
+        mean_control = sum(control[0]) / len(control[0])
+        faithful = abs(mean_control - original) <= max(1000, 0.25 * abs(original))
+        print(f"fidelity: the original game went {original:+d} from here, the control branches {mean_control:+.0f}"
+              + ("" if faithful else ": they don't reproduce it (a fresh bot, a re-seeded opponent): don't trust the labels"))
     print("\nforced postures, mean final net: " + ", ".join(f"{p} {v:+.0f}" for p, v in sorted(forced.items(), key=lambda kv: -kv[1])))
     print(f"best: {', '.join(good)} (within {a.margin} of the best)")
-    if a.label:
+    if a.label and not faithful:
+        print("no case saved (the branches don't reproduce the original game)")
+    elif a.label:
         from lab import jev_eval, jevlog
 
         paths = jevlog.log_files(origin)
@@ -593,6 +623,26 @@ def cmd_jev(a, db) -> int:
     return 0
 
 
+def cmd_champion(a, db) -> int:
+    import datetime
+
+    path = ROOT / "lab" / "champions.json"
+    data = json.loads(path.read_text())
+    if a.action == "set":
+        if not a.bot or not a.why:
+            print("lab champion set BOT --run N --why '...'")
+            return 1
+        _check_bots([a.bot])
+        data["ladder"].append({"bot": a.bot, "since": datetime.date.today().isoformat(), "run": a.run, "why": a.why})
+        path.write_text(json.dumps(data, indent=1) + "\n")
+        print(f"champion: {a.bot}")
+        return 0
+    for i, c in enumerate(data["ladder"]):
+        mark = "*" if i == len(data["ladder"]) - 1 else " "
+        print(f"{mark} {c['since']}  {c['bot']:<18} run {c['run'] if c['run'] is not None else '-':<4} {c['why']}")
+    return 0
+
+
 def cmd_curves(a, db) -> int:
     runs = [int(r) for r in a.runs.split(",")] if a.runs else None
     print(report.curves(db, runs, _split(a.bots) if a.bots else None))
@@ -798,7 +848,7 @@ def main() -> int:
     s.add_argument("game")
     s.add_argument("--at", required=True)
     s.add_argument("--seat", type=int, default=0)
-    s.add_argument("--repeats", type=int, default=2)
+    s.add_argument("--spread", type=int, default=3, help="branch at this many moments 2 s apart (one branch replays one way)")
     s.add_argument("--stop-after", type=float, default=None, help="end each branch this many seconds later")
     s.add_argument("--margin", type=int, default=300, help="postures this close to the best count as right")
     s.add_argument("--label", action="store_true", help="save the moment as a jev eval case labelled by the outcome")
@@ -918,6 +968,11 @@ def main() -> int:
     s.add_argument("--at", help="the full state and answers of the call nearest this game time")
     s.add_argument("--all", action="store_true", help="every call, not only changes of decision")
     s.add_argument("--attacks", action="store_true", help="every logged attack by opponent: did it gain?")
+    s = sub.add_parser("champion", help="the champion over time (lab/champions.json); 'set' a new one")
+    s.add_argument("action", nargs="?", default="show", choices=["show", "set"])
+    s.add_argument("bot", nargs="?")
+    s.add_argument("--run", type=int)
+    s.add_argument("--why")
     s = sub.add_parser("curves", help="each bot's army, harvesters and assets at 3, 6 and 9 minutes")
     s.add_argument("--runs", help="runs separated by commas (default: every game)")
     s.add_argument("--bots", help="bots separated by commas")
@@ -938,7 +993,7 @@ def main() -> int:
     handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch,
                 "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
-                "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
+                "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "champion": cmd_champion, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
                 "h": cmd_h}
     return handlers[a.command](a, db)
 
