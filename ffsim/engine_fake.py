@@ -32,6 +32,8 @@ def default_world(seat: int) -> dict:
 
 class FakeEngine:
     order_latency_ticks = 0
+    view_interval = 6
+    view_phase = 0
 
     def __init__(self, seat_kinds: list[str] | None = None, *, verdict=None) -> None:
         self.seat_kinds = seat_kinds or ["agent", "agent"]
@@ -45,6 +47,7 @@ class FakeEngine:
         self.surrendered: list[int] = []
         self.on_view = None
         self.on_exit = None
+        self.steps = 0
 
     def start(self, on_view, on_exit) -> None:
         self.on_view, self.on_exit, self.started = on_view, on_exit, True
@@ -89,10 +92,27 @@ class FakeEngine:
             self.emit()
 
     def emit(self) -> None:
+        for seat, view in self._views():
+            if self.on_view:
+                self.on_view(seat, view)
+
+    def _views(self) -> list[tuple[int, dict]]:
+        out = []
         for seat, w in self.world.items():
             w["tick"] = self.tick
             self.results[seat] = [r for r in self.results[seat] if r["tick"] >= self.tick - 150]
             view = copy.deepcopy(w)
             view["command_results"] = list(self.results[seat])
-            if self.on_view:
-                self.on_view(seat, view)
+            out.append((seat, view))
+        return out
+
+    def step(self, until_tick: int) -> list[tuple[int, dict]]:
+        """Virtual time (``ffsim.vclock``): run to ``until_tick`` and return the views made on the way."""
+        out = []
+        while self.tick < until_tick:
+            self.tick += 1
+            self._apply()
+            if (self.tick - self.view_phase) % self.view_interval == 0:
+                out.extend(self._views())
+        self.steps += 1
+        return out

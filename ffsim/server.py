@@ -10,12 +10,16 @@ leaves this machine):
 - ``POST /mcp``: JSON-RPC (``initialize``, ``tools/list``, ``tools/call``, ``ping``) with
   the 11 tools of the hosted GameAPI and their recorded schemas;
 - admin (``/sim/...``): create a match (``POST /sim/matches``), list and inspect them.
+
+A match runs in real time (the engine at 25 ticks/s, the round trip slept) or in virtual
+time (``ffsim.vclock``: the engine steps as fast as the players allow, every wait is virtual).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import random
 import secrets
 import threading
 import time
@@ -23,7 +27,8 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from .gameapi import Match, SeatConfig, ToolError
+from .gameapi import PLATFORM_TIMING, Match, SeatConfig, ToolError
+from .vclock import platform_rtts
 from .rules import Rules, list_games, tools_list
 
 KEEP_FINISHED_SECONDS = 300
@@ -35,13 +40,22 @@ def agent_id_for(key: str, position: int) -> str:
 
 
 class Platform:
-    def __init__(self, engine_factory, *, results_dir: Path | None = None, rtt_ms: float = 0.0) -> None:
+    def __init__(self, engine_factory, *, results_dir: Path | None = None, rtt_ms: float | str = 0.0,
+                 time_mode: str = "real", think: str | float = "measured", timing: dict | None = None,
+                 seed: int | None = None) -> None:
         self.engine_factory = engine_factory  # (match, seat_kinds, lobby) -> engine
         self.results_dir = results_dir
         # Simulated network round trip for /mcp calls: half before the call is handled (the batch
         # "arrives" later), half before the answer leaves. Our real round trip to the platform was
         # 0.19 s (get_game_state / play_action medians from the wire logs).
-        self.rtt_ms = rtt_ms
+        # "platform": draw each call's round trip from the platform's measured ones.
+        self.rtts = platform_rtts() if rtt_ms == "platform" else [float(rtt_ms) / 1000.0]
+        self.rtt_rng = random.Random(seed)
+        self.timing = PLATFORM_TIMING if timing is None else timing
+        self.seed = seed
+        self.created = 0
+        self.time_mode = time_mode  # "real" or "virtual" (the default for new matches)
+        self.think = think  # virtual time: the agents' think time ("measured" or seconds)
         self.lock = threading.RLock()
         self.matches: dict[str, Match] = {}
         self.match_meta: dict[str, dict] = {}
@@ -53,7 +67,8 @@ class Platform:
     # -- admin --------------------------------------------------------------------------
 
     def create_match(self, *, map_id: str = "trapped", max_minutes: int = 20, seats: list[dict],
-                     lobby: dict | None = None, label: str = "") -> dict:
+                     lobby: dict | None = None, label: str = "", time_mode: str | None = None,
+                     think: str | float | None = None) -> dict:
         if len(seats) != 2:
             raise ValueError("Red Alert needs exactly 2 seats")
         session_id = "sim-" + str(uuid.uuid4())
@@ -68,11 +83,20 @@ class Platform:
             keys.append(key)
         kinds = [c.kind for c in configs]
         factory = self.engine_factory
-        match = Match(session_id, map_id, configs, lambda m: factory(m, kinds, lobby), max_minutes=max_minutes)
+        time_mode = time_mode or self.time_mode
+        if time_mode not in ("real", "virtual"):
+            raise ValueError("time_mode is real or virtual")
+        virtual = ({"rtt": self.rtts, "think": self.think if think is None else think}
+                   if time_mode == "virtual" else None)
+        self.created += 1
+        seed = None if self.seed is None else self.seed * 1000 + self.created
+        match = Match(session_id, map_id, configs, lambda m: factory(m, kinds, lobby), max_minutes=max_minutes,
+                      virtual=virtual, timing=self.timing, seed=seed)
         with self.lock:
             self.matches[session_id] = match
             self.match_meta[session_id] = {"keys": keys, "label": label, "created": time.time(),
-                                           "seats": seats, "map": map_id, "max_minutes": max_minutes}
+                                           "seats": seats, "map": map_id, "max_minutes": max_minutes,
+                                           "time_mode": time_mode}
             for pos, c in enumerate(configs):
                 if c.token:
                     self.seat_tokens[c.token] = (session_id, pos)
@@ -90,6 +114,9 @@ class Platform:
                                "military": (s.obs or {}).get("military")} for s in match.seats],
                     "game_seconds": round(match.game_seconds(), 1), "result": match.result,
                     "termination_reason": match.termination_reason, "failure_reason": match.failure_reason,
+                    "time_mode": meta.get("time_mode", "real"),
+                    "clock": match.vclock.report() if match.vclock is not None else None,
+                    "engine": _engine_report(match.engine),
                     "log": match.log[-20:]}
 
     def cancel(self, session_id: str) -> None:
@@ -112,6 +139,9 @@ class Platform:
 
     def _report(self, session_id: str) -> None:
         info = self.describe(session_id)
+        if "started_wall" in self.match_meta[session_id]:
+            info["_started"] = self.match_meta[session_id]["started_wall"]
+            info["wall_seconds"] = round(time.monotonic() - info["_started"], 1)
         info["reasoning"] = self.matches[session_id].reasoning[-200:]
         if self.results_dir is not None:
             self.results_dir.mkdir(parents=True, exist_ok=True)
@@ -131,6 +161,16 @@ class Platform:
         with self.lock:
             self.sessions[token] = key
         return {"access_token": token, "expires_in": 3600}
+
+    def clock_for(self, seat_token: str):
+        """The virtual clock and seat position of an MCP caller, or (None, None) in real time."""
+        where = self.seat_tokens.get(seat_token)
+        if where is None:
+            return None, None
+        match = self.matches.get(where[0])
+        if match is None or match.vclock is None:
+            return None, None
+        return match.vclock, where[1]
 
     def key_for_session(self, token: str) -> str | None:
         return self.sessions.get(token)
@@ -222,6 +262,13 @@ class Platform:
 REQUIRED = {t["name"]: t.get("inputSchema", {}).get("required", []) for t in tools_list()["tools"]}
 
 
+def _engine_report(engine) -> dict | None:
+    if engine is None or not getattr(engine, "lockstep", False):
+        return None
+    return {"steps": engine.steps, "engine_s": round(engine.engine_us / 1e6, 2),
+            "step_wall_s": round(engine.step_wall, 2), "tick": engine.tick}
+
+
 def _pydantic_repr(value) -> str:
     """pydantic-core's input_value: a repr longer than 50 characters keeps its first 25 and last 24."""
     r = repr(value)
@@ -300,6 +347,7 @@ def make_handler(platform: Platform):
             return self._send(404, {"error": "not_found"})
 
         def do_POST(self):
+            received = time.monotonic()
             path = self.path.split("?")[0]
             body = self._body()
             if path == "/tournament/agent/authenticate":
@@ -326,7 +374,16 @@ def make_handler(platform: Platform):
                 except (TypeError, ValueError, KeyError) as exc:
                     return self._send(400, {"error": "bad_request", "detail": str(exc)})
             if path == "/mcp":
-                half = platform.rtt_ms / 2000.0
+                clock, position = platform.clock_for(self._bearer())
+                if clock is not None:  # virtual time: the round trip is virtual too
+                    params = body.get("params") if isinstance(body, dict) else None
+                    tool = (params or {}).get("name") if body.get("method") == "tools/call" else body.get("method")
+                    call = clock.begin(position, str(tool or ""), received)
+                    try:
+                        return self._mcp(body)
+                    finally:
+                        clock.end(call)
+                half = platform.rtt_rng.choice(platform.rtts) / 2
                 if half > 0:
                     time.sleep(half)
                 return self._mcp(body, half)

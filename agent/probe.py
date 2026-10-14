@@ -408,10 +408,17 @@ class Probe:
         return next((b for b in (st.get("observation") or {}).get("buildings") or [] if b.get("type") in types), None)
 
     def _track(self, ids: list[int], seconds: float) -> list[dict]:
+        """Watch for ``seconds`` of game time (ticks, so the window is the same on the local
+        platform's virtual clock, where a round trip costs no wall time)."""
         rows = []
-        end = time.time() + seconds
-        while time.time() < end:
+        end = None
+        while True:
             st = self.state()
+            tick = st.get("state_version") or 0
+            if end is None:
+                end = tick + seconds * 25
+            elif tick >= end:
+                break
             obs = st.get("observation") or {}
             rows.append({"tick": st.get("state_version"), "t": round(time.time(), 3),
                          "units": {u["id"]: [u.get("x"), u.get("y"), u.get("act"), u.get("idle"), u.get("stance")]

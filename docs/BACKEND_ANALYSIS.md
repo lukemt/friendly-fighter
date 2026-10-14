@@ -317,3 +317,32 @@ So a bot can only free power by switching off a dome, a tesla coil or an anti-ai
   - `action_id` is only a label and is ignored when `action` is given, so it is no idempotency key;
   - `reasoning_summary` is stored for spectators.
 - `wait_for_update` also takes `since_message_seq`, `since_is_current_actor`, `since_phase` and `timeout_seconds` (max 25). The docs say at most 2 waits per game can run at once (`TOO_MANY_WAITS`). This wasn't observed: in Red Alert every wait returns within one view (0.24 s), so 4 parallel waits all succeeded.
+
+## 8. The platform's timing, from the wire logs (2026-10-14)
+
+Measured on the wire logs of both probe matches and the bot's games
+(`python -m ffsim.timing`, plus the histograms below). This is what the local
+platform's virtual time reproduces (docs/SIMULATOR.md, "The platform's timing").
+
+- **Clock.** 25.0 ticks per wall second over whole games (every 60 s window between
+  24.8 and 25.8). Views come every 6 ticks, always on ticks 5, 11, 17... (state_version
+  % 6 == 5 in every recording).
+- **Round trip.** `get_game_state`, `play_action` and `get_legal_actions` take a median
+  0.195 s (p10 0.19, p90 0.21, max 0.34); the agent's own gap between calls is 1-4 ms.
+- **`wait_for_update` polls every 0.1 s.** It answers at once when the state already
+  changed; otherwise it looks again every 0.1 s after it arrived. The call durations
+  cluster at 0.19 s (51 %), 0.29 s (21 %), 0.39 s (4 %) and 0.49 s (1 %), with the rest
+  in between (round-trip jitter).
+- **Batches are stamped with the newest view's tick**, not an interpolated engine tick:
+  `arrival - state_version` is always 0, 6 or 12 (24 or 30 when the agent was slow).
+- **The served state lags that tick.** A batch sent right after a state was read lands
+  one view later in 80-85 % of cases (0: 7-12 %, 12: 3-6 %). Polling alone predicts only
+  ~60 %. Adding a delay between a view's tick and its appearance in the served state,
+  about 45 ms (exponential), reproduces both the lags and the wait histogram. A likely
+  cause is the platform building the state (legal actions, events) after it learns the
+  tick.
+- **Execution.** Orders run 12 ticks after the stamp; a deploy shows its `fact` 24 ticks
+  after the stamp (24 in the local replica too).
+- **`starting_units: "none"`** in `match_rules` is RA's lobby value for "MCV only" (the
+  `StartingUnits@mcvonly` class is `none`). The local engine had been given `mcvonly`,
+  which the lobby silently rejected; a session world given it spawns nothing.

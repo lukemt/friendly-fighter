@@ -1,8 +1,42 @@
 diff --git a/OpenRA.Game/Game.cs b/OpenRA.Game/Game.cs
-index 18413ce..3e84bb5 100644
+index 18413ce..9ec6de4 100644
 --- a/OpenRA.Game/Game.cs
 +++ b/OpenRA.Game/Game.cs
-@@ -1077,6 +1077,11 @@ public static void LoadMap(string launchMap, string launchBots = null)
+@@ -47,6 +47,11 @@ public static class Game
+ 		/// <summary>True when running with the Null platform (no GPU/rendering).</summary>
+ 		public static bool IsHeadless => Settings?.Game?.Platform == "Null";
+ 
++		/// <summary>friendly-fighter sim: virtual time. When set (headless only), the game loop stops pacing
++		/// logic ticks by the wall clock and hands control to this driver instead; the driver runs as many
++		/// ticks as it wants by calling the given action (one logic tick each) and returns.</summary>
++		public static Action<Action> LockstepDriver;
++
+ 		static WorldRenderer worldRenderer;
+ 		static string modLaunchWrapper;
+ 
+@@ -835,6 +840,21 @@ static void Loop()
+ 
+ 			while (state == RunStatus.Running)
+ 			{
++				// friendly-fighter sim: virtual time — ticks run only when the lockstep driver asks for them.
++				if (IsHeadless && LockstepDriver != null && OrderManager.World != null)
++				{
++					LockstepDriver(() =>
++					{
++						OrderManager.LastTickTime.Value = 0;
++						LogicTick();
++					});
++					nextLogic = RunTime;
++					nextRender = RunTime;
++					forcedNextRender = RunTime;
++					renderBeforeNextTick = false;
++					continue;
++				}
++
+ 				// Headless fast-forward: bypass timing/render system entirely.
+ 				// Runs logic ticks in a tight loop with no sleep or render interleave.
+ 				// ExternalBotBridge sets tickScale < 1.0 during advance(), which makes
+@@ -1077,6 +1097,11 @@ public static void LoadMap(string launchMap, string launchBots = null)
  			}
  
  			orders.Add(Order.Command("option gamespeed default"));
@@ -671,7 +705,7 @@ index 5b6b39d..6c775a5 100644
  	}
  }
 diff --git a/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs b/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
-index c11dec0..cfcdaa9 100644
+index c11dec0..526a871 100644
 --- a/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
 @@ -116,6 +116,13 @@ public sealed class ExternalBotBridge : ITick, IBot, INotifyCreated
@@ -688,7 +722,19 @@ index c11dec0..cfcdaa9 100644
  		// Fast-forward: when > 0, game runs at max speed until this tick is reached.
  		// Volatile: written by gRPC thread in RequestFastAdvance, read by game thread in Tick.
  		volatile int pendingFastAdvanceTarget;
-@@ -252,6 +259,10 @@ public void Activate(Player p)
+@@ -177,6 +184,11 @@ public sealed class ExternalBotBridge : ITick, IBot, INotifyCreated
+ 		/// <summary>Session/episode ID used as the routing key for gRPC calls.</summary>
+ 		public string SessionId => episodeId;
+ 
++		// friendly-fighter sim: for RLLockstep
++		internal World World => world;
++		internal string PlayerName => player?.InternalName;
++		internal bool AgentConnected => agentConnected;
++
+ 		public ExternalBotBridge(ExternalBotBridgeInfo info, ActorInitializer init)
+ 		{
+ 			this.info = info;
+@@ -252,9 +264,23 @@ public void Activate(Player p)
  			player = p;
  			observationSerializer = new ObservationSerializer(world, player, episodeId);
  			actionHandler = new ActionHandler(world, player);
@@ -696,10 +742,25 @@ index c11dec0..cfcdaa9 100644
 +			var envInterval = Environment.GetEnvironmentVariable("RL_OBS_INTERVAL");
 +			if (!string.IsNullOrEmpty(envInterval) && int.TryParse(envInterval, out var oi) && oi > 0)
 +				observationInterval = oi;
++
++			// friendly-fighter sim: the platform's views fall on ticks 5, 11, 17... (RL_OBS_PHASE=5)
++			var envPhase = Environment.GetEnvironmentVariable("RL_OBS_PHASE");
++			if (!string.IsNullOrEmpty(envPhase) && int.TryParse(envPhase, out var ph) && ph >= 0)
++				observationPhase = ph;
  
- 			// Register in the session registry
- 			Sessions[episodeId] = this;
-@@ -265,9 +276,9 @@ public void Activate(Player p)
+-			// Register in the session registry
+-			Sessions[episodeId] = this;
++			if (RLLockstep.Enabled)
++				RLLockstep.Install(world);
++
++			// Register in the session registry (friendly-fighter sim: a lockstep session has one bridge
++			// per agent seat, so each registers under "<session>/<player>")
++			registryKey = MultiSessionMode && RLLockstep.Enabled ? $"{episodeId}/{p.InternalName}" : episodeId;
++			Sessions[registryKey] = this;
+ 
+ 			// Pause game until RL agent connects (gives LLM time to plan)
+ 			if (MultiSessionMode)
+@@ -265,9 +291,9 @@ public void Activate(Player p)
  			}
  			else
  			{
@@ -712,7 +773,25 @@ index c11dec0..cfcdaa9 100644
  			}
  
  			Log.Write("rl-bridge", "Game paused — waiting for RL agent to connect");
-@@ -480,8 +491,18 @@ void ITick.Tick(Actor self)
+@@ -297,7 +323,7 @@ public void Activate(Player p)
+ 		/// </summary>
+ 		internal void Deactivate()
+ 		{
+-			Sessions.TryRemove(episodeId, out _);
++			Sessions.TryRemove(registryKey ?? episodeId, out _);
+ 			SessionDone.Set();
+ 			TickRequested.Set(); // Wake tick loop so it can exit
+ 
+@@ -313,6 +339,8 @@ void IBot.QueueOrder(Order order)
+ 		}
+ 
+ 		bool gameOverHandled;
++		int observationPhase;
++		string registryKey;
+ 
+ 		void ITick.Tick(Actor self)
+ 		{
+@@ -480,8 +508,18 @@ void ITick.Tick(Actor self)
  			try
  			{
  				// Process all pending actions from agent (non-blocking drain)
@@ -732,7 +811,7 @@ index c11dec0..cfcdaa9 100644
  					// Intercept FAST_ADVANCE before ActionHandler
  					foreach (var cmd in agentAction.Commands)
  					{
-@@ -494,8 +515,10 @@ void ITick.Tick(Actor self)
+@@ -494,8 +532,10 @@ void ITick.Tick(Actor self)
  						}
  					}
  
@@ -744,24 +823,29 @@ index c11dec0..cfcdaa9 100644
  			}
  			catch (ChannelClosedException)
  			{
-@@ -508,7 +531,7 @@ void ITick.Tick(Actor self)
+@@ -508,7 +548,7 @@ void ITick.Tick(Actor self)
  				world.IssueOrder(orders.Dequeue());
  
  			// Only send observations at the configured interval
 -			if (world.WorldTick % info.ObservationInterval != 0)
-+			if (world.WorldTick % observationInterval != 0 && !world.IsGameOver)
++			if ((world.WorldTick - observationPhase) % observationInterval != 0 && !world.IsGameOver)
  				return;
  
  			if (!agentConnected)
-@@ -518,6 +541,7 @@ void ITick.Tick(Actor self)
+@@ -518,7 +558,11 @@ void ITick.Tick(Actor self)
  			{
  				// Serialize and push observation (DropOldest — never blocks)
  				var observation = observationSerializer.Serialize(world.WorldTick);
+-				observationChannel.Writer.TryWrite(observation);
 +				observation.CommandResults.AddRange(recentResults);
- 				observationChannel.Writer.TryWrite(observation);
++				if (RLLockstep.Enabled)
++					RLLockstep.Collect(player.InternalName, observation);
++				else
++					observationChannel.Writer.TryWrite(observation);
  			}
  			catch (ChannelClosedException)
-@@ -538,6 +562,16 @@ internal void OnAgentConnected()
+ 			{
+@@ -538,6 +582,16 @@ internal void OnAgentConnected()
  		{
  			agentConnected = true;
  
@@ -778,7 +862,7 @@ index c11dec0..cfcdaa9 100644
  			// Use SetLocalPauseState for immediate effect — SetPauseState issues an Order
  			// which requires the game loop to process it, but Tick() doesn't run while
  			// Paused is true, creating a deadlock for custom maps where loading is slow.
-@@ -545,6 +579,16 @@ internal void OnAgentConnected()
+@@ -545,6 +599,16 @@ internal void OnAgentConnected()
  			Log.Write("rl-bridge", "RL agent connected — game unpaused");
  		}
  
@@ -876,10 +960,21 @@ index 69cea95..1af47b7 100644
  		}
  
 diff --git a/OpenRA.Mods.Common/Traits/Player/Protos/rl_bridge.proto b/OpenRA.Mods.Common/Traits/Player/Protos/rl_bridge.proto
-index 1017ebe..c2e65d8 100644
+index 1017ebe..20aaf17 100644
 --- a/OpenRA.Mods.Common/Traits/Player/Protos/rl_bridge.proto
 +++ b/OpenRA.Mods.Common/Traits/Player/Protos/rl_bridge.proto
-@@ -63,6 +63,25 @@ message GameObservation {
+@@ -22,6 +22,10 @@ service RLBridge {
+   // Session management (multi-session mode)
+   rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+   rpc DestroySession(DestroySessionRequest) returns (DestroySessionResponse);
++
++  // friendly-fighter sim: virtual time (RL_LOCKSTEP=1). Hands each player's actions to its bridge,
++  // runs the game up to until_tick as fast as the CPU allows, and returns every view those ticks made.
++  rpc Step(StepRequest) returns (StepReply);
+ }
+ 
+ // ─── Observations (Game → Agent) ────────────────────────────────────────────
+@@ -63,6 +67,25 @@ message GameObservation {
    bool interrupted = 18;           // true if advance ended early due to interrupt
    string interrupt_reason = 19;    // signal name (e.g. "enemy_spotted")
    int32 actual_ticks_advanced = 20; // ticks actually advanced (may be < requested)
@@ -905,7 +1000,7 @@ index 1017ebe..c2e65d8 100644
  }
  
  message RlEconomy {
-@@ -110,6 +129,7 @@ message RlUnitInfo {
+@@ -110,6 +133,7 @@ message RlUnitInfo {
    int32 attack_range = 17;     // Max attack range in WDist units
    int32 passenger_count = 18;  // Cargo count (0 if not transport, -1 if N/A)
    bool is_building = 19;       // false for units (helps distinguish in visible_enemies)
@@ -913,7 +1008,7 @@ index 1017ebe..c2e65d8 100644
  }
  
  message RlBuildingInfo {
-@@ -133,6 +153,8 @@ message RlBuildingInfo {
+@@ -133,6 +157,8 @@ message RlBuildingInfo {
    repeated string can_produce = 16; // Items this building can produce
    int32 cell_x = 17;              // Cell position X
    int32 cell_y = 18;              // Cell position Y
@@ -922,7 +1017,7 @@ index 1017ebe..c2e65d8 100644
  }
  
  message RlProductionInfo {
-@@ -154,6 +176,8 @@ message RlMapInfo {
+@@ -154,6 +180,8 @@ message RlMapInfo {
  
  message AgentAction {
    repeated Command commands = 1;
@@ -931,7 +1026,7 @@ index 1017ebe..c2e65d8 100644
  }
  
  message Command {
-@@ -165,6 +189,8 @@ message Command {
+@@ -165,6 +193,8 @@ message Command {
    string item_type = 6;       // For build/train: actor type to produce
    bool queued = 7;             // Queue after current activity vs interrupt
    int32 ticks = 8;             // For FAST_ADVANCE: number of ticks to fast-forward
@@ -940,8 +1035,45 @@ index 1017ebe..c2e65d8 100644
  }
  
  enum ActionType {
+@@ -228,6 +258,7 @@ message CreateSessionRequest {
+   string map_name = 1;    // Map filename or UID
+   string bots = 2;        // Bot config: "Multi1:rl-agent,Multi0:beginner"
+   int32 seed = 3;         // Random seed (0 = random)
++  string lobby_options = 4;  // friendly-fighter sim: "startingcash=5000;crates=True" on top of the defaults
+ }
+ 
+ message CreateSessionResponse {
+@@ -239,3 +270,28 @@ message DestroySessionRequest {
+ }
+ 
+ message DestroySessionResponse {}
++
++// ─── friendly-fighter sim: virtual time ─────────────────────────────────────
++
++message PlayerAction {
++  string player = 1;          // internal name: Multi0, Multi1
++  AgentAction action = 2;
++}
++
++message PlayerObservation {
++  string player = 1;
++  GameObservation observation = 2;
++}
++
++message StepRequest {
++  int32 until_tick = 1;       // run until the world reaches this tick (no ticks if it already has)
++  repeated PlayerAction actions = 2;
++  string session_id = 3;      // multi-session mode: the session (CreateSession) to step
++}
++
++message StepReply {
++  int32 tick = 1;
++  bool game_over = 2;
++  repeated PlayerObservation observations = 3;  // in tick order
++  int64 elapsed_us = 4;       // wall time the ticks took
++}
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLBridgeService.cs b/OpenRA.Mods.Common/Traits/Player/RLBridgeService.cs
-index 582a0b7..fd80db9 100644
+index 582a0b7..54cb8b4 100644
 --- a/OpenRA.Mods.Common/Traits/Player/RLBridgeService.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/RLBridgeService.cs
 @@ -71,8 +71,23 @@ public override async Task GameSession(
@@ -970,3 +1102,278 @@ index 582a0b7..fd80db9 100644
  
  			if (bridge == null)
  			{
+@@ -164,6 +179,15 @@ public override async Task GameSession(
+ 		/// <summary>
+ 		/// Unary RPC: query current game state on demand.
+ 		/// </summary>
++		/// <summary>friendly-fighter sim: virtual time (see RLLockstep).</summary>
++		public override Task<RLProto.StepReply> Step(RLProto.StepRequest request, ServerCallContext context)
++		{
++			if (!RLLockstep.Enabled)
++				throw new RpcException(new Status(StatusCode.FailedPrecondition, "Step needs RL_LOCKSTEP=1"));
++
++			return RLLockstep.Step(request, context.CancellationToken);
++		}
++
+ 		public override Task<RLProto.GameState> GetState(
+ 			RLProto.StateRequest request,
+ 			ServerCallContext context)
+@@ -192,7 +216,7 @@ public override async Task GameSession(
+ 					"CreateSession is only available in multi-session mode"));
+ 
+ 			var sessionId = RLSessionManager.CreateSession(
+-				request.MapName, request.Bots, request.Seed);
++				request.MapName, request.Bots, request.Seed, request.LobbyOptions);
+ 
+ 			return Task.FromResult(new RLProto.CreateSessionResponse
+ 			{
+diff --git a/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
+new file mode 100644
+index 0000000..761e13b
+--- /dev/null
++++ b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
+@@ -0,0 +1,195 @@
++#region Copyright & License Information
++/*
++ * Copyright (c) The OpenRA Developers and Contributors
++ * This file is part of OpenRA, which is free software. It is made
++ * available to you under the terms of the GNU General Public License
++ * as published by the Free Software Foundation, either version 3 of
++ * the License, or (at your option) any later version. For more
++ * information, see COPYING.
++ */
++#endregion
++
++using System;
++using System.Collections.Concurrent;
++using System.Collections.Generic;
++using System.Diagnostics;
++using System.Linq;
++using System.Threading;
++using System.Threading.Tasks;
++using Grpc.Core;
++using RLProto = OpenRA.Mods.Common.RL;
++
++namespace OpenRA.Mods.Common.Traits
++{
++	/// <summary>
++	/// friendly-fighter sim: virtual time. With RL_LOCKSTEP=1 a headless game no longer runs on the
++	/// wall clock: it runs exactly the ticks each Step RPC asks for, as fast as the CPU allows, and
++	/// returns the views those ticks produced. The caller owns the clock.
++	///
++	/// Two ways to host it: a single game started with Launch.Map (its local server, the game loop
++	/// hands its ticks to Drive), or multi-session mode (Launch.MultiSession: CreateSession makes a
++	/// world on an EchoConnection, no network; each Step runs that world's ticks on its own thread).
++	/// </summary>
++	public static class RLLockstep
++	{
++		public static readonly bool Enabled = Environment.GetEnvironmentVariable("RL_LOCKSTEP") == "1";
++
++		sealed class Job
++		{
++			public int Until;
++			public readonly List<RLProto.PlayerAction> Actions = new();
++			public readonly List<RLProto.PlayerObservation> Observations = new();
++			public readonly TaskCompletionSource<RLProto.StepReply> Done = new(TaskCreationOptions.RunContinuationsAsynchronously);
++		}
++
++		static readonly BlockingCollection<Job> Jobs = new();
++		[ThreadStatic]
++		static Job current;
++		static World world;
++
++		/// <summary>Called by each bridge when it activates: from then on the game loop runs our ticks only.</summary>
++		internal static void Install(World w)
++		{
++			if (ExternalBotBridge.MultiSessionMode)
++				return;
++
++			world = w;
++			Game.LockstepDriver = Drive;
++		}
++
++		/// <summary>Game thread: run the next job, if one comes within a moment.</summary>
++		static void Drive(Action tick)
++		{
++			if (!Jobs.TryTake(out var job, 20))
++				return;
++
++			current = job;
++			try
++			{
++				foreach (var bridge in ExternalBotBridge.Sessions.Values)
++					if (bridge.World == world && bridge.IsEnabled && !bridge.AgentConnected)
++						bridge.OnAgentConnected();
++
++				foreach (var a in job.Actions)
++					ExternalBotBridge.LookupByPlayer(a.Player)?.ActionWriter.TryWrite(a.Action);
++
++				var watch = Stopwatch.StartNew();
++				var idle = 0;
++				while (world.WorldTick < job.Until)
++				{
++					var before = world.WorldTick;
++					tick();
++					if (world.WorldTick != before)
++						idle = 0;
++					else if (++idle > 200000)
++						throw new InvalidOperationException($"the world is stuck at tick {before}");
++					else
++						Thread.Yield();
++				}
++
++				var reply = new RLProto.StepReply
++				{
++					Tick = world.WorldTick,
++					GameOver = world.IsGameOver,
++					ElapsedUs = watch.ElapsedTicks * 1000000 / Stopwatch.Frequency,
++				};
++				reply.Observations.AddRange(job.Observations);
++				job.Done.TrySetResult(reply);
++			}
++			catch (Exception e)
++			{
++				job.Done.TrySetException(e);
++			}
++			finally
++			{
++				current = null;
++			}
++		}
++
++		/// <summary>Game thread (ExternalBotBridge.Tick): a view made during the current job.</summary>
++		internal static void Collect(string player, RLProto.GameObservation observation)
++		{
++			current?.Observations.Add(new RLProto.PlayerObservation { Player = player, Observation = observation });
++		}
++
++		/// <summary>gRPC thread: queue a job and wait for the game thread to run it.</summary>
++		internal static Task<RLProto.StepReply> Step(RLProto.StepRequest request, CancellationToken ct)
++		{
++			if (ExternalBotBridge.MultiSessionMode)
++				return Task.FromResult(StepSession(request, ct));
++
++			var job = new Job { Until = request.UntilTick };
++			job.Actions.AddRange(request.Actions);
++			ct.Register(() => job.Done.TrySetCanceled());
++			Jobs.Add(job);
++			return job.Done.Task;
++		}
++
++		/// <summary>Multi-session mode: run one session's ticks on this thread.</summary>
++		static RLProto.StepReply StepSession(RLProto.StepRequest request, CancellationToken ct)
++		{
++			RLSessionManager.SessionState state = null;
++			for (var i = 0; i < 1200 && !ct.IsCancellationRequested; i++)
++			{
++				if (RLSessionManager.SessionStates.TryGetValue(request.SessionId, out state))
++					break;
++
++				Thread.Sleep(50);
++			}
++
++			if (state == null)
++				throw new RpcException(new Status(StatusCode.NotFound, $"no session {request.SessionId}"));
++
++			state.TickLock.Wait(ct);
++			try
++			{
++				var w = state.World;
++				var om = state.OrderManager;
++				var bridges = ExternalBotBridge.Sessions.Values.Where(b => b.World == w && b.IsEnabled).ToList();
++				foreach (var bridge in bridges)
++					if (!bridge.AgentConnected)
++						bridge.OnAgentConnected();
++
++				foreach (var a in request.Actions)
++					bridges.FirstOrDefault(b => b.PlayerName == a.Player)?.ActionWriter.TryWrite(a.Action);
++
++				var job = new Job { Until = request.UntilTick };
++				current = job;
++				var watch = Stopwatch.StartNew();
++				var idle = 0;
++				while (w.WorldTick < job.Until)
++				{
++					var before = w.WorldTick;
++					om.LastTickTime.Value = 0;
++					Sync.RunUnsynced(false, w, () =>
++					{
++						om.TickImmediate();
++						return true;
++					});
++
++					if (om.TryTick())
++						w.Tick();
++
++					if (w.WorldTick != before)
++						idle = 0;
++					else if (++idle > 100000)
++						throw new InvalidOperationException($"the world is stuck at tick {before}");
++				}
++
++				var reply = new RLProto.StepReply
++				{
++					Tick = w.WorldTick,
++					GameOver = w.IsGameOver,
++					ElapsedUs = watch.ElapsedTicks * 1000000 / Stopwatch.Frequency,
++				};
++				reply.Observations.AddRange(job.Observations);
++				return reply;
++			}
++			finally
++			{
++				current = null;
++				state.TickLock.Release();
++			}
++		}
++	}
++}
+diff --git a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
+index 3163740..ca9ec3c 100644
+--- a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
++++ b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
+@@ -175,7 +175,7 @@ public static void StartGrpcServer(int port)
+ 		/// the game world is created asynchronously on a background thread.
+ 		/// FastAdvance will wait for the bridge to activate before proceeding.
+ 		/// </summary>
+-		public static string CreateSession(string mapName, string bots, int seed)
++		public static string CreateSession(string mapName, string bots, int seed, string lobbyOptions = null)
+ 		{
+ 			var sessionId = Guid.NewGuid().ToString("N")[..12];
+ 			Log.Write("rl-bridge", $"Creating session {sessionId}: map={mapName}, bots={bots}, seed={seed}");
+@@ -184,7 +184,7 @@ public static string CreateSession(string mapName, string bots, int seed)
+ 			{
+ 				try
+ 				{
+-					InitSession(sessionId, mapName, bots, seed);
++					InitSession(sessionId, mapName, bots, seed, lobbyOptions);
+ 				}
+ 				catch (Exception e)
+ 				{
+@@ -285,7 +285,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
+ 		/// Initialize a game session: create World, find bridge, register state.
+ 		/// The calling thread exits after this returns — no persistent tick loop.
+ 		/// </summary>
+-		static void InitSession(string sessionId, string mapName, string bots, int seed)
++		static void InitSession(string sessionId, string mapName, string bots, int seed, string lobbyOptions)
+ 		{
+ 			// 1. Resolve map (cached — only first request per map name hits MapCache).
+ 			//    MapCache.GetEnumerator() calls UpdateMaps() which mutates collections,
+@@ -366,6 +366,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
+ 			// 5. Build LobbyInfo with map slots and bot assignments
+ 			SetupLobbyInfo(orderManager, mapPreview, map, bots, seed);
+ 
++			// friendly-fighter sim: lobby options on top of the defaults ("startingcash=5000;crates=True")
++			foreach (var opt in (lobbyOptions ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries))
++			{
++				var kv = opt.Split('=', 2);
++				if (kv.Length == 2 && orderManager.LobbyInfo.GlobalSettings.LobbyOptions.TryGetValue(kv[0].Trim(), out var state))
++				{
++					state.Value = kv[1].Trim();
++					state.PreferredValue = kv[1].Trim();
++				}
++			}
++
+ 			// 6. World creation + LoadComplete (serialized — traits access shared state).
+ 			//    With PrepareMap cached and map lookup cached, the lock only covers
+ 			//    World construction (~300ms per session). 64 sessions ≈ 19s total.

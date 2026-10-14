@@ -65,7 +65,7 @@ def test_view_clock(game):
     a = game.state(seat)["state_version"]
     time.sleep(1.0)
     b = game.state(seat)["state_version"]
-    assert a % 6 == 0 and b % 6 == 0 and 18 <= b - a <= 36  # 25 ticks/s, a view every 6 ticks
+    assert a % 6 == 5 and b % 6 == 5 and 18 <= b - a <= 36  # 25 ticks/s, a view every 6 ticks (5, 11, 17...)
 
 
 def test_engine_verdicts_match_the_platform(game):

@@ -22,6 +22,10 @@ service RLBridge {
   // Session management (multi-session mode)
   rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
   rpc DestroySession(DestroySessionRequest) returns (DestroySessionResponse);
+
+  // friendly-fighter sim: virtual time (RL_LOCKSTEP=1). Hands each player's actions to its bridge,
+  // runs the game up to until_tick as fast as the CPU allows, and returns every view those ticks made.
+  rpc Step(StepRequest) returns (StepReply);
 }
 
 // ─── Observations (Game → Agent) ────────────────────────────────────────────
@@ -254,6 +258,7 @@ message CreateSessionRequest {
   string map_name = 1;    // Map filename or UID
   string bots = 2;        // Bot config: "Multi1:rl-agent,Multi0:beginner"
   int32 seed = 3;         // Random seed (0 = random)
+  string lobby_options = 4;  // friendly-fighter sim: "startingcash=5000;crates=True" on top of the defaults
 }
 
 message CreateSessionResponse {
@@ -265,3 +270,28 @@ message DestroySessionRequest {
 }
 
 message DestroySessionResponse {}
+
+// ─── friendly-fighter sim: virtual time ─────────────────────────────────────
+
+message PlayerAction {
+  string player = 1;          // internal name: Multi0, Multi1
+  AgentAction action = 2;
+}
+
+message PlayerObservation {
+  string player = 1;
+  GameObservation observation = 2;
+}
+
+message StepRequest {
+  int32 until_tick = 1;       // run until the world reaches this tick (no ticks if it already has)
+  repeated PlayerAction actions = 2;
+  string session_id = 3;      // multi-session mode: the session (CreateSession) to step
+}
+
+message StepReply {
+  int32 tick = 1;
+  bool game_over = 2;
+  repeated PlayerObservation observations = 3;  // in tick order
+  int64 elapsed_us = 4;       // wall time the ticks took
+}

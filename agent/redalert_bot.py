@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import math
 import threading
-import time
 from dataclasses import dataclass, field, replace
 from typing import Any, Callable
 
@@ -95,6 +94,7 @@ MAX_COMMANDS = 180            # the server allows 200 engine commands per batch
 MAX_UNITS_PER_ORDER = 50
 TIEBREAK_HOLD_SECONDS = 60    # last minute: no new waves when ahead on kills
 SCOUT_GRID = 4                # sweep cells: an N x N grid over the playable area
+TICKS_PER_SECOND = 25
 STATUS_SECONDS = 30.0         # a status line in the log this often
 VISION_CHECK_RADIUS = 5       # a remembered building cell this close to our unit is "seen"
 SURPLUS_CASH = 1500           # free money above this buys more units (any focus) and factories
@@ -176,11 +176,15 @@ class RedAlertBot:
         self,
         *,
         log: Callable[[str], None] = print_line,
-        clock: Callable[[], float] = time.monotonic,
+        clock: Callable[[], float] | None = None,
         knobs: Knobs | None = None,
     ) -> None:
         self._log = log
-        self._clock = clock
+        # Game time (the newest observation's tick / 25) by default: it runs at the wall clock's pace
+        # on the platform, and keeps the bot's timers right when a local game runs faster (ffsim's
+        # virtual time) or the agent falls behind.
+        self._game_seconds = 0.0
+        self._clock = clock or (lambda: self._game_seconds)
         self._lock = threading.Lock()
         self._knobs = knobs or Knobs()
         self._config_used = False
@@ -272,8 +276,10 @@ class RedAlertBot:
     # -- the decision -----------------------------------------------------------------
 
     def decide(self, raw: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
-        now = self._clock()
         obs = _dict(raw.get("observation"))
+        if isinstance(obs.get("tick"), int):
+            self._game_seconds = max(self._game_seconds, obs["tick"] / TICKS_PER_SECOND)
+        now = self._clock()
         legal = _dict(raw.get("legal_actions"))
         knobs = self.knobs
         self._expire(now)

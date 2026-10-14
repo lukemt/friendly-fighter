@@ -3,7 +3,14 @@
     python scripts/ffsim.py run                                # 1 game: our agent vs itself, trapped, 10 min
     python scripts/ffsim.py run --seat1 ai:normal --games 4    # vs OpenRA's own Normal AI
     python scripts/ffsim.py run --seat0 agent:A --seat1 agent:B --env B:FF_VARIANT=rush --games 6 --parallel 2
+    python scripts/ffsim.py run --time real                    # on the wall clock, like the platform (10 min per game)
     python scripts/ffsim.py serve --port 8800                  # just the platform; create matches via POST /sim/matches
+
+Time: games run in **virtual time** by default (``ffsim.vclock``): the engine runs as fast as
+the CPU and the agents allow, and every timing rule of the platform (the 0.19 s round trip,
+the 0.2 s hold, long polls, the agent's own think time) is kept in game ticks. ``--time real``
+runs on the wall clock instead. ``--think measured`` (default) charges each agent the wall
+time it really took between an answer and its next call; ``--think 3`` charges 3 ms flat.
 
 Seats: ``agent[:LABEL]`` is played by a runtime (``python -m agent --match``) started for
 that label (one runtime per label; both seats under one label is self-play, like the
@@ -33,7 +40,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from ffsim.engine_openra import OpenRAEngine  # noqa: E402
+from ffsim.engine_openra import EngineHost, OpenRAEngine  # noqa: E402
 from ffsim.rules import Rules  # noqa: E402
 from ffsim.server import Platform, serve  # noqa: E402
 
@@ -44,10 +51,29 @@ def local_key(label: str) -> str:
     return "eak_live_" + hashlib.sha256(f"ffsim:{label}".encode()).hexdigest()
 
 
-def engine_factory(out: Path):
+def engine_factory(out: Path, engine: str = "host"):
+    """Real time: one engine process per game. Virtual time: by default every game is a session of
+    one shared engine process (``EngineHost``); ``engine="single"`` starts one per game instead."""
+    hosts: list[EngineHost] = []
+    lock = threading.Lock()
+
     def make(match, kinds, lobby):
-        return OpenRAEngine(match.session_id, match.map_id, kinds, lobby=lobby, log_dir=out / "engine" / match.session_id)
+        virtual = match.vclock is not None
+        host = None
+        if virtual and engine == "host":
+            with lock:
+                if not hosts:
+                    hosts.append(EngineHost(out / "engine"))  # (re)started on demand
+            host = hosts[0]
+        return OpenRAEngine(match.session_id, match.map_id, kinds, lobby=lobby, log_dir=out / "engine" / match.session_id,
+                            lockstep=virtual, host=host, seed=match.rng.randrange(1, 2 ** 31))
+
+    make.hosts = hosts
     return make
+
+
+def think_arg(value: str) -> str | float:
+    return value if value == "measured" else float(value) / 1000.0
 
 
 def parse_seat(spec: str) -> dict:
@@ -94,7 +120,9 @@ def summarize(results: list[dict]) -> dict:
 def cmd_run(a) -> int:
     out = Path(a.out or ROOT / "sim" / "results" / datetime.now().strftime("%Y%m%d-%H%M%S"))
     out.mkdir(parents=True, exist_ok=True)
-    platform = Platform(engine_factory(out), results_dir=out, rtt_ms=a.rtt_ms)
+    factory = engine_factory(out, a.engine)
+    platform = Platform(factory, results_dir=out, rtt_ms=a.rtt_ms, time_mode=a.time,
+                        think=think_arg(a.think), seed=getattr(a, "seed", None))
     server = serve(platform, a.port)
     url = f"http://127.0.0.1:{server.server_address[1]}"
     print(f"[ffsim] platform at {url}; results in {out}")
@@ -120,9 +148,10 @@ def cmd_run(a) -> int:
         done.append(info)
         res = info.get("result") or {}
         sides = " vs ".join(f"{s['label']}({s['faction']})" for s in info["seats"])
+        wall = time.monotonic() - info.get("_started", time.monotonic())
         print(f"[ffsim] game {len(done)}/{a.games} {info['map']}: {sides} -> {res.get('winner_seat') or res.get('outcome')} "
-              f"({info['termination_reason']}, {info['game_seconds']:.0f}s) tiebreak={[s['tiebreak'] for s in info['seats']]}",
-              flush=True)
+              f"({info['termination_reason']}, {info['game_seconds']:.0f}s in {wall:.0f}s wall) "
+              f"tiebreak={[s['tiebreak'] for s in info['seats']]}", flush=True)
         if len(done) >= a.games:
             finished.set()
 
@@ -136,6 +165,7 @@ def cmd_run(a) -> int:
         m = rng.choice(MAPS) if a.map == "random" else a.map
         order = seats if not (a.swap and started % 2 == 0) else list(reversed(seats))
         info = platform.create_match(map_id=m, max_minutes=a.minutes, seats=order, label=f"game{started}")
+        platform.match_meta[info["session_id"]]["started_wall"] = time.monotonic()
         print(f"[ffsim] game {started} {info['session_id']} on {m}: "
               + " vs ".join(s.get("label") or s["kind"] for s in order), flush=True)
 
@@ -176,6 +206,8 @@ def cmd_run(a) -> int:
                 m.fail("cancelled", "runner stopped")
             if m.engine is not None:
                 m.engine.stop()
+        for host in factory.hosts:
+            host.stop()
         server.shutdown()
     table = summarize(done)
     summary = {"games": len(done), "seats": [a.seat0, a.seat1], "map": a.map, "minutes": a.minutes, "table": table,
@@ -192,7 +224,9 @@ def cmd_run(a) -> int:
 
 def cmd_serve(a) -> int:
     out = Path(a.out or ROOT / "sim" / "results" / ("serve-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
-    platform = Platform(engine_factory(out), results_dir=out, rtt_ms=a.rtt_ms)
+    factory = engine_factory(out, a.engine)
+    platform = Platform(factory, results_dir=out, rtt_ms=a.rtt_ms, time_mode=a.time,
+                        think=think_arg(a.think), seed=getattr(a, "seed", None))
     server = serve(platform, a.port)
     print(f"[ffsim] platform at http://127.0.0.1:{server.server_address[1]} (maps {sorted(Rules.load().maps)})")
     print("  POST /sim/matches {\"map_id\": \"trapped\", \"max_minutes\": 10, \"seats\": [{\"kind\": \"agent\", \"key\": KEY}, "
@@ -219,13 +253,20 @@ def main() -> int:
     r.add_argument("--env", action="append", default=[], metavar="LABEL:K=V")
     r.add_argument("--seed", type=int, default=None)
     r.add_argument("--probe", action="store_true", help="run agent/probe.py on seat 0 (it resigns when done)")
-    r.add_argument("--rtt-ms", type=float, default=190.0,
-                   help="simulated network round trip per MCP call (our real one to the platform: 190 ms)")
+    r.add_argument("--rtt-ms", default="platform",
+                   help="network round trip per MCP call: 'platform' (drawn from ours to the platform, median 195 ms) or ms")
+    r.add_argument("--time", choices=["virtual", "real"], default="virtual")
+    r.add_argument("--engine", choices=["host", "single"], default="host",
+                   help="virtual time: games as sessions of one engine process (host) or one engine each (single)")
+    r.add_argument("--think", default="measured", help="virtual time: 'measured' or a fixed think time in ms")
     r.add_argument("--port", type=int, default=0)
     r.add_argument("--out")
     s = sub.add_parser("serve", help="run the platform only")
     s.add_argument("--port", type=int, default=8800)
-    s.add_argument("--rtt-ms", type=float, default=190.0)
+    s.add_argument("--rtt-ms", default="platform")
+    s.add_argument("--time", choices=["virtual", "real"], default="virtual")
+    s.add_argument("--engine", choices=["host", "single"], default="host")
+    s.add_argument("--think", default="measured")
     s.add_argument("--out")
     a = p.parse_args()
     return cmd_run(a) if a.command == "run" else cmd_serve(a)

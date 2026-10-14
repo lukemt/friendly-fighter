@@ -144,8 +144,11 @@ The local platform is built and tested; see **docs/SIMULATOR.md**.
   the 11 tools, pacing, the verdict book, events, `legal_actions` and results.
 - Our **unchanged runtime** plays on it.
 - `python scripts/ffsim.py run` plays games: self-play, A/B between labels, or against
-  OpenRA's AIs (`ai:normal`, `rush`, `turtle`, `naval`). Each game uses about 0.3 core
-  and 240 MB.
+  OpenRA's AIs (`ai:normal`, `rush`, `turtle`, `naval`).
+- Since 2026-10-14 games run in **virtual time** (`ffsim/vclock.py`): a 10-minute game in
+  ~40 s, six in parallel in ~85 s, timed like the platform (measured: round trips,
+  `wait_for_update` polling every 0.1 s, batches stamped with the newest view, views on
+  ticks 5, 11, 17...). The bot's timers now run on game time, not the wall clock.
 
 **Fidelity checks.**
 

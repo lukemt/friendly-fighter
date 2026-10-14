@@ -20,6 +20,7 @@ the hosted runner does:
 
 from __future__ import annotations
 
+import random
 import threading
 import time
 from collections import deque
@@ -28,6 +29,7 @@ from dataclasses import dataclass, field
 from . import observe
 from .orders import Checked, View, check_order
 from .rules import Rules
+from .vclock import VirtualClock
 
 TICKS_PER_SECOND = 25
 APPLY_DELAY_TICKS = 12
@@ -43,6 +45,13 @@ MAX_WAITS = 2
 HANDOVER_SECONDS = 0.02
 NO_AGENTS_SECONDS = 300
 IDLE_SECONDS = 1200
+# The platform's timing, measured in its wire logs (docs/SIMULATOR.md, "Timing"):
+# - wait_for_update looks for a change when it arrives and then every 0.1 s: its durations
+#   cluster at the round trip + 0, 0.1, 0.2, 0.3 s;
+# - a view shows in the served state ~45 ms (exponential) after its tick, while batches are
+#   stamped with the newest tick at once: so a batch sent right after a state usually lands
+#   one view later (arrival - state_version: 0 / 6 / 12 ticks in 8 / 80+ / 5 % of batches).
+PLATFORM_TIMING = {"wait_poll": 0.1, "publish_delay_mean": 0.045}
 PLAYING_AFTER_VIEWS = 2  # views in "starting" before "playing" (the platform showed two)
 
 STATUS_IN_PROGRESS = "in_progress"
@@ -112,6 +121,7 @@ class Seat:
         self.repair_memory: dict = {}
         self.power_memory: dict = {}
         self.faction: str | None = None
+        self.queue: deque = deque()  # (publish time, view) not yet in the state
 
     @property
     def is_agent(self) -> bool:
@@ -125,7 +135,12 @@ class Seat:
 class Match:
     def __init__(self, session_id: str, map_id: str, seats: list[SeatConfig], engine_factory, *,
                  max_minutes: int = 20, rules: Rules | None = None, clock=time.monotonic,
-                 sleep=time.sleep, match_rules: dict | None = None) -> None:
+                 sleep=time.sleep, match_rules: dict | None = None, virtual: dict | None = None,
+                 timing: dict | None = None, seed: int | None = None) -> None:
+        """``virtual``: run in virtual time (``ffsim.vclock``) with these ``VirtualClock`` options
+        (``rtt``, ``think``...); the engine must then support ``step``. ``timing``: the
+        platform's own delays (``PLATFORM_TIMING``); without it, waits wake on every change and
+        views show at once."""
         self.session_id = session_id
         self.rules = rules or Rules.load()
         self.map_id = map_id
@@ -141,11 +156,22 @@ class Match:
                                            "kill_bounties": False, "crates": True}
         self.lock = threading.RLock()
         self.cond = threading.Condition(self.lock)
+        self.vclock: VirtualClock | None = None
+        if virtual is not None:
+            self.vclock = VirtualClock(self.cond, [i for i, s in enumerate(seats) if s.kind == "agent"],
+                                       **{"seed": f"{seed}:{session_id}", **virtual})
+            self.clock, self.sleep = clock, sleep = self.vclock.now, self.vclock.sleep
+        self.latest_tick = 0  # the tick of the newest view: GameAPI's "current tick"
+        timing = timing or {}
+        self.wait_poll: float | None = timing.get("wait_poll")
+        self.publish_delay_mean: float = timing.get("publish_delay_mean", 0.0)
+        self.rng = random.Random(seed if seed is not None else session_id)
+        self.publish_delays: dict[int, float] = {}  # view tick -> its delay (the same for both seats)
         # The platform shows "starting" while it waits for the seats to check in (waiting_for_players lists them).
         self.phase = "starting"
         self.engine_started = False
         self.rev = 0
-        self.created = clock()
+        self.created = time.monotonic()  # the no-agents rule runs on the wall clock
         self.start_tick: int | None = None
         self.result: dict | None = None
         self.termination_reason: str | None = None
@@ -166,11 +192,11 @@ class Match:
         with self.lock:
             if not seat.checked_in:
                 seat.checked_in = True
-                self.cond.notify_all()
+                self._notify()
             if not self.engine_started and self.phase == "starting" and all(s.checked_in for s in self.seats):
                 self.engine_started = True
                 start = True
-                self.cond.notify_all()
+                self._notify()
         if start:
             self._start_engine()
 
@@ -178,13 +204,17 @@ class Match:
         try:
             self.engine = self.engine_factory(self)
             self.engine.start(self.on_view, self.on_engine_exit)
+            if self.vclock is not None:
+                self.vclock.start(self.engine, self.on_views, self.on_engine_exit, self.on_time)
         except Exception as exc:  # noqa: BLE001
             self.fail("engine_start_failed", repr(exc))
 
     def tick(self) -> None:
         """Housekeeping, called about once a second by the server: no-agent timeout."""
         with self.lock:
-            if not self.engine_started and self.phase == "starting" and self.clock() - self.created > NO_AGENTS_SECONDS:
+            if self.vclock is None:
+                self._publish()
+            if not self.engine_started and self.phase == "starting" and time.monotonic() - self.created > NO_AGENTS_SECONDS:
                 self._finish_no_result("no_agents_connected")
 
     def on_engine_exit(self, why: str) -> None:
@@ -218,35 +248,81 @@ class Match:
 
     def _end(self) -> None:
         self.phase = "finished"
-        self.finished_at = self.clock()
+        self.finished_at = time.monotonic()
         for seat in self.seats:
             for pending in list(seat.pending.values()):
                 self._settle(seat, pending, final_tick=None)
-        self.cond.notify_all()
+        self._notify()
+        if self.vclock is not None:
+            self.vclock.stop()
         engine = self.engine
         if engine is not None:
             threading.Thread(target=engine.stop, name=f"stop-{self.session_id[:8]}", daemon=True).start()
 
     # -- engine side --------------------------------------------------------------------
 
+    def _notify(self) -> None:
+        if self.vclock is not None:
+            self.vclock.notify()
+        else:
+            self.cond.notify_all()
+
+    def _wait(self, deadline: float) -> None:
+        """Holding the lock: wait for a change (a notify) or the deadline."""
+        if self.vclock is not None:
+            self.vclock.wait(self.cond, deadline)
+        else:
+            self.cond.wait(max(0.0, min(deadline - self.clock(), 0.5)))
+
+    def on_views(self, views: list[tuple[int, dict]]) -> None:
+        for position, view in views:
+            self.on_view(position, view)
+
     def on_view(self, position: int, view: dict) -> None:
+        """A view from the engine: its tick is GameAPI's "now" at once; the state shows it once
+        it is published (``publish_delay_mean`` later)."""
         with self.lock:
             if self.phase == "finished":
                 return
-            seat = self.seats[position]
-            seat.view = view
-            seat.views += 1
-            self.rev += 1
-            seat.faction = view.get("faction") or seat.faction
-            if self.start_tick is None:
-                self.start_tick = view["tick"]
-            seat.tracker.update(view)
-            seat.obs = observe.observation(view, self.map_id, self.size, seat.tracker.events)
-            self._collect_results(seat, view)
-            if self.phase == "starting" and all(s.views >= PLAYING_AFTER_VIEWS for s in self.seats if s.is_agent):
-                self.phase = "playing"
-            self._check_end(view)
-            self.cond.notify_all()
+            tick = view["tick"]
+            self.latest_tick = max(self.latest_tick, tick)
+            delay = 0.0
+            if self.publish_delay_mean:
+                delay = self.publish_delays.get(tick)
+                if delay is None:
+                    delay = self.publish_delays[tick] = self.rng.expovariate(1.0 / self.publish_delay_mean)
+                    self.publish_delays.pop(tick - 600, None)
+            # In virtual time a view is made exactly at its tick; in real time when it reaches us.
+            made = tick / TICKS_PER_SECOND if self.vclock is not None else self.clock()
+            self.seats[position].queue.append((made + delay, view))
+            self._publish()
+
+    def on_time(self) -> None:
+        """The virtual clock moved: publish what is due."""
+        with self.lock:
+            self._publish()
+
+    def _publish(self) -> None:
+        """Holding the lock: apply every view whose publication time has come."""
+        now = self.clock()
+        for seat in self.seats:
+            while seat.queue and seat.queue[0][0] <= now and self.phase != "finished":
+                self._apply_view(seat, seat.queue.popleft()[1])
+
+    def _apply_view(self, seat: Seat, view: dict) -> None:
+        seat.view = view
+        seat.views += 1
+        self.rev += 1
+        seat.faction = view.get("faction") or seat.faction
+        if self.start_tick is None:
+            self.start_tick = view["tick"]
+        seat.tracker.update(view)
+        seat.obs = observe.observation(view, self.map_id, self.size, seat.tracker.events)
+        self._collect_results(seat, view)
+        if self.phase == "starting" and all(s.views >= PLAYING_AFTER_VIEWS for s in self.seats if s.is_agent):
+            self.phase = "playing"
+        self._check_end(view)
+        self._notify()
 
     def _collect_results(self, seat: Seat, view: dict) -> None:
         for r in view.get("command_results") or []:
@@ -349,9 +425,9 @@ class Match:
     # -- clock --------------------------------------------------------------------------
 
     def current_tick(self) -> int:
-        if self.engine is not None:
-            return self.engine.tick_now()
-        return 0
+        """GameAPI's idea of "now": the tick of the newest view. On the platform every batch is
+        stamped with a view tick (arrival - state_version is 0, 6 or 12 in every recording)."""
+        return self.latest_tick
 
     def game_seconds(self) -> float:
         ticks = [s.view["tick"] for s in self.seats if s.view]
@@ -363,6 +439,7 @@ class Match:
 
     def state(self, seat: Seat, *, updated: bool | None = None) -> dict:
         with self.lock:
+            self._publish()
             return self._state(seat, updated)
 
     def _state_version(self, seat: Seat) -> int:
@@ -460,6 +537,7 @@ class Match:
 
     def legal_actions(self, seat: Seat) -> dict:
         with self.lock:
+            self._publish()
             sv = self._state_version(seat)
             if self.phase == "playing" and seat.obs:
                 return observe.legal_actions(self.session_id, sv, seat.obs, self.map["spawns"], self.rules.building_items)
@@ -467,6 +545,7 @@ class Match:
 
     def get_result(self, seat: Seat) -> dict:
         with self.lock:
+            self._publish()
             if self.phase != "finished":
                 return {"session_id": self.session_id, "is_terminal": False, "status": STATUS_IN_PROGRESS,
                         "returns": None, "your_return": None, "winner_agent_id": None, "termination_reason": None,
@@ -481,6 +560,7 @@ class Match:
 
     def resign(self, seat: Seat) -> dict:
         with self.lock:
+            self._publish()
             if self.phase == "finished":
                 raise ToolError("GAME_ALREADY_COMPLETE", "The game is over. Call get_result.", [{"tool": "get_result"}])
             engine = self.engine
@@ -496,6 +576,7 @@ class Match:
                         timeout_seconds: float = 20.0) -> dict:
         timeout = max(0.0, min(float(timeout_seconds), 25.0))
         with self.lock:
+            self._publish()
             if self.waits >= MAX_WAITS:
                 raise ToolError("TOO_MANY_WAITS", f"At most {MAX_WAITS} wait_for_update calls may wait at once per game.")
             if since_is_current_actor is None:
@@ -503,9 +584,11 @@ class Match:
             if since_phase is None:
                 since_phase = self.phase
             self.waits += 1
-            try:
-                deadline = self.clock() + timeout
-                while True:
+            deadline = self.clock() + timeout
+        try:
+            while True:
+                with self.lock:
+                    self._publish()
                     current = self.phase == "playing" and not seat.in_flight
                     if (self._state_version(seat) != since_version or current != since_is_current_actor
                             or self.phase != since_phase or self.phase == "finished"):
@@ -513,8 +596,13 @@ class Match:
                     left = deadline - self.clock()
                     if left <= 0:
                         return self._state(seat, False)
-                    self.cond.wait(min(left, 0.5))
-            finally:
+                    if not self.wait_poll:
+                        self._wait(deadline)
+                        continue
+                # The platform looks again every 0.1 s.
+                self.sleep(min(self.wait_poll, left))
+        finally:
+            with self.lock:
                 self.waits -= 1
 
     def play_action(self, seat: Seat, state_version, action, reasoning_summary=None) -> dict:
@@ -523,6 +611,7 @@ class Match:
         if state_version < 0:
             raise ToolError("INVALID_ACTION", "Malformed orders batch: state_version: Input should be greater than or equal to 0")
         with self.lock:
+            self._publish()
             if self.phase == "finished":
                 raise ToolError("GAME_ALREADY_COMPLETE", "The game is over. Call get_result.", [{"tool": "get_result"}])
             if self.phase != "playing":
@@ -535,13 +624,13 @@ class Match:
                                     "Retry play_action in a moment (one batch at a time, at most one every 0.2 s), "
                                     "with the state_version of your newest get_game_state.")}])
             seat.in_flight = True
-            self.cond.notify_all()
+            self._notify()
         try:
             return self._play(seat, state_version, action, reasoning_summary)
         finally:
             with self.lock:
                 seat.in_flight = False
-                self.cond.notify_all()
+                self._notify()
 
     def _play(self, seat: Seat, state_version: int, action, reasoning_summary) -> dict:
         if not isinstance(action, dict) or action.get("type") != "orders":

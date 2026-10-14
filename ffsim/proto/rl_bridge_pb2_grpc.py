@@ -62,6 +62,11 @@ class RLBridgeStub:
                 request_serializer=rl__bridge__pb2.DestroySessionRequest.SerializeToString,
                 response_deserializer=rl__bridge__pb2.DestroySessionResponse.FromString,
                 _registered_method=True)
+        self.Step = channel.unary_unary(
+                '/openra.rl.RLBridge/Step',
+                request_serializer=rl__bridge__pb2.StepRequest.SerializeToString,
+                response_deserializer=rl__bridge__pb2.StepReply.FromString,
+                _registered_method=True)
 
 
 class RLBridgeServicer:
@@ -106,6 +111,14 @@ class RLBridgeServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Step(self, request, context):
+        """friendly-fighter sim: virtual time (RL_LOCKSTEP=1). Hands each player's actions to its bridge,
+        runs the game up to until_tick as fast as the CPU allows, and returns every view those ticks made.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RLBridgeServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -133,6 +146,11 @@ def add_RLBridgeServicer_to_server(servicer, server):
                     servicer.DestroySession,
                     request_deserializer=rl__bridge__pb2.DestroySessionRequest.FromString,
                     response_serializer=rl__bridge__pb2.DestroySessionResponse.SerializeToString,
+            ),
+            'Step': grpc.unary_unary_rpc_method_handler(
+                    servicer.Step,
+                    request_deserializer=rl__bridge__pb2.StepRequest.FromString,
+                    response_serializer=rl__bridge__pb2.StepReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -273,6 +291,33 @@ class RLBridge:
             '/openra.rl.RLBridge/DestroySession',
             rl__bridge__pb2.DestroySessionRequest.SerializeToString,
             rl__bridge__pb2.DestroySessionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Step(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/openra.rl.RLBridge/Step',
+            rl__bridge__pb2.StepRequest.SerializeToString,
+            rl__bridge__pb2.StepReply.FromString,
             options,
             channel_credentials,
             insecure,

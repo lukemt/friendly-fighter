@@ -123,19 +123,19 @@ def test_play_action_stamps_arrival_and_settles_twelve_ticks_later():
     m, clock, engines = make_match()
     e = start(m, engines)
     seat = m.seats[0]
-    e.tick = 15  # the engine has moved on since the state we read (tick 12)
+    e.tick = 15  # the engine has moved on, but GameAPI's "now" is its newest view: tick 12
     ans = m.play_action(seat, 12, {"type": "orders", "orders": [{"cmd": "deploy", "units": [100]}]})
-    assert ans["accepted"] and ans["state_version"] == 15 and ans["pending"]
+    assert ans["accepted"] and ans["state_version"] == 12 and ans["pending"]
     assert ans["results"] == [{"index": 0, "cmd": "deploy", "detail": None, "commands": 1, "status": "pending",
                                "reason": "pending", "failed": []}]
-    assert e.sent[0]["apply_at"] == 15 + APPLY_DELAY_TICKS
+    assert e.sent[0]["apply_at"] == 12 + APPLY_DELAY_TICKS
     lo = m.state(seat)["last_orders"]
     assert lo["pending"] and not lo["carried"] and lo["applied_at_tick"] is None and "rev" in lo
     e.advance(3)  # tick 18: not yet applied
     assert m.state(seat)["last_orders"]["pending"]
-    e.advance(9)  # tick 27 = arrival + 12
+    e.advance(6)  # tick 24 = arrival + 12
     lo = m.state(seat)["last_orders"]
-    assert not lo["pending"] and lo["carried"] and lo["applied_at_tick"] == 27 and "rev" not in lo
+    assert not lo["pending"] and lo["carried"] and lo["applied_at_tick"] == 24 and "rev" not in lo
     assert lo["results"][0]["status"] == "ok"
 
 
@@ -189,7 +189,7 @@ def test_pacing_hold_concurrency_and_staleness():
     assert exc.value.code == "NOT_YOUR_TURN" and "still being applied" in exc.value.detail
     seat.in_flight = False
 
-    e.tick = 4000
+    e.advance(4000 - e.tick)  # a view at tick 4000
     with pytest.raises(ToolError) as exc:
         m.play_action(seat, 999, batch)
     assert exc.value.code == "STALE_STATE" and "current tick 4000, oldest accepted 1000" in exc.value.detail
@@ -394,7 +394,7 @@ def test_runtime_clients_talk_to_the_local_platform(monkeypatch):
         engines.append(e)
         return e
 
-    platform = Platform(factory)
+    platform = Platform(factory, timing={})  # views show at once, waits wake on change
     server = serve(platform, 0)
     url = f"http://127.0.0.1:{server.server_address[1]}"
     key = "eak_live_" + "ab" * 32
