@@ -37,6 +37,9 @@ RED_ALERT = "red_alert"
 # remote/control.json is looked at once a second at most, not on every view: on the shared
 # workspace filesystem each look costs about a millisecond (a fifth of a worker's CPU).
 CONTROL_EVERY_SECONDS = 1.0
+# FF_THINK_MS: wait this long before every decision, like an agent that thinks slowly (an LLM's
+# latency) -- for local test games of how such an agent fares; unset, there's no wait.
+THINK_SECONDS = float(os.environ.get("FF_THINK_MS") or 0) / 1000.0
 
 
 def knobs_from_env() -> Knobs:
@@ -76,6 +79,8 @@ class FriendlyFighter:
 
     def choose_action(self, state: GameState, context: DecisionContext):
         self._recorder.state(state, context)
+        if THINK_SECONDS:
+            time.sleep(THINK_SECONDS)  # FF_THINK_MS: play like a slower agent (local test games)
         move = self._choose(state, context)
         self._recorder.action(move, context)
         return move

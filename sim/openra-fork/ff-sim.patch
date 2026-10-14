@@ -223,7 +223,7 @@ index 9bdaea6..f2c2662 100644
  			var worldActorType = type == WorldType.Editor ? SystemActors.EditorWorld : SystemActors.World;
  			WorldActor = CreateActor(worldActorType.ToString(), []);
 diff --git a/OpenRA.Mods.Common/Traits/AffectsShroud.cs b/OpenRA.Mods.Common/Traits/AffectsShroud.cs
-index 6b68de3..bb2ff5c 100644
+index 6b68de3..f6ade7d 100644
 --- a/OpenRA.Mods.Common/Traits/AffectsShroud.cs
 +++ b/OpenRA.Mods.Common/Traits/AffectsShroud.cs
 @@ -39,6 +39,9 @@ public abstract class AffectsShroud : ConditionalTrait<AffectsShroudInfo>, ISync
@@ -236,7 +236,40 @@ index 6b68de3..bb2ff5c 100644
  		[VerifySync]
  		CPos cachedLocation;
  
-@@ -82,8 +85,11 @@ PPos[] ProjectedCells(Actor self)
+@@ -70,20 +73,38 @@ PPos[] ProjectedCells(Actor self)
+ 
+ 			if (Info.Type == VisibilityType.Footprint)
+ 			{
+-				// PERF: Reuse collection to avoid allocations.
+-				footprint.UnionWith(self.OccupiesSpace.OccupiedCells()
+-					.SelectMany(kv => Shroud.ProjectedCellsInRange(map, map.CenterOfCell(kv.Cell), minRange, maxRange, Info.MaxHeightDelta)));
+-				var cells = footprint.ToArray();
+-				footprint.Clear();
+-				return cells;
++				// friendly-fighter sim (PERF): the same cells in the same order as the union of each
++				// occupied cell's range (a HashSet lists its items in the order they were added):
++				// one cell's range has no duplicates, so only two or more cells need the set
++				var occupied = self.OccupiesSpace.OccupiedCells();
++				cellsInRange.Clear();
++				if (occupied.Length == 1)
++				{
++					foreach (var puv in Shroud.ProjectedCellsInRange(map, map.CenterOfCell(occupied[0].Cell), minRange, maxRange, Info.MaxHeightDelta))
++						cellsInRange.Add(puv);
++				}
++				else
++				{
++					foreach (var kv in occupied)
++						foreach (var puv in Shroud.ProjectedCellsInRange(map, map.CenterOfCell(kv.Cell), minRange, maxRange, Info.MaxHeightDelta))
++							if (footprint.Add(puv))
++								cellsInRange.Add(puv);
++
++					footprint.Clear();
++				}
++
++				return cellsInRange.ToArray();
+ 			}
+ 
+ 			var pos = self.CenterPosition;
  			if (Info.Type == VisibilityType.GroundPosition)
  				pos -= new WVec(WDist.Zero, WDist.Zero, self.World.Map.DistanceAboveTerrain(pos));
  

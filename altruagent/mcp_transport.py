@@ -60,6 +60,11 @@ from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 import httpx
+
+try:  # orjson, when installed, parses a game state several times faster (same result)
+    import orjson as _orjson
+except ImportError:  # pragma: no cover
+    _orjson = None
 from mcp import ClientSession, types
 from mcp.client.streamable_http import streamablehttp_client
 from pydantic_core import PydanticSerializationError
@@ -299,11 +304,14 @@ def _shared_raw_client() -> httpx.Client:
 def _parse_rpc_body(response: httpx.Response) -> dict:
     """The JSON-RPC envelope from a plain JSON reply or a one-event SSE reply."""
     content_type = response.headers.get("content-type", "")
-    text = response.text
     if "text/event-stream" in content_type:
+        text = response.text
         data = [line[5:].strip() for line in text.splitlines() if line.startswith("data:")]
         text = data[-1] if data else ""
-    envelope = json.loads(text) if text else {}
+        envelope = json.loads(text) if text else {}
+    else:
+        raw = response.content
+        envelope = (_orjson.loads(raw) if _orjson is not None else json.loads(raw)) if raw.strip() else {}
     if not isinstance(envelope, dict):
         raise ValueError("JSON-RPC reply is not an object")
     return envelope

@@ -23,6 +23,7 @@ regardless of what OS this ever runs on — Windows has no ``fork`` at all.
 from __future__ import annotations
 
 import multiprocessing
+import os
 import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable, Collection
@@ -54,6 +55,13 @@ DEFAULT_COOLDOWN_SECONDS = 60.0
 DEFAULT_SHUTDOWN_JOIN_TIMEOUT_SECONDS = 5.0
 
 _MP_CONTEXT = multiprocessing.get_context("spawn")
+# ALTRUAGENT_MP_START=forkserver (opt-in; the local simulator sets it): each match process is forked
+# from a server that imported the runtime and the agent once, instead of a fresh interpreter importing
+# them again (~1 s of CPU per match). Still a clean process per match; spawn stays the default.
+if os.environ.get("ALTRUAGENT_MP_START") == "forkserver":  # pragma: no cover (POSIX only)
+    _MP_CONTEXT = multiprocessing.get_context("forkserver")
+    _MP_CONTEXT.set_forkserver_preload(["altruagent.worker"] + [
+        m for m in (os.environ.get("ALTRUAGENT_PRELOAD") or "agent.agent").split(",") if m])
 
 
 def _log(message: str) -> None:

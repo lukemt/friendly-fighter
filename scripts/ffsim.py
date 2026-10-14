@@ -112,8 +112,11 @@ def start_runtime(label: str, url: str, out: Path, agent: str | None, env_extra:
     env = dict(os.environ, ALTRUAGENT_CONTROL_URL=url, ALTRUAGENT_OFFICIAL_AGENT_KEY=local_key(label),
                FF_REMOTE_DIR=str(remote), FF_CONSOLE_BASE_PORT=str(8870 + 10 * (ord(label[0]) % 10)),
                PYTHONUNBUFFERED="1", PYTHONHASHSEED="0",  # same set order every run: reproducible
+               ALTRUAGENT_MP_START="forkserver",  # match processes forked from preloaded modules (~1 s CPU each)
                FF_WIRE="1" if os.environ.get("FF_SIM_WIRE") else "0",  # the server knows every call already
                **env_extra)
+    if agent:
+        env["ALTRUAGENT_PRELOAD"] = agent.split(":", 1)[0]  # (the forkserver imports this agent)
     if "OPENAI_API_KEY" not in env_extra and not os.environ.get("FF_SIM_OPENAI"):
         env["OPENAI_API_KEY"] = ""  # no LLM commander in local games unless FF_SIM_OPENAI=1 (dotenv won't override "")
     cmd = [sys.executable, "-u", "-m", "agent", "--match"] + (["--agent", agent] if agent else [])
@@ -122,19 +125,25 @@ def start_runtime(label: str, url: str, out: Path, agent: str | None, env_extra:
 
 
 def _game_workers(pid: int) -> list[int]:
-    """The runtime's match processes still running (not its multiprocessing resource tracker)."""
-    try:
-        children = [int(c) for c in Path(f"/proc/{pid}/task/{pid}/children").read_text().split()]
-    except (OSError, ValueError):
-        return []
-    out = []
-    for c in children:
+    """The runtime's match processes still running: its descendants other than multiprocessing's
+    resource tracker and fork server (a match process that ended but isn't reaped is a zombie: done)."""
+    out, todo = [], [pid]
+    while todo:
+        p = todo.pop()
         try:
-            state = Path(f"/proc/{c}/stat").read_text().rsplit(")", 1)[1].split()[0]
-            if state != "Z" and b"resource_tracker" not in Path(f"/proc/{c}/cmdline").read_bytes():
-                out.append(c)  # (a match process that ended but isn't reaped yet is a zombie: done)
-        except (OSError, IndexError):
-            pass
+            children = [int(c) for c in Path(f"/proc/{p}/task/{p}/children").read_text().split()]
+        except (OSError, ValueError):
+            continue
+        for c in children:
+            try:
+                state = Path(f"/proc/{c}/stat").read_text().rsplit(")", 1)[1].split()[0]
+                cmd = Path(f"/proc/{c}/cmdline").read_bytes()
+            except (OSError, IndexError):
+                continue
+            if b"forkserver" in cmd:
+                todo.append(c)  # (match processes are its children)
+            elif state != "Z" and b"resource_tracker" not in cmd:
+                out.append(c)
     return out
 
 
@@ -171,7 +180,7 @@ def cmd_run(a) -> int:
     factory = engine_factory(out, a.engine, getattr(a, "parallel", 1), persist=not a.fresh_engines)
     # Prefetching ticks hides engine time behind the agents' when one game runs alone; with
     # several, the cores are busy anyway and the extra step per view only costs CPU.
-    prefetch = getattr(a, "parallel", 1) <= 1
+    prefetch = os.environ.get("FF_PREFETCH", "1" if getattr(a, "parallel", 1) <= 1 else "0") == "1"
     platform = Platform(factory, results_dir=out, rtt_ms=a.rtt_ms, time_mode=a.time,
                         think=think_arg(a.think), seed=getattr(a, "seed", None), prefetch=prefetch)
     server = serve(platform, a.port)
@@ -280,7 +289,7 @@ def cmd_serve(a) -> int:
     factory = engine_factory(out, a.engine, getattr(a, "parallel", 1), persist=not a.fresh_engines)
     # Prefetching ticks hides engine time behind the agents' when one game runs alone; with
     # several, the cores are busy anyway and the extra step per view only costs CPU.
-    prefetch = getattr(a, "parallel", 1) <= 1
+    prefetch = os.environ.get("FF_PREFETCH", "1" if getattr(a, "parallel", 1) <= 1 else "0") == "1"
     platform = Platform(factory, results_dir=out, rtt_ms=a.rtt_ms, time_mode=a.time,
                         think=think_arg(a.think), seed=getattr(a, "seed", None), prefetch=prefetch)
     server = serve(platform, a.port)
