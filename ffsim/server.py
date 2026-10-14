@@ -89,10 +89,14 @@ class Platform:
 
     def create_match(self, *, map_id: str = "trapped", max_minutes: int = 20, seats: list[dict],
                      lobby: dict | None = None, label: str = "", time_mode: str | None = None,
-                     think: str | float | None = None) -> dict:
+                     think: str | float | None = None, seed: int | None = None,
+                     session_id: str | None = None) -> dict:
+        """``seats``: ``{"kind": "agent", "key": ..., "think": ...}`` or ``{"kind": "ai:normal"}``; a seat's
+        ``think`` (virtual time: seconds, ``"measured"`` or ``"paused"``) overrides the match's.
+        ``seed``: this game's seed (default: the platform's seed and the number of games so far)."""
         if len(seats) != 2:
             raise ValueError("Red Alert needs exactly 2 seats")
-        session_id = "sim-" + str(uuid.uuid4())
+        session_id = session_id or "sim-" + str(uuid.uuid4())
         configs, keys = [], []
         for pos, s in enumerate(seats):
             kind = s.get("kind", "agent")
@@ -107,10 +111,12 @@ class Platform:
         time_mode = time_mode or self.time_mode
         if time_mode not in ("real", "virtual"):
             raise ValueError("time_mode is real or virtual")
-        virtual = ({"rtt": self.rtts, "think": self.think if think is None else think, "prefetch": self.prefetch}
+        virtual = ({"rtt": self.rtts, "think": self.think if think is None else think, "prefetch": self.prefetch,
+                    "seat_think": {i: s["think"] for i, s in enumerate(seats) if s.get("think") is not None}}
                    if time_mode == "virtual" else None)
         self.created += 1
-        seed = None if self.seed is None else self.seed * 1000 + self.created
+        if seed is None:
+            seed = None if self.seed is None else self.seed * 1000 + self.created
         match = Match(session_id, map_id, configs, lambda m: factory(m, kinds, lobby), max_minutes=max_minutes,
                       virtual=virtual, timing=self.timing, seed=seed)
         with self.lock:

@@ -185,6 +185,10 @@ class Match:
         self.finished_at: float | None = None
         self.log: list[str] = []
         self.reasoning: list[dict] = []
+        # Observers of the game (the lab's game log), each with any of on_view(match, seat, view),
+        # on_batch(match, seat, batch, tick, orders, reasoning), on_settle(match, seat, batch, rows),
+        # on_end(match); called holding the match lock, so they only take notes.
+        self.watchers: list = []
 
     # -- lifecycle ----------------------------------------------------------------------
 
@@ -256,6 +260,9 @@ class Match:
         for seat in self.seats:
             for pending in list(seat.pending.values()):
                 self._settle(seat, pending, final_tick=None)
+        for w in self.watchers:
+            if hasattr(w, "on_end"):
+                w.on_end(self)
         self._notify()
         if self.vclock is not None:
             self.vclock.stop()
@@ -326,6 +333,9 @@ class Match:
         seat.tracker.update(view)
         seat.obs = observe.observation(view, self.map_id, self.size, seat.tracker.events)
         self._collect_results(seat, view)
+        for w in self.watchers:
+            if hasattr(w, "on_view"):
+                w.on_view(self, seat, view)
         if self.phase == "starting" and all(s.views >= PLAYING_AFTER_VIEWS for s in self.seats if s.is_agent):
             self.phase = "playing"
         self._check_end(view)
@@ -391,6 +401,9 @@ class Match:
         seat.settled.append([{"batch": pending.batch, "index": r["index"], "cmd": r["cmd"], "status": r["status"],
                               "reason": r["reason"], "detail": r["detail"]}
                              for r in rows if r["status"] in ("rejected", "partial", "lost")])
+        for w in self.watchers:
+            if hasattr(w, "on_settle"):
+                w.on_settle(self, seat, pending.batch, rows)
         seat.pending.pop(pending.batch, None)
         if engine_ok_any:
             self.last_accepted_at = self.clock()
@@ -702,6 +715,9 @@ class Match:
             if reasoning_summary:
                 self.reasoning.append({"seat": seat.name, "batch": batch, "tick": arrival,
                                        "text": str(reasoning_summary)[:500]})
+            for w in self.watchers:
+                if hasattr(w, "on_batch"):
+                    w.on_batch(self, seat, batch, arrival, orders, rows, reasoning_summary)
             pending = PendingBatch(batch, arrival, checked, record)
             if pending_any:
                 seat.pending[batch] = pending

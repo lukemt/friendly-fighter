@@ -595,7 +595,11 @@ class OpenRAEngine:
 
     def __init__(self, session_id: str, map_id: str, seat_kinds: list[str], *, lobby: dict | None = None,
                  view_interval: int = VIEW_INTERVAL, log_dir: Path | None = None, lockstep: bool = False,
-                 host: EngineHost | None = None, seed: int = 0) -> None:
+                 host: EngineHost | None = None, seed: int = 0, trace_path: Path | None = None,
+                 prefix: list | None = None) -> None:
+        """``trace_path``: write this game's engine trace there (default: ``FF_ENGINE_TRACE``'s folder).
+        ``prefix``: a snapshot to start from (virtual time, with a host): the ``(StepRequest, tick, digest)``
+        steps of a trace (``read_trace``) to replay first; the game then goes on from where they end."""
         self.session_id = session_id
         self.map_file = MAP_FILES.get(map_id, map_id)
         self.seat_kinds = seat_kinds
@@ -628,6 +632,12 @@ class OpenRAEngine:
         self.steps = 0
         self.step_lock = threading.Lock()  # one step at a time; stop() waits for the last one
         self.trace = None  # FF_ENGINE_TRACE
+        self.trace_path = Path(trace_path) if trace_path else (
+            Path(TRACE_DIR) / f"{session_id}.trace" if TRACE_DIR else None)
+        self.prefix = prefix or []
+        self.prefix_views: list | None = None  # the snapshot's views, handed out by the first step
+        self.prefix_diff: int | None = None  # the first replayed step whose views differed from the trace's
+        self.first_view_tick: int | None = None
 
     # -- lifecycle ----------------------------------------------------------------------
 
@@ -641,11 +651,13 @@ class OpenRAEngine:
         self.on_view, self.on_exit = on_view, on_exit
         if self.host is not None:
             self.host_session = self.host.create(self.map_file, self._bots(), self.seed, self.lobby)
-            if TRACE_DIR:
-                Path(TRACE_DIR).mkdir(parents=True, exist_ok=True)
-                self.trace = open(Path(TRACE_DIR) / f"{self.session_id}.trace", "w")
+            if self.trace_path is not None:
+                self.trace_path.parent.mkdir(parents=True, exist_ok=True)
+                self.trace = open(self.trace_path, "w")
                 self.trace.write(json.dumps({"map_file": self.map_file, "bots": self._bots(), "seed": self.seed,
                                              "lobby": self.lobby}) + "\n")
+            if self.prefix:
+                self._replay_prefix()
             return
         support = self.run_dir / "support"
         support.mkdir(parents=True, exist_ok=True)
@@ -697,9 +709,35 @@ class OpenRAEngine:
             self.stub = pb_grpc.RLBridgeStub(self.channel)
         return self.stub
 
+    def _replay_prefix(self) -> None:
+        """Play the snapshot's recorded steps (the same actions at the same ticks: the same game, as
+        ``scripts/ffbench.py`` checks), keeping the last step's views for the first ``step``."""
+        views: list = []
+        with self.step_lock:
+            for n, (request, tick, digest) in enumerate(self.prefix, 1):
+                request = pb.StepRequest.FromString(request.SerializeToString())
+                request.session_id = self.host_session
+                reply = self.host.step(request)
+                if self.trace is not None:
+                    request.session_id = ""
+                    self.trace.write(json.dumps([base64.b64encode(request.SerializeToString()).decode(), reply.tick,
+                                                 views_digest(reply.observations)]) + "\n")
+                if self.prefix_diff is None and (reply.tick != tick or views_digest(reply.observations) != digest):
+                    self.prefix_diff = n
+                if reply.observations:
+                    views = [(int(o.player[5:]), view_from_pb(o.observation)) for o in reply.observations]
+                    if self.first_view_tick is None:
+                        self.first_view_tick = views[0][1]["tick"]
+                self.tick = reply.tick
+                self.steps += 1
+        self.prefix_views = views
+
     def step(self, until_tick: int) -> list[tuple[int, dict]]:
         """Virtual time: run the world up to ``until_tick`` (with the actions queued since the
         last step) and return the views those ticks made, as (seat position, view)."""
+        if self.prefix_views is not None and until_tick <= self.tick:
+            views, self.prefix_views = self.prefix_views, None  # (a snapshot: where it starts)
+            return views
         with self.step_lock:
             if self.stopping:
                 raise RuntimeError("engine stopped")
@@ -723,6 +761,8 @@ class OpenRAEngine:
             self.tick = reply.tick
             for _, v in views:
                 self.last_tick = v["tick"]
+                if self.first_view_tick is None:
+                    self.first_view_tick = v["tick"]
         return views
 
     def _watch(self) -> None:

@@ -23,7 +23,6 @@ seeded, so the same games every time) for checking engine changes:
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
 import sys
@@ -35,20 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from ffsim.engine_openra import ENGINE_DIR, EngineHost, views_digest  # noqa: E402
-from ffsim.proto import rl_bridge_pb2 as pb  # noqa: E402
-
-
-def read_trace(path: Path) -> tuple[dict, list[tuple[pb.StepRequest, int, str]]]:
-    lines = path.read_text().splitlines()
-    head = json.loads(lines[0])
-    steps = []
-    for line in lines[1:]:
-        try:
-            req, tick, digest = json.loads(line)
-        except ValueError:
-            break  # a trace cut short
-        steps.append((pb.StepRequest.FromString(base64.b64decode(req)), tick, digest))
-    return head, steps
+from ffsim.trace import read_trace  # noqa: E402,F401
 
 
 def replay(host: EngineHost, head: dict, steps, *, check: bool = True, until: int | None = None, pace: float = 0.0

@@ -45,15 +45,11 @@ THINK_SECONDS = float(os.environ.get("FF_THINK_MS") or 0) / 1000.0
 def knobs_from_env() -> Knobs:
     """``FF_KNOBS='{"posture": "eco", "attack_threshold": 14}'``: the bot starts with these knobs
     instead of the defaults (for local test games of other strategies; unknown keys are ignored)."""
-    knobs = Knobs()
     try:
         wanted = json.loads(os.environ.get("FF_KNOBS") or "{}")
     except ValueError:
-        return knobs
-    for f in fields(Knobs):
-        if f.name in wanted:
-            setattr(knobs, f.name, type(getattr(knobs, f.name))(wanted[f.name]))
-    return knobs
+        return Knobs()
+    return knobs_from_dict(wanted if isinstance(wanted, dict) else {})
 
 
 def _is_realtime(state: GameState) -> bool:
@@ -61,13 +57,29 @@ def _is_realtime(state: GameState) -> bool:
     return isinstance(pacing, dict) and pacing.get("mode") == "realtime"
 
 
+def knobs_from_dict(wanted: dict | None) -> Knobs:
+    """Knobs with these values over the defaults (unknown keys are ignored)."""
+    knobs = Knobs()
+    for f in fields(Knobs):
+        if wanted and f.name in wanted:
+            setattr(knobs, f.name, type(getattr(knobs, f.name))(wanted[f.name]))
+    return knobs
+
+
 class FriendlyFighter:
-    def __init__(self) -> None:
+    def __init__(self, *, knobs: Knobs | None = None, think_seconds: float | None = None,
+                 record: bool | None = None, controls: bool = True) -> None:
+        """``knobs``/``think_seconds``: as ``FF_KNOBS``/``FF_THINK_MS`` (which they override) for one agent
+        object (the lab plays several in one process); ``record``: as ``FF_RECORD``; ``controls``: whether
+        the remote-control, console and probe files may take this seat over."""
+        self._knobs = knobs
+        self._think_seconds = THINK_SECONDS if think_seconds is None else think_seconds
+        self._controls = controls
         self._bot: RedAlertBot | None = None
         self._commander: Commander | None = None
         self._fallback: Any = None
         self._fallback_ready = False
-        self._recorder = Recorder()
+        self._recorder = Recorder(enabled=record)
         self._remote: RemoteSeat | None = None
         self._probe: Probe | None = None
         self._probe_checked = False
@@ -79,8 +91,8 @@ class FriendlyFighter:
 
     def choose_action(self, state: GameState, context: DecisionContext):
         self._recorder.state(state, context)
-        if THINK_SECONDS:
-            time.sleep(THINK_SECONDS)  # FF_THINK_MS: play like a slower agent (local test games)
+        if self._think_seconds:
+            time.sleep(self._think_seconds)  # FF_THINK_MS: play like a slower agent (local test games)
         move = self._choose(state, context)
         self._recorder.action(move, context)
         return move
@@ -88,6 +100,8 @@ class FriendlyFighter:
     def _choose(self, state: GameState, context: DecisionContext):
         if context.game_type == RED_ALERT or (context.game_type is None and _is_realtime(state)):
             bot = self._red_alert()
+            if not self._controls:
+                return bot.choose_action(state, context)
             if not self._probe_checked:  # decided once per match, at its first view
                 self._probe_checked = True
                 mine = lambda c: c.get("enabled") and str(c.get("seat")) == str(context.seat_position)  # noqa: E731
@@ -141,7 +155,7 @@ class FriendlyFighter:
 
     def _red_alert(self) -> RedAlertBot:
         if self._bot is None:
-            self._bot = RedAlertBot(knobs=knobs_from_env())
+            self._bot = RedAlertBot(knobs=self._knobs if self._knobs is not None else knobs_from_env())
             self._commander = commander_from_env(self._bot)
             if self._commander is not None:
                 self._commander.start()
@@ -160,6 +174,10 @@ class FriendlyFighter:
         return self._fallback
 
 
-def create_agent() -> FriendlyFighter:
+def create_agent(knobs: dict | None = None, *, think_ms: float | None = None, record: bool | None = None,
+                 controls: bool = True) -> FriendlyFighter:
+    """The runtime calls this with no arguments; the lab (lab/bots.py) passes a bot's settings."""
     load_dotenv()  # no-op if already loaded; never overrides real env vars
-    return FriendlyFighter()
+    return FriendlyFighter(knobs=knobs_from_dict(knobs) if knobs is not None else None,
+                           think_seconds=None if think_ms is None else think_ms / 1000.0, record=record,
+                           controls=controls)

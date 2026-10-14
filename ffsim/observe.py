@@ -127,14 +127,18 @@ class EventTracker:
         self.sold: dict[int, int] = {}  # building id -> tick of the sell order
         self.low_power = False
         self.ready_counts: dict[str, int] = {}
+        self.sink = None  # called with every new event (the lab's game log); the seat sees the last 20
 
     def note_sell(self, building_id: int, tick: int) -> None:
         self.sold[building_id] = tick
 
     def _push(self, tick: int, kind: str, **fields) -> None:
         self.seq += 1
-        self.events.append({"seq": self.seq, "tick": tick, "kind": kind, **fields})
+        event = {"seq": self.seq, "tick": tick, "kind": kind, **fields}
+        self.events.append(event)
         del self.events[:-EVENT_WINDOW]
+        if self.sink is not None:
+            self.sink(event)
 
     def update(self, view: dict) -> None:
         tick = view["tick"]

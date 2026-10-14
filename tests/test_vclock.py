@@ -179,3 +179,18 @@ def test_a_silent_seat_is_timed_by_the_wall_clock():
     v = m.vclock.now()
     assert 0.4 <= v <= time.monotonic() - t0 + 1.0
     m.fail("cancelled")
+
+
+def test_a_paused_seat_holds_the_game_until_it_calls():
+    m, engines = make_match(kinds=("agent", "ai:normal"))
+    m.vclock.seat_think = {0: "paused"}
+    agent = Agent(m, 0, until=3.0)
+    agent.thread.start()
+    agent.thread.join(30)
+    t = m.vclock.now()
+    time.sleep(1.0)  # a person thinking: no call, no game time
+    assert m.vclock.now() == t
+    agent2 = Agent(m, 0, until=t + 2.0)
+    agent2.run()
+    assert m.vclock.now() >= t + 2.0
+    m.fail("cancelled")

@@ -39,3 +39,6 @@ remote/
 # local simulator (ffsim) output
 sim/results/
 sim/traces/
+
+# the lab (lab/): its database, traces and logs
+sim/lab/

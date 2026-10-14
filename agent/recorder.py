@@ -57,10 +57,10 @@ def _jsonable(value: Any) -> Any:
 
 
 class Recorder:
-    def __init__(self, root: Path = ROOT) -> None:
+    def __init__(self, root: Path = ROOT, *, enabled: bool | None = None) -> None:
         self._root = root
         self._file: gzip.GzipFile | None = None
-        self._enabled = os.environ.get("FF_RECORD", "1") != "0"
+        self._enabled = os.environ.get("FF_RECORD", "1") != "0" if enabled is None else enabled
         self._pending = 0
         self._config_written = False
 
