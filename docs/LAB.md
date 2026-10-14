@@ -149,6 +149,10 @@ lab compare REF,B,C --baselines @standard --games 8     # several candidates on 
 lab exploit TARGET --tries 16 --games 2 --finalists 4   # which settings of the scripted bot beat TARGET?
 ```
 
+`lab curves [--runs 50,53]` shows each bot's army value, harvesters and assets at 3, 6 and 9
+minutes. These measure the hands, not the result: why a bot loses before it loses. `lab champion`
+shows the champion over time (`lab/champions.json`); `lab champion set BOT --run N --why ...` adds one.
+
 `compare` is `gate` for several candidates. Each one plays each baseline on the same seeds, and
 each one's difference from the reference (the first) comes with a 95% interval. The gate's verdict
 also pools the paired games: BETTER, WORSE, or UNCLEAR with the number of games a difference that

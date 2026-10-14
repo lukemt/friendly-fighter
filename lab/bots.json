@@ -677,6 +677,25 @@
     "ours",
     "jev"
    ]
+  },
+  {
+   "name": "ff-jev-v9",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": "read"
+    }
+   },
+   "think": 0.005,
+   "description": "v9: greedy from the start until Jev reads an attacker (rusher/aggressive) or raids come; no scout; literal playbook",
+   "tags": [
+    "ours",
+    "jev"
+   ]
   }
  ]
 }

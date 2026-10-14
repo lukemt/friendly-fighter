@@ -107,5 +107,24 @@ used).
   - **Say what was never seen:** "never seen their army: size unknown, not zero". Otherwise
     "nothing seen" reads as a passive opponent.
 
+## What the exploiter search found (`lab exploit`)
+
+- **Eco attackers beat our defenders.** An opponent with extra refineries and no defenses, attacking
+  in constant small waves or in waves of 16 tanks, beat the v7 champion 6/8 and 5/8 (run 52), and
+  wiped it out 4 times by about 8:20. They are now sparring partners (`@exploiters`).
+- **Why:**
+  - **The guard opening costs about 1,000 of army by 3:00.** It has 1.4 harvesters at 3:00, against
+    2.2 for the standard opening (`lab curves`).
+  - **Going greedy in the middle of the game starves production** right when the attack comes. v7
+    had 11 units from 2:00 to 7:00.
+  - **Greedy from the start is fine:** the biggest army at 6:00 (11.7k) and 8.6 harvesters.
+- **Greed has a price against the Rush AI.** Its second wave (about 7:00) wipes out a greedy base
+  that beat the first rush. Jev's read ("rusher": stay safe) avoided this; v9 makes it the rule.
+- **More defenses: no effect.** A cap of 4 or 6 instead of 2 changed nothing (run 56, ±0.05 points a
+  game), because defenses come after the war factory and two refineries.
+- **A small difference needs many games.** Bots in the 75-80% range differ by a few percent, while
+  one seed swings a matchup from 3/6 to 5/6. Paired seeds give an interval of ±0.1 points a game
+  per 50 pairs, so a 5% difference needs about 400. Spend the games on big changes.
+
 **Next:** pick the opening by opponent. A rush shows by ~2:30 (scouting) and in an opponent's
 history; the guard costs economy against everyone else.
