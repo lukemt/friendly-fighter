@@ -114,9 +114,11 @@ goes through the virtual clock and JSON, as on the wire. Checked against the rea
 lab human start --vs ai-normal [--map trapped] [--seat 0] [--autopilot macro] [--name claude]
 lab human start --vs ai-normal --from <game> --at 5:00     # take over a recorded game at 5:00
 lab h help
-lab h state | map | map 60 66 10 | units [3tnk|combat] | enemies | events | log
-lab h build powr | train 3tnk 3 | place powr [X Y] | attack 60 66 all | move 40 40 12,13 | target 455 idle
-lab h go 10                                               # play 10 seconds of game time
+lab h state | map | map 60 66 10 | units [3tnk|combat] | enemies | events | log | info 3tnk tsla
+lab h history                                             # where this opponent built, and what it fielded, before
+lab h build powr | build tsla at 58 66 | train 3tnk 3 | rally all 61 66 | attack 60 66 all | move 40 40 12,13 then
+lab h group tanks 3tnk | attack 40 50 @tanks | target 455 idle | stance defend all | bombard 31 44 @art
+lab h go 10                                               # play 10 seconds of game time (stops early on trouble)
 lab h autopilot off|macro|full | knobs posture=defend | note "flanking works here" | resign | quit
 ```
 
@@ -124,8 +126,32 @@ The game **waits for you**. Between commands no game time passes: your seat's th
 `paused` in the virtual clock. `go N` plays N seconds:
 - your queued orders go out in the first batch;
 - then each view, the autopilot adds its own orders;
-- at the end you see what happened: your orders, any that were refused, and the events (fights,
-  losses, kills, buildings).
+- it **stops early** when enemies reach your base or your units come under fire after a quiet
+  spell (`go N nostop` runs through). A fight can be played 2-3 seconds at a time.
+
+At the end you see what happened, in a few lines:
+- **Activity:** what was made and built, what was spotted, and the fights (lost what, killed how many).
+- **Feedback on your orders:** orders that were refused, and where a building really went.
+- **Warnings:**
+  - unspent money and idle factories;
+  - artillery or harvesters with enemies close;
+  - aircraft (riflemen can't hit them) and mines;
+  - units killed by something out of sight, with the nearest known defenses;
+  - the odds: enemies in sight against your units nearby.
+
+Selections, memory and recall:
+- **Groups:** `group NAME UNITS` saves a selection, then `@NAME` uses it.
+- **Enemy memory:** `enemies` remembers every enemy building seen.
+- **`history`:** asks the database where this opponent built in earlier lab games on this map,
+  and which units it used. You see its defenses before you meet them.
+
+**Special orders:**
+- **`bombard X Y UNITS`:** fires at the ground, so artillery hits defenses it can't see.
+- **`stance defend`:** units hold their ground.
+- **`build ITEM at X Y`:** places the building there when it's ready.
+- **`rally all X Y`:** every production building, new ones too, sends its units there.
+
+What was learned playing OpenRA's AIs this way is in [STRATEGY.md](STRATEGY.md).
 
 **Autopilot modes:**
 - **`macro`** (the default): our bot runs the economy and production (building, placing,

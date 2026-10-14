@@ -16,7 +16,7 @@
  {"name": "counter", "kind": "module", "params": {"factory": "bots.example:create_agent", "kwargs": {"threshold": 12}},
   "description": "bots/example.py: defends, and counterattacks once ahead on kills with 12+ units (a turtle that scores)", "tags": ["ours"]},
  {"name": "ff-guard", "kind": "ff", "params": {"knobs": {"opening": "guard"}},
-  "description": "ff-default with the guard opening: a defense after the barracks, 10 infantry, no waves before 4:30 (from beating the Rush AI by hand)", "tags": ["ours"]},
+  "description": "ff-default with the guard opening: a defense after the barracks, 10 infantry first, no waves before 6:00, emergency infantry (from beating the Rush AI by hand)", "tags": ["ours"]},
  {"name": "ff-guard-turtle", "kind": "ff", "params": {"knobs": {"opening": "guard", "posture": "defend", "attack_threshold": 20}},
   "description": "ff-turtle with the guard opening", "tags": ["ours"]},
  {"name": "ff-slow", "kind": "ff", "params": {"knobs": {}}, "think": 0.8,

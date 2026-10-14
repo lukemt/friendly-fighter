@@ -94,6 +94,10 @@ Built in the lab (2026-10-14, [LAB.md](LAB.md)):
 - **LLM pacing in virtual time.** A bot's `think` can be `measured`: its real latency is
   charged as game time.
 
+The knowledge base is started: [STRATEGY.md](STRATEGY.md). It holds what wins and loses against
+each opponent, from the lab and from Claude playing OpenRA's AIs by hand, each point with its
+evidence.
+
 Still open:
 - distilled cheap copies;
 - an LLM orchestrator bot;
