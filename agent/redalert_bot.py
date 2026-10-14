@@ -118,9 +118,10 @@ class Knobs:
 
     posture: str = "attack"          # "eco" | "defend" | "attack"
     attack_threshold: int = 8        # combat units needed to launch a wave
-    unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed"
+    unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only)
     target: str = "nearest"          # "nearest" | "enemy_base" | "harvesters"
     opening: str = "standard"        # "standard" | "guard": a defense and infantry at home through the rush window
+    aim: tuple[int, int] | None = None  # attack here (the commander's pick), unless enemies are in the way
     note: str = ""
 
 
@@ -504,6 +505,8 @@ class RedAlertBot:
         reserve = 0 if "weap" in types else self._costs.get("weap", 2000) // 2
         # Infantry: alternate rifles and rockets.
         infantry = [i for i in INFANTRY_PRIORITY if i in available]
+        if knobs.unit_focus == "rockets" and "e3" in available:  # (against aircraft and armor)
+            infantry = ["e3"]
         surplus = free - reserve > SURPLUS_CASH
         want_infantry = knobs.unit_focus != "vehicles" or "weap" not in types or surplus
         if (knobs.opening == "guard" and now < GUARD_SECONDS and infantry and queued["Infantry"] == 0 and has_proc
@@ -675,6 +678,8 @@ class RedAlertBot:
             near = min(visible, key=lambda c: _dist(c, center))
             if _dist(near, center) < 12:
                 return near
+        if knobs.aim is not None:
+            return knobs.aim
         known = [cell for cell, _ in self._enemy_buildings.values()]
         if known:
             return min(known, key=lambda c: _dist(c, center))
