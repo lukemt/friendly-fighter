@@ -106,3 +106,45 @@ def branch_jobs(db, game_ref: str, seconds: float, variants: list[str], *, seat:
                          "label": f"branch:{label}", "branch": {"of": game["id"], "tick": tick, "label": label},
                          "extra": extra})
     return jobs
+
+
+def timelapse(db, game_ref: str, every: float = 60.0, start: float = 0.0, end: float | None = None):
+    """The game's agent seats every ``every`` seconds from ``start`` to ``end``, from one replay of the
+    trace: yields ``(seconds, {position: observation})``."""
+    from ffsim.engine_openra import HostPool, view_from_pb
+
+    game = db.find_game(game_ref)
+    if game is None or not game["trace"]:
+        raise ValueError(f"no game {game_ref!r} with a trace")
+    head, steps = read_trace(game["trace"])
+    first = (json.loads(game["info"] or "{}")).get("start_tick") or 0
+    m = Rules.load().map(game["map"])
+    size = (m["width"], m["height"])
+    end = game["game_seconds"] if end is None else min(end, game["game_seconds"] or end)
+    marks = []
+    t = start
+    while t <= (end or 0) + 1e-9:
+        marks.append(first + int(round(t * TICKS_PER_SECOND)))
+        t += every
+    pool = HostPool(LAB_DIR / "engines", 1, persist=True)
+    host = pool.take()
+    session = host.create(head["map_file"], head["bots"], head["seed"], head["lobby"])
+    try:
+        latest: dict = {}
+        k = 0
+        for request, _, _ in steps:
+            if k >= len(marks):
+                break
+            request.session_id = session
+            reply = host.step(request)
+            for o in reply.observations:
+                latest[int(o.player[5:])] = view_from_pb(o.observation)
+            while k < len(marks) and latest and reply.tick >= marks[k]:
+                obs = {pos: observe.observation(v, game["map"], size, []) for pos, v in latest.items()}
+                yield (marks[k] - first) / TICKS_PER_SECOND, obs
+                k += 1
+    finally:
+        try:
+            host.destroy(session)
+        finally:
+            pool.stop()

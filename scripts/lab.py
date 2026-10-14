@@ -244,6 +244,36 @@ def cmd_look(a, db) -> int:
     return 0
 
 
+def cmd_watch(a, db) -> int:
+    """The game as a time-lapse: every N seconds, both sides' score and the map of one seat."""
+    from lab.branch import parse_time, timelapse
+    from lab.views import minimap
+
+    g = db.find_game(a.game)
+    if g is None:
+        print(f"no game {a.game!r}")
+        return 1
+    seats = {s["position"]: s for s in db.q("SELECT * FROM seats WHERE game_id = ?", g["id"])}
+    start = parse_time(a.start) / 25 if a.start else 0.0
+    end = parse_time(a.end) / 25 if a.end else None
+    center = tuple(int(v) for v in a.zoom.split(",")[:2]) if a.zoom else None
+    radius = int(a.zoom.split(",")[2]) if a.zoom and len(a.zoom.split(",")) > 2 else 12
+    for seconds, obs in timelapse(db, g["id"], parse_time(a.every) / 25, start, end):
+        parts = []
+        for pos, o in sorted(obs.items()):
+            mil, eco = o.get("military") or {}, o.get("economy") or {}
+            combat = sum(1 for u in o.get("units") or [] if not u.get("wreck") and u["type"] not in ("harv", "mcv"))
+            parts.append(f"seat {pos} {seats[pos]['bot']}: net {(mil.get('kills_cost') or 0) - (mil.get('deaths_cost') or 0):+d} "
+                         f"army {combat} (${mil.get('army_value')}) cash {eco.get('cash')}+{eco.get('ore')} "
+                         f"bldgs {len(o.get('buildings') or [])} enemies seen {sum(1 for e in o.get('visible_enemies') or [] if not e.get('wreck'))}")
+        print(f"=== {clock(seconds)}  " + "  |  ".join(parts))
+        if not a.no_map:
+            pos = a.seat if a.seat is not None else min(obs)
+            if pos in obs:
+                print(minimap(obs[pos], g["map"], center=center, radius=radius))
+    return 0
+
+
 def cmd_games(a, db) -> int:
     f = _filters(a)
     f["bot"] = a.bot
@@ -589,6 +619,15 @@ def main() -> int:
     s.add_argument("--units", action="store_true")
     s.add_argument("--no-map", action="store_true")
 
+    s = sub.add_parser("watch", help="a recorded game as a time-lapse (score and map every N seconds)")
+    s.add_argument("game")
+    s.add_argument("--every", default="60", help="seconds between frames (or 1:00)")
+    s.add_argument("--from", dest="start", help="game time to start at (e.g. 5:00)")
+    s.add_argument("--to", dest="end", help="game time to stop at")
+    s.add_argument("--seat", type=int, help="whose map (default: the first agent seat)")
+    s.add_argument("--zoom", help="X,Y[,R]: a full-size window around a cell instead of the whole map")
+    s.add_argument("--no-map", action="store_true", help="only the score lines")
+
     s = sub.add_parser("replay", help="check that a game's trace replays identically")
     s.add_argument("game")
 
@@ -680,7 +719,7 @@ def main() -> int:
     a = p.parse_args()
     db = LabDB()
     handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "branch": cmd_branch,
-                "look": cmd_look, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
+                "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
                 "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
                 "h": cmd_h}

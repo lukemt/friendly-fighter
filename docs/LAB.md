@@ -149,6 +149,7 @@ answer is in `human_log`. One human session at a time; it runs in the background
 lab games [--bot X] [--vs Y] [--map M] [--run R] [--since 2h] [--branches]
 lab show <game> [--decisions 30]      # seats, results, the score every 30 s, buildings, fights, reasoning
 lab look <game> --at 6:30 [--seat 0] [--units]   # the board then (replayed from the trace, ~4 s)
+lab watch <game> --every 0:20 --from 7:00 --to 9:00 [--zoom 46,56,16] [--no-map]   # a time-lapse
 lab replay <game>                     # check that the trace replays exactly
 lab stats <bot> --by opponent|map|faction|seat|version [--vs Y] [--version current]
 lab h2h A B
@@ -170,6 +171,9 @@ and `last-1`.
 - **`look`:** rebuilds any moment from the engine trace: the replay is checked step by step against
   the trace, and you get the seat's summary, the events before it and the map. For a platform
   game (no trace) it shows the recorded state at that moment.
+- **`watch`:** the game as a time-lapse, from one replay of its trace: every N seconds, each
+  agent seat's score, army, cash, buildings and enemies in sight, and the map (whole, or a
+  full-size window with `--zoom X,Y,R`). It is the way to see how a fight unfolded.
 - **`report`:** the observer's report on a batch of games, per bot:
   - wins, draws and losses;
   - the mean score at each minute (when a bot falls behind);

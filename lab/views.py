@@ -140,7 +140,8 @@ def minimap(obs: dict, map_id: str, *, center: tuple[int, int] | None = None, ra
     if center is not None:
         x0, y0 = center[0] - radius, center[1] - radius
         size = 2 * radius + 1
-        out = ["     " + "".join(str((x0 + i) % 10) for i in range(size))]
+        out = [f"cells x {x0}-{x0 + size - 1}, y {y0}-{y0 + size - 1} (the ruler is x's last digit)",
+               "     " + "".join(str((x0 + i) % 10) for i in range(size))]
         for j in range(size):
             y = y0 + j
             out.append(f"{y:4d} " + "".join(marks.get((x0 + i, y)) or terrain(x0 + i, y) for i in range(size)))
