@@ -7,6 +7,8 @@ the start.
 
 from __future__ import annotations
 
+import math
+
 import json
 import time
 from collections import Counter, defaultdict
@@ -546,10 +548,65 @@ def gate_report(db, run_id: int, candidate: str, champion: str) -> str:
             worse.append(b)
     if table:
         out.append(_table(table, ["baseline", candidate, champion, f"net {candidate}", f"net {champion}"]))
-    verdict = "PASS" if h and (w / len(h)) > 0.5 and not worse else "FAIL"
-    out.append(f"verdict: {verdict}" + (f" (worse than the champion against {', '.join(worse)})" if worse else "")
-               + ("" if not h else f"; head to head {100 * w / len(h):.0f}%"))
+    paired = paired_difference(db, run_id, candidate, champion, baselines)
+    verdict, why = gate_verdict(paired, h)
+    if paired["n"]:
+        out.append(f"paired (same seeds, {paired['n']} pairs): candidate - champion = {paired['mean']:+.2f} points a game "
+                   f"(95% CI {paired['lo']:+.2f} to {paired['hi']:+.2f}); net {paired['net']:+.0f} a game")
+        for b, d in paired["by_baseline"].items():
+            if d["hi"] < 0:
+                out.append(f"  regression against {b}: {d['mean']:+.2f} (CI {d['lo']:+.2f} to {d['hi']:+.2f})")
+    out.append(f"verdict: {verdict} ({why})")
     return "\n".join(out)
+
+
+def _points(result: str | None) -> float:
+    return 1.0 if result == "win" else 0.5 if result == "draw" else 0.0
+
+
+def _mean_ci(xs: list[float]) -> tuple[float, float, float]:
+    """Mean and a 95% interval (normal approximation; wide on purpose with few games)."""
+    n = len(xs)
+    if not n:
+        return 0.0, -1.0, 1.0
+    mean = sum(xs) / n
+    if n < 2:
+        return mean, -1.0, 1.0
+    var = sum((x - mean) ** 2 for x in xs) / (n - 1)
+    half = 1.96 * math.sqrt(max(var, 0.05) / n)  # (a floor: 6 identical pairs are not certainty)
+    return mean, mean - half, mean + half
+
+
+def paired_difference(db, run_id: int, candidate: str, champion: str, baselines: list[str]) -> dict:
+    """Candidate and champion played each baseline on the same seeds: the per-seed differences."""
+    diffs, nets, by = [], [], {}
+    for b in baselines:
+        c = {(r["seed"], r["map"]): r for r in perspective(db, candidate, {"run": run_id, "vs": b})}
+        k = {(r["seed"], r["map"]): r for r in perspective(db, champion, {"run": run_id, "vs": b})}
+        d = [_points(c[key]["result"]) - _points(k[key]["result"]) for key in c if key in k]
+        nets += [(c[key]["net"] or 0) - (k[key]["net"] or 0) for key in c if key in k]
+        diffs += d
+        mean, lo, hi = _mean_ci(d)
+        by[b] = {"mean": mean, "lo": lo, "hi": hi, "n": len(d)}
+    mean, lo, hi = _mean_ci(diffs)
+    return {"n": len(diffs), "mean": mean, "lo": lo, "hi": hi, "net": sum(nets) / len(nets) if nets else 0.0,
+            "by_baseline": by, "sd": (math.sqrt(sum((x - mean) ** 2 for x in diffs) / (len(diffs) - 1))
+                                      if len(diffs) > 1 else 0.5)}
+
+
+def gate_verdict(paired: dict, h2h: list[dict]) -> tuple[str, str]:
+    """BETTER / WORSE / UNCLEAR from the pooled paired difference and the head-to-head games."""
+    w = sum(_points(r["result"]) for r in h2h)
+    hlo, hhi = wilson(w, len(h2h)) if h2h else (0.0, 1.0)
+    if paired["n"] and paired["hi"] < 0 or (h2h and hhi < 0.5):
+        return "WORSE", "the champion does better" + (" against the baselines" if paired["n"] and paired["hi"] < 0 else " head to head")
+    regressions = [b for b, d in paired["by_baseline"].items() if d["hi"] < 0]
+    if (paired["n"] and paired["lo"] > 0 or (h2h and hlo > 0.5 and paired["mean"] >= 0)) and not regressions:
+        return "BETTER", ("better against the baselines" if paired["n"] and paired["lo"] > 0 else "wins head to head, no worse elsewhere")
+    if paired["n"] > 1 and abs(paired["mean"]) > 0.01:
+        need = math.ceil((1.96 * max(paired["sd"], 0.2) / abs(paired["mean"])) ** 2)
+        return "UNCLEAR", f"a difference of {paired['mean']:+.2f} a game needs about {need} pairs to show; this run had {paired['n']}"
+    return "UNCLEAR", "no difference to see: play more games, or call them equal"
 
 
 def runs_table(db, limit: int = 20) -> str:

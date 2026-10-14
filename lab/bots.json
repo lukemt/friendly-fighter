@@ -1,40 +1,336 @@
-{"bots": [
- {"name": "ff-default", "kind": "ff", "params": {"knobs": {}},
-  "description": "our tournament bot as submitted: mixed army, waves of 8+, nearest target", "tags": ["ours", "champion"]},
- {"name": "ff-turtle", "kind": "ff", "params": {"knobs": {"posture": "defend", "attack_threshold": 20}},
-  "description": "defends at home, never sends waves (beat ff-default 11 of 12 in self-play)", "tags": ["ours"]},
- {"name": "ff-rush", "kind": "ff", "params": {"knobs": {"posture": "attack", "attack_threshold": 4, "unit_focus": "infantry", "target": "nearest"}},
-  "description": "small infantry waves early", "tags": ["ours"]},
- {"name": "ff-eco", "kind": "ff", "params": {"knobs": {"posture": "eco", "attack_threshold": 14, "unit_focus": "vehicles", "target": "enemy_base"}},
-  "description": "extra refineries first, big vehicle waves at the enemy base", "tags": ["ours"]},
- {"name": "ff-harass", "kind": "ff", "params": {"knobs": {"unit_focus": "vehicles", "target": "harvesters"}},
-  "description": "vehicle waves that hunt harvesters", "tags": ["ours"]},
- {"name": "ff-tanks", "kind": "ff", "params": {"knobs": {"unit_focus": "vehicles", "attack_threshold": 12}},
-  "description": "vehicles only, waves of 12+", "tags": ["ours"]},
- {"name": "ff-patient", "kind": "ff", "params": {"knobs": {"posture": "attack", "attack_threshold": 20}},
-  "description": "attacks only with a big army (waves of 20+)", "tags": ["ours"]},
- {"name": "counter", "kind": "module", "params": {"factory": "bots.example:create_agent", "kwargs": {"threshold": 12}},
-  "description": "bots/example.py: defends, and counterattacks once ahead on kills with 12+ units (a turtle that scores)", "tags": ["ours"]},
- {"name": "ff-guard", "kind": "ff", "params": {"knobs": {"opening": "guard"}},
-  "description": "ff-default with the guard opening: a defense after the barracks, 10 infantry first, no waves before 6:00, emergency infantry (from beating the Rush AI by hand)", "tags": ["ours"]},
- {"name": "ff-guard-turtle", "kind": "ff", "params": {"knobs": {"opening": "guard", "posture": "defend", "attack_threshold": 20}},
-  "description": "ff-turtle with the guard opening", "tags": ["ours"]},
- {"name": "ff-jev", "kind": "module", "params": {"factory": "bots.jev_bot:create_agent"},
-  "description": "our bot steered by Jev (TypeSafe) decision loops: opponent read, posture, production, opening, from Claude's playbook; needs TYPESAFE_API_KEY", "tags": ["ours", "jev"]},
- {"name": "ff-jev-push", "kind": "module", "params": {"factory": "bots.jev_bot:create_agent", "kwargs": {"push": true}},
-  "description": "ff-jev, but an attack falls back only when the counted odds are against it too", "tags": ["ours", "jev"]},
- {"name": "ff-slow", "kind": "ff", "params": {"knobs": {}}, "think": 0.8,
-  "description": "ff-default deciding in 0.8 s, like an LLM agent", "tags": ["ours", "latency"]},
- {"name": "ff-sluggish", "kind": "ff", "params": {"knobs": {}}, "think": 2.5,
-  "description": "ff-default deciding in 2.5 s, like the starter's LLM player", "tags": ["ours", "latency"]},
- {"name": "starter-llm", "kind": "module", "params": {"factory": "examples.llm_agent:create_agent"}, "think": "measured",
-  "description": "the starter's LLM player (OpenAI): needs OPENAI_API_KEY and FF_SIM_OPENAI=1; its real latency is game time", "tags": ["llm", "needs-openai"]},
- {"name": "builder", "kind": "module", "params": {"factory": "lab.simple_bots:create_builder"},
-  "description": "builds a base and an economy, never trains an army: can we finish it?", "tags": ["baseline", "weak"]},
- {"name": "idle", "kind": "module", "params": {"factory": "lab.simple_bots:create_idle"},
-  "description": "does nothing at all (not even deploying): an opponent whose agent never acts", "tags": ["baseline", "weak"]},
- {"name": "ai-normal", "kind": "ai", "params": {"type": "normal"}, "description": "OpenRA's Normal AI", "tags": ["baseline", "openra"]},
- {"name": "ai-rush", "kind": "ai", "params": {"type": "rush"}, "description": "OpenRA's Rush AI", "tags": ["baseline", "openra"]},
- {"name": "ai-turtle", "kind": "ai", "params": {"type": "turtle"}, "description": "OpenRA's Turtle AI", "tags": ["baseline", "openra"]},
- {"name": "ai-naval", "kind": "ai", "params": {"type": "naval"}, "description": "OpenRA's Naval AI", "tags": ["baseline", "openra"]}
-]}
+{
+ "bots": [
+  {
+   "name": "ff-default",
+   "kind": "ff",
+   "params": {
+    "knobs": {}
+   },
+   "think": 0.005,
+   "description": "our tournament bot as submitted: mixed army, waves of 8+, nearest target",
+   "tags": [
+    "ours",
+    "champion"
+   ]
+  },
+  {
+   "name": "ff-turtle",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "posture": "defend",
+     "attack_threshold": 20
+    }
+   },
+   "think": 0.005,
+   "description": "defends at home, never sends waves (beat ff-default 11 of 12 in self-play)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-rush",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "posture": "attack",
+     "attack_threshold": 4,
+     "unit_focus": "infantry",
+     "target": "nearest"
+    }
+   },
+   "think": 0.005,
+   "description": "small infantry waves early",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-eco",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "posture": "eco",
+     "attack_threshold": 14,
+     "unit_focus": "vehicles",
+     "target": "enemy_base"
+    }
+   },
+   "think": 0.005,
+   "description": "extra refineries first, big vehicle waves at the enemy base",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-harass",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "unit_focus": "vehicles",
+     "target": "harvesters"
+    }
+   },
+   "think": 0.005,
+   "description": "vehicle waves that hunt harvesters",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-tanks",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "unit_focus": "vehicles",
+     "attack_threshold": 12
+    }
+   },
+   "think": 0.005,
+   "description": "vehicles only, waves of 12+",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-patient",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "posture": "attack",
+     "attack_threshold": 20
+    }
+   },
+   "think": 0.005,
+   "description": "attacks only with a big army (waves of 20+)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "counter",
+   "kind": "module",
+   "params": {
+    "factory": "bots.example:create_agent",
+    "kwargs": {
+     "threshold": 12
+    }
+   },
+   "think": 0.005,
+   "description": "bots/example.py: defends, and counterattacks once ahead on kills with 12+ units (a turtle that scores)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-guard",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "opening": "guard"
+    }
+   },
+   "think": 0.005,
+   "description": "ff-default with the guard opening: a defense after the barracks, 10 infantry first, no waves before 6:00, emergency infantry (from beating the Rush AI by hand)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-guard-turtle",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "opening": "guard",
+     "posture": "defend",
+     "attack_threshold": 20
+    }
+   },
+   "think": 0.005,
+   "description": "ff-turtle with the guard opening",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-jev",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent"
+   },
+   "think": 0.005,
+   "description": "our bot steered by Jev (TypeSafe) decision loops: opponent read, posture, production, opening, from Claude's playbook; needs TYPESAFE_API_KEY",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-push",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true
+    }
+   },
+   "think": 0.005,
+   "description": "ff-jev, but an attack falls back only when the counted odds are against it too",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-slow",
+   "kind": "ff",
+   "params": {
+    "knobs": {}
+   },
+   "think": 0.8,
+   "description": "ff-default deciding in 0.8 s, like an LLM agent",
+   "tags": [
+    "ours",
+    "latency"
+   ]
+  },
+  {
+   "name": "ff-sluggish",
+   "kind": "ff",
+   "params": {
+    "knobs": {}
+   },
+   "think": 2.5,
+   "description": "ff-default deciding in 2.5 s, like the starter's LLM player",
+   "tags": [
+    "ours",
+    "latency"
+   ]
+  },
+  {
+   "name": "starter-llm",
+   "kind": "module",
+   "params": {
+    "factory": "examples.llm_agent:create_agent"
+   },
+   "think": "measured",
+   "description": "the starter's LLM player (OpenAI): needs OPENAI_API_KEY and FF_SIM_OPENAI=1; its real latency is game time",
+   "tags": [
+    "llm",
+    "needs-openai"
+   ]
+  },
+  {
+   "name": "builder",
+   "kind": "module",
+   "params": {
+    "factory": "lab.simple_bots:create_builder"
+   },
+   "think": 0.005,
+   "description": "builds a base and an economy, never trains an army: can we finish it?",
+   "tags": [
+    "baseline",
+    "weak"
+   ]
+  },
+  {
+   "name": "idle",
+   "kind": "module",
+   "params": {
+    "factory": "lab.simple_bots:create_idle"
+   },
+   "think": 0.005,
+   "description": "does nothing at all (not even deploying): an opponent whose agent never acts",
+   "tags": [
+    "baseline",
+    "weak"
+   ]
+  },
+  {
+   "name": "ai-normal",
+   "kind": "ai",
+   "params": {
+    "type": "normal"
+   },
+   "think": 0.005,
+   "description": "OpenRA's Normal AI",
+   "tags": [
+    "baseline",
+    "openra"
+   ]
+  },
+  {
+   "name": "ai-rush",
+   "kind": "ai",
+   "params": {
+    "type": "rush"
+   },
+   "think": 0.005,
+   "description": "OpenRA's Rush AI",
+   "tags": [
+    "baseline",
+    "openra"
+   ]
+  },
+  {
+   "name": "ai-turtle",
+   "kind": "ai",
+   "params": {
+    "type": "turtle"
+   },
+   "think": 0.005,
+   "description": "OpenRA's Turtle AI",
+   "tags": [
+    "baseline",
+    "openra"
+   ]
+  },
+  {
+   "name": "ai-naval",
+   "kind": "ai",
+   "params": {
+    "type": "naval"
+   },
+   "think": 0.005,
+   "description": "OpenRA's Naval AI",
+   "tags": [
+    "baseline",
+    "openra"
+   ]
+  },
+  {
+   "name": "ff-jev-push-v4",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_jev_push_v4.bot:create_agent",
+    "kwargs": {
+     "push": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-jev-push ff-jev-push@cacba02a at 7b8e525+changes: ff-jev, but an attack falls back only when the counted odds are against it too",
+   "tags": [
+    "frozen",
+    "jev",
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-jev-push-v5",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_jev_push_v5.bot:create_agent",
+    "kwargs": {
+     "push": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-jev-push ff-jev-push@a5111a30 at 7b8e525+changes: ff-jev, but an attack falls back only when the counted odds are against it too",
+   "tags": [
+    "frozen",
+    "jev",
+    "ours"
+   ]
+  }
+ ]
+}

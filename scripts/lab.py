@@ -132,6 +132,21 @@ def cmd_bots(a, db) -> int:
         registry.save(table)
         print(f"added {a.name}: {table[a.name].version()}")
         return 0
+    if a.action == "freeze":
+        if not a.as_name:
+            print("name the copy: lab bots freeze <bot> --as <new name>")
+            return 1
+        table = registry.load()
+        if a.as_name in table:
+            print(f"{a.as_name} exists")
+            return 1
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
+                                cwd=ROOT).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=ROOT).stdout.strip()
+        frozen = registry.freeze(table, a.name, a.as_name, commit=commit + ("+changes" if dirty else ""))
+        registry.save(table)
+        print(f"froze {a.name} as {a.as_name}: {frozen.params['factory']} ({frozen.version()})")
+        return 0
     if a.action == "show":
         b = registry.get(a.name)
         print(json.dumps({**b.spec(), "name": b.name, "version": b.version(), "description": b.description,
@@ -425,6 +440,9 @@ def cmd_jev(a, db) -> int:
     from lab import jevlog
     from lab.branch import parse_time
 
+    if a.attacks:
+        print(jevlog.attack_table(db, jevlog.log_files()))
+        return 0
     if a.game is None:
         print(jevlog.usage(jevlog.log_files()))
         return 0
@@ -590,7 +608,8 @@ def main() -> int:
         sp.add_argument("--record", action="store_true", help="also write our agent's recordings (recordings/)")
 
     s = sub.add_parser("bots", help="the bot registry")
-    s.add_argument("action", nargs="?", default="list", choices=["list", "add", "show"])
+    s.add_argument("action", nargs="?", default="list", choices=["list", "add", "show", "freeze"])
+    s.add_argument("--as", dest="as_name", help="freeze: the name of the frozen copy")
     s.add_argument("name", nargs="?")
     s.add_argument("--kind", default="ff", choices=registry.KINDS)
     s.add_argument("--knobs", help="ff: JSON knobs")
@@ -729,6 +748,7 @@ def main() -> int:
     s.add_argument("game", nargs="?")
     s.add_argument("--at", help="the full state and answers of the call nearest this game time")
     s.add_argument("--all", action="store_true", help="every call, not only changes of decision")
+    s.add_argument("--attacks", action="store_true", help="every logged attack by opponent: did it gain?")
     s = sub.add_parser("dashboard", help="the database as an HTML page (sim/lab/dashboard.html)")
     s.add_argument("--out")
     s.add_argument("--games", type=int, default=200, help="how many recent games it includes")

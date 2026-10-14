@@ -250,3 +250,40 @@ def test_go_stops_when_enemies_reach_the_base(db):
     out = seat.command(["go", "120", "nostop"])
     assert "GAME OVER" in out
     t.join(30)
+
+
+def test_a_frozen_bot_keeps_its_code(tmp_path, monkeypatch):
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "bots").mkdir()
+    (tmp_path / "agent" / "redalert_bot.py").write_text("VERSION = 1\n")
+    (tmp_path / "bots" / "mine.py").write_text("from agent.redalert_bot import VERSION\n\ndef create_agent():\n    return VERSION\n")
+    monkeypatch.setattr(registry, "ROOT", tmp_path)
+    table = {"mine": registry.Bot(name="mine", kind="module", params={"factory": "bots.mine:create_agent", "kwargs": {"x": 1}},
+                                  tags=["ours"])}
+    frozen = registry.freeze(table, "mine", "mine-v1", commit="abc123")
+    package = tmp_path / "bots" / "frozen" / "mine_v1"
+    assert frozen.params == {"factory": "bots.frozen.mine_v1.bot:create_agent", "kwargs": {"x": 1}}
+    assert "from .redalert_bot import VERSION" in (package / "bot.py").read_text()
+    assert (package / "redalert_bot.py").read_text() == "VERSION = 1\n"
+    assert "frozen" in frozen.tags and "abc123" in frozen.description and table["mine-v1"] is frozen
+    before = frozen.code_hash()
+    (tmp_path / "agent" / "redalert_bot.py").write_text("VERSION = 2\n")  # the live code moves on...
+    registry._files_hash.cache_clear()
+    assert frozen.code_hash() == before  # ...the frozen copy doesn't
+    with pytest.raises(ValueError):
+        registry.freeze(table, "mine", "mine-v1")
+
+
+def test_the_gate_verdict_weighs_paired_games():
+    def paired(diffs, by=None):
+        mean, lo, hi = report._mean_ci(diffs)
+        return {"n": len(diffs), "mean": mean, "lo": lo, "hi": hi, "net": 0.0, "sd": 0.5,
+                "by_baseline": by or {"b": {"mean": mean, "lo": lo, "hi": hi, "n": len(diffs)}}}
+    win, loss = {"result": "win"}, {"result": "loss"}
+    assert report.gate_verdict(paired([1.0] * 20 + [0.0] * 10), [])[0] == "BETTER"
+    assert report.gate_verdict(paired([-1.0] * 20 + [0.0] * 10), [])[0] == "WORSE"
+    verdict, why = report.gate_verdict(paired([1.0, -1.0, 0.5, 0.0, 0.0, -0.5, 0.5]), [win, loss])
+    assert verdict == "UNCLEAR" and "pairs" in why
+    assert report.gate_verdict(paired([0.0] * 12), [win] * 6)[0] == "BETTER"  # (head to head decides a tie)
+    regression = {"x": {"mean": -1.0, "lo": -1.0, "hi": -0.5, "n": 6}}
+    assert report.gate_verdict(paired([0.0] * 12, regression), [win] * 6)[0] != "BETTER"

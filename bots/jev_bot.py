@@ -76,6 +76,7 @@ PLAYBOOK = [
     "Attack only when behind on score with a big army (25 or more units), late in the game, at a part of the enemy base where no defenses stand.",
     "When ahead on score, never attack: defend the lead.",
     "An attack that is losing more than it kills, or that runs into defenses, must fall back at once.",
+    "Against a turtle (a base full of defenses, mines or aircraft) attacking almost always loses, even when slightly behind: keep defending.",
     "Rocket infantry are the answer to aircraft and tanks; rifle infantry cannot hit aircraft.",
 ]
 
@@ -124,11 +125,17 @@ OPENING_QUESTION = {
 }
 
 
+def _root() -> Path:
+    """The repository (frozen copies live deeper: walk up to it)."""
+    here = Path(__file__).resolve()
+    return next((p for p in here.parents if (p / "lab").is_dir() and (p / "bots").is_dir()), here.parents[1])
+
+
 def _key() -> str | None:
     key = os.environ.get("TYPESAFE_API_KEY")
     if key:
         return key
-    env = Path(__file__).resolve().parent.parent / ".env"
+    env = _root() / ".env"
     try:
         for line in env.read_text().splitlines():
             if line.startswith("TYPESAFE_API_KEY="):
@@ -217,14 +224,16 @@ class JevBot:
     (by default Jev's word is enough)."""
 
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = False,
-                 commit_deficit: int = COMMIT_DEFICIT) -> None:
+                 commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True) -> None:
         self.push = push
         self.commit_deficit = commit_deficit
         self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60),
                                log=lambda line: None)
         self.jev = Jev(model=model)
+        if not use_jev:  # (the control: the same bot with the decisions frozen at the start)
+            self.jev.key = None
         self.log_dir = Path(log_dir or os.environ.get("FF_JEV_LOG") or
-                            Path(__file__).resolve().parent.parent / "sim" / "lab" / "jev")
+                            _root() / "sim" / "lab" / "jev")
         self.log_path: Path | None = None
         self.posture = "defend"
         self.posture_since = 0.0
@@ -354,7 +363,8 @@ class JevBot:
         it turns back once it has seen enemy buildings."""
         scout = next((u for u in facts["units"] if u.get("id") == self.scout_id), None)
         if scout is not None and not self.scout_home and (c := _cell(scout)):
-            seen = [cell for _, cell in self.enemy_buildings.values() if _dist(cell, c) <= 9]
+            seen = [cell for _, cell in self.enemy_buildings.values() if _dist(cell, c) <= 10]
+            seen += [e for e in facts["enemies"] if (ec := _cell(e)) and _dist(ec, c) <= 8]
             if seen:
                 self.scout_home = True
                 self.bot._unit_ordered[self.scout_id] = now + 30
@@ -384,6 +394,15 @@ class JevBot:
         if not towers:
             return min(targets, key=lambda c: _dist(c, facts["home"]))
         return max(targets, key=lambda c: (min(_dist(c, d) for d in towers), -_dist(c, facts["home"])))
+
+    def _defenses_text(self) -> str:
+        standing: dict[str, int] = {}
+        for t, _ in self.defense_cells.values():
+            standing[t] = standing.get(t, 0) + 1
+        n = sum(standing.values())
+        if not n:
+            return "none standing that we know of" + (" (some destroyed)" if self.enemy_defenses else "")
+        return f"{n} known ({'many: a fortified base' if n >= 4 else 'a few'}): {_mix(standing)}"
 
     def _cost(self, unit_type: str) -> int:
         return int(self.bot._costs.get(unit_type, 400))
@@ -428,7 +447,7 @@ class JevBot:
             "our_army": f"{n} combat units ({_size(n)}), {where}: {_mix(ours)}",
             "enemy_army": (f"in the last minute we saw {sum(recent_enemy.values())} enemy combat units: {_mix(recent_enemy)}; "
                            f"the biggest enemy group seen at once was {self.enemy_max_army} units ({_size(self.enemy_max_army)})"),
-            "enemy_defenses": ", ".join(sorted(NAMES.get(t, t) for t in self.enemy_defenses)) or "none seen",
+            "enemy_defenses": self._defenses_text(),
             "enemy_aircraft": ", ".join(sorted(NAMES.get(t, t) for t in self.enemy_air)) or "none seen",
             "raids_on_our_base": raid,
             "now_at_our_base": (f"{len(facts['at_base'])} enemy units are attacking our base" if facts["threat"]
@@ -508,7 +527,8 @@ class JevBot:
                 posture = "gather"
                 rails.append("too small/early to attack")
             elif not passive and not (net <= -self.commit_deficit or
-                                      (net < 0 and isinstance(remaining, (int, float)) and remaining < COMMIT_LATE_SECONDS)):
+                                      (net < 0 and isinstance(remaining, (int, float)) and remaining < COMMIT_LATE_SECONDS
+                                       and self.opponent != "turtle")):
                 posture = "defend"
                 rails.append("not behind enough: defend")
             elif self.attacks and self.attacks[-1].get("failed") and now - self.attacks[-1]["end"] < RECOMMIT_SECONDS:

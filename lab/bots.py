@@ -66,8 +66,12 @@ class Bot:
         files = list(CODE.get(self.kind, []))
         if self.kind == "module":
             module = str(self.params.get("factory", "")).split(":", 1)[0]
-            files.append(module.replace(".", "/") + ".py")
-            files += CODE["ff"]  # (module bots usually build on our agent's code)
+            if module.startswith("bots.frozen."):  # (a frozen copy carries all of its code)
+                package = ROOT / Path(*module.split(".")[:3])
+                files += sorted(str(f.relative_to(ROOT)) for f in package.glob("*.py"))
+            else:
+                files.append(module.replace(".", "/") + ".py")
+                files += CODE["ff"]  # (module bots usually build on our agent's code)
         if self.kind == "ai":
             return _engine_hash()
         return _files_hash(tuple(files))
@@ -87,6 +91,32 @@ class Bot:
             factory = getattr(importlib.import_module(module), func or "create_agent")
             return factory(**(self.params.get("kwargs") or {}))
         raise ValueError(f"bot {self.name} ({self.kind}) is not played by an agent object")
+
+
+def freeze(table: dict, name: str, new_name: str, *, commit: str = "") -> "Bot":
+    """A copy of a module bot that never changes: its module and the scripted bot it builds on
+    (agent/redalert_bot.py) copied to ``bots/frozen/<new_name>/``, registered as ``new_name``."""
+    bot = table[name]
+    if bot.kind != "module":
+        raise ValueError(f"{name} is a {bot.kind} bot: only module bots can be frozen (ff bots are knobs: copy the entry)")
+    module, _, func = str(bot.params["factory"]).partition(":")
+    safe = "".join(c if c.isalnum() else "_" for c in new_name)
+    package = ROOT / "bots" / "frozen" / safe
+    if package.exists():
+        raise ValueError(f"{package} exists")
+    package.mkdir(parents=True)
+    for init in (ROOT / "bots" / "frozen" / "__init__.py", package / "__init__.py"):
+        if not init.exists():
+            init.write_text('"""Frozen bots: copies that never change (lab bots freeze)."""\n' if init.parent.name == "frozen" else "")
+    source = (ROOT / (module.replace(".", "/") + ".py")).read_text()
+    source = source.replace("from agent.redalert_bot import", "from .redalert_bot import")
+    (package / "bot.py").write_text(f"# Frozen from {module} ({name} {bot.version()}) at {commit or 'the working tree'}.\n" + source)
+    (package / "redalert_bot.py").write_text((ROOT / "agent" / "redalert_bot.py").read_text())
+    frozen = Bot(name=new_name, kind="module", params={**bot.params, "factory": f"bots.frozen.{safe}.bot:{func or 'create_agent'}"},
+                 think=bot.think, description=f"frozen {name} {bot.version()}" + (f" at {commit}" if commit else "")
+                 + f": {bot.description}", tags=sorted(set(bot.tags) | {"frozen"}))
+    table[new_name] = frozen
+    return frozen
 
 
 @lru_cache(maxsize=None)

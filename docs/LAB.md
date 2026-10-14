@@ -67,6 +67,47 @@ version, so a change to the bot shows up as a new version even before it is comm
 run also records the git commit, with `+` when the tree had uncommitted changes. `--version current` limits
 `stats`/`ratings` to the code as it is now.
 
+**Freezing a version.** A module bot's file changes as we improve it; to keep a version playable
+(a champion to gate against, an old self to play), freeze it:
+
+```bash
+lab bots freeze ff-jev-push --as ff-jev-push-v4   # copies to bots/frozen/ff_jev_push_v4/
+lab gate ff-jev-push --champion ff-jev-push-v4 --baselines ai-normal,ai-rush,ai-turtle --games 6
+```
+
+The copy holds the bot's module and the scripted bot it builds on (`agent/redalert_bot.py`), with
+the import pointed at the copy, so neither the bot's file nor the scripted bot changing moves it.
+Its version hashes only its own files. Commit `bots/frozen/` with the registry.
+
+### Bots steered by Jev
+
+`ff-jev` and `ff-jev-push` (`bots/jev_bot.py`) are the scripted bot with the strategy Claude used
+when playing by hand as a few decision loops answered by Jev, TypeSafe's typed decision model
+(about 0.3 s a call, about $0.007 a game). Code counts and compares, and Jev judges:
+
+- **Every 10 s of game time**, and every 3 s during a fight or an attack, the bot describes the game
+  in words. The description covers the clock, the score, the recent trades, both armies, known
+  defenses, raids, the odds in the current fight and past attacks. It asks Jev in one call who the
+  opponent is, what the army should do (defend, gather, commit, retreat), what to train, and (in the
+  first 4 minutes) which opening to play.
+- **Code turns the answers into the scripted bot's knobs**, with rails from `docs/STRATEGY.md`:
+  - attack only when behind, with a big army;
+  - hold a lead in the last minute;
+  - never turn around in a fight we are winning;
+  - wait after a failed attack.
+- **A scout** looks at the enemy base twice a game and turns back at the first sight of anything.
+- **`ff-jev-push`** falls back from an attack only when Jev says so and the counted odds are against
+  it too.
+
+It needs `TYPESAFE_API_KEY` (in the environment or `.env`); without it, it plays as
+`ff-guard-turtle`. Every call is logged to `sim/lab/jev/<session>-<seat>.jsonl`:
+
+```bash
+lab jev last              # what it decided over the game, and why (changes only; --all for every call)
+lab jev last --at 7:40    # everything Jev was shown at that moment, and every probability it answered
+lab jev                   # calls, tokens, cost and latency over every logged game
+```
+
 ## Playing games
 
 ```bash
@@ -275,7 +316,9 @@ lab note --game <game> "the wave walked into two pillboxes at 6:29"
 | `sim/lab/logs/` | the workers' logs (the bots' log lines) |
 | `sim/lab/human/` | the human session's address and logs |
 | `sim/lab/dashboard.html` | the dashboard (`lab dashboard`) |
+| `sim/lab/jev/` | the Jev bots' call logs (`lab jev`) |
 | `lab/bots.json` | the bot registry (committed) |
+| `bots/` | bots of our own (`jev_bot.py`, `example.py`); `bots/frozen/`: frozen copies |
 
 Database tables:
 
