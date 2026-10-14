@@ -23,7 +23,7 @@ sim/openra-fork/setup.sh          # ~/openra-sim: .NET 8, the fork + ff-sim.patc
 
 ```bash
 python scripts/ffsim.py run                                  # our agent vs itself, trapped, 10 min (~15 s)
-python scripts/ffsim.py run --seat1 ai:normal --games 12   # vs OpenRA's Normal AI (~1.5 min for all 12)
+python scripts/ffsim.py run --seat1 ai:normal --games 12   # vs OpenRA's Normal AI (~90 s for all 12)
 python scripts/ffsim.py run --map random --games 6 --parallel 3 --swap
 python scripts/ffsim.py run --seat0 agent:A --seat1 agent:T --env 'T:FF_KNOBS={"posture":"defend"}' --games 10 --swap
 python scripts/ffsim.py run --seat1 ai:rush --env 'A:FF_THINK_MS=800'   # a slower agent (800 ms per decision)
@@ -34,7 +34,7 @@ python scripts/ffsim.py serve --port 8800                    # just the platform
 ```
 
 Games run in **virtual time** by default (next section): a 10-minute game takes about
-13 s alone, and a batch runs at about 8 games a minute.
+12 s alone, and a batch runs at about 8 games a minute.
 
 **Other strategies.** `FF_KNOBS` (JSON) starts our bot with other knobs (`posture`
 eco/defend/attack, `attack_threshold`, `unit_focus` infantry/vehicles/mixed, `target`
@@ -68,9 +68,9 @@ The runtimes write their usual recordings to `recordings/sim-*`.
 
 **Cost.**
 
-- Virtual time: a 10-minute game takes ~12.6 s of wall time alone (~48x real time). In a
-  batch, 12 games vs Normal AI take ~89 s with 4 at once (about 8 games a minute). A game
-  costs ~23 CPU-s: ~12 s engine (5.3 CPU-s when it runs alone: engines slow each other down
+- Virtual time: a 10-minute game takes ~11.6 s of wall time alone (~50x real time). In a
+  batch, 12 games vs Normal AI take ~86 s with 4 at once (about 8 games a minute). A game
+  costs ~21 CPU-s: ~10 s engine (5.2 CPU-s when it runs alone: engines slow each other down
   on this machine), ~5 s server, ~6 s for the agent's match process. docs/SPEED_LOOP.md has
   how it got there and what was measured.
 - Real time costs more CPU, not less: the engine alone uses ~0.3 core for the whole 10

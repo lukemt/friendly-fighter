@@ -46,9 +46,13 @@ the work goes. Each round:
 
 | 4 | engine: sight offsets precomputed on rectangular maps (-3 %); unrendered, no control groups or wall sprites (-1 %) | 11 recorded games replay identically | 12 games: 88 s, 267-275 CPU-s | 12.6 s |
 
-| 5 | stepped engines on .NET 10 (installed by setup.sh; real time stays on .NET 8): ticks -10 %, same CPU; one encoding of each MCP reply (orjson.Fragment); `ffbench.py corpus` / `check` | the 11 recorded games replay identically on .NET 10 | see below | |
+| 5 | stepped engines on .NET 10 (installed by setup.sh; real time stays on .NET 8): ticks -10 %, same CPU; one encoding of each MCP reply (orjson.Fragment); `ffbench.py corpus` / `check` | the 11 recorded games replay identically on .NET 10; the probe matches the platform on all 19 steps | 12 games: 86 s, 254 CPU-s | 11.6 s |
 
-Tried and dropped (measured, no gain): GC young-generation sizes (1-256 MB alone; 2-64 MB
+**Where it ended** (same seeded games, outcomes identical to the last credit every time): one
+10-minute game in **11.6 s** (from 26 s), 12 games vs the Normal AI in **86 s** (from ~150 s),
+**21 CPU-s a game** (from 36: engine 10, agent process 6, server 5).
+
+Tried and dropped (measured, no gain): Python's cycle collector less often (server CPU the same), GC young-generation sizes (1-256 MB alone; 2-64 MB
 with 4 engines competing for the cache, and in whole runs: 88 s either way), the segment
 GC, no background GC, pinning engines to CPUs, prefetching with 4 games at once (92 s vs
 89 s), 6 games at once (100 s vs 90 s), reusing a unit's sight array (within noise).
@@ -67,14 +71,16 @@ turn, with ~3.2 of the 4 CPUs busy.
 | 2 | eco: refineries first, waves of 14, vehicles, enemy base | Rush AI, sidestep | 1/6 (5 bases wiped out in 5-9 min) | first 0/6 *at the time limit* (bug, below); fixed: 0/6, 5 wiped out in 4-8 min | 3.4 game length, then 1.3 |
 | 3 | self-play: default bot (A) vs turtle (T: defend posture, waves of 20) | each other, shadowfiend-ii | T won 5/6 | T won 6/6 | 1.2 |
 | 4 | slow agent: default bot thinking 800 ms per decision (`FF_THINK_MS`) | Turtle AI, trapped | 2/6 | 2/6 | 1.7 (kills); timing exact: 58 states/min, orders 24-30 ticks late, in both |
-| 5 | harvester hunter: vehicles, target harvesters | Normal AI, shadowfiend-ii | 0/6, net -3808 (all close) | 2/6, net -2333 | outcomes <= 1.6; lag shares 2.2-5.0 (below) |
+| 5 | harvester hunter: vehicles, target harvesters | Normal AI, shadowfiend-ii | 0/6, net -3808 (all close); rerun 0/6, -6825 | 2/6, net -2333 | outcomes <= 2.6; lag shares 2.2-5.0 (below) |
+| 6 | self-play: default bot (A) vs rush variant (R) | each other, trapped | A 4-2 (3 wipe-outs) | A 4-2 (3 wipe-outs) | 3.0 (6-tick lag share, now the other way round); outcomes <= 0.3 |
 
 **Local real time is not the platform either.** In round 5 the lag shares disagreed (6-tick
 lag 0.94 in real time, 0.90 virtual). The real platform's own recordings have 0.79-0.90
 (12-tick lag 0.03-0.17, more for agents that send more batches); the virtual run (0.90 /
 0.04) is inside that range, the local real-time run, played while the machine was busy with
-benchmarks, is not. Local real-time batches vary between runs (6-tick share 0.89-0.94 over
-rounds 1-5) more than their per-game spread says: their timing depends on the machine's load.
+benchmarks, is not. A clean rerun gave the same 0.94, but in round 6 the difference went the other way (real 0.91,
+virtual 0.93): the lag shares differ by strategy and run more than their per-game spread says,
+in either direction, while the platform's recordings span 0.79-0.90.
 
 **Found by round 2's strategy: stepped games never ended.** OpenRA ends a game 1.5 s after the
 last opponent lost, with `Game.RunAfterDelay`: a wall-clock timer that only `Game.Loop` runs,
@@ -91,7 +97,19 @@ Stepped games now count the delay in game ticks (38 at 25 ticks/s); real time is
   minute instead of 236) and its orders land a second late, yet it held its own against the
   passive Turtle AI (2/6, like the fast bot's typical results). Virtual time can't save an
   agent's own thinking: those games took 491 s instead of 634 s.
+- In a mirror, the default mixed army beat the infantry rush 8 of 12 (4-2 in each clock); the
+  rush only wins by wiping a base out early.
+- Hunting harvesters with vehicles kept games close against the Normal AI on shadowfiend-ii
+  (net -700 to -9450) but won none in real time.
 - Attacking into a defended base loses on the tiebreak: in self-play the turtle (never attacks
   until 20 units, defends) beat our default bot in 11 of 12 games, real and virtual, by
   +2000 to +10000 net. Most games end at the time limit, where kills minus losses decide: an
   attack must trade well or not happen.
+
+## Ideas left
+
+None that are promising: what remains costs 1-3 % each (allocation-free targeting and
+production checks in the engine, a leaner HTTP layer in the server) or would change what is
+replicated (the platform's double payload, the runtime's HTTP client). The machine is the
+limit: engines running side by side slow each other down, and each game waits on its own
+engine, server and agent in turn.
