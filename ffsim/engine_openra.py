@@ -27,6 +27,7 @@ import queue
 import shutil
 import signal
 import socket
+import struct
 import subprocess
 import threading
 import time
@@ -207,11 +208,19 @@ class EngineHost:
 
     order_latency_ticks = LOCKSTEP_ORDER_LATENCY_TICKS
 
+    # Calls go over the engine's plain TCP lockstep protocol (RL_RAW_PORT, ~1 ms of CPU less per
+    # call on each side than gRPC); FF_ENGINE_GRPC=1 uses the gRPC service instead.
+    RAW = os.environ.get("FF_ENGINE_GRPC") != "1"
+    STEP, CREATE, DESTROY = 1, 2, 3
+
     def __init__(self, log_dir: Path, *, view_interval: int = VIEW_INTERVAL) -> None:
         self.view_interval = view_interval
         self.view_phase = VIEW_PHASE % view_interval
         self.dir = Path(log_dir).resolve()
         self.port = free_port()
+        self.raw_port = free_port()
+        self.sock: socket.socket | None = None
+        self.sock_lock = threading.Lock()
         self.lock = threading.Lock()
         self.proc: subprocess.Popen | None = None
         self.stub = None
@@ -229,32 +238,74 @@ class EngineHost:
             if not content.exists():
                 content.symlink_to(CONTENT_DIR)
             env = _engine_env(self.port, self.view_interval, self.view_phase, True)
+            if self.RAW:
+                env["RL_RAW_PORT"] = str(self.raw_port)
             cmd = [str(DOTNET_ROOT / "dotnet"), str(ENGINE_DIR / "bin" / "OpenRA.dll"), f"Engine.EngineDir={ENGINE_DIR}",
                    f"Engine.SupportDir={support}", "Game.Mod=ra", "Game.Platform=Null", "Sound.Mute=True",
                    f"Launch.MultiSession={self.port}"]
             self.log = open(self.dir / "engine-host.log", "ab")
             self.proc = _popen(cmd, cwd=ENGINE_DIR, env=env, stdout=self.log, stderr=subprocess.STDOUT,
                                preexec_fn=_die_with_parent)
+            if self.RAW:
+                _wait_port(self.raw_port, self.proc)
+                self.sock = socket.create_connection(("127.0.0.1", self.raw_port))
+                self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                self.stub = self.sock
+                return self.stub
             _wait_port(self.port, self.proc)
             opts = [("grpc.max_receive_message_length", 64 << 20)]
             self.channel = grpc.insecure_channel(f"127.0.0.1:{self.port}", options=opts)
             self.stub = pb_grpc.RLBridgeStub(self.channel)
             return self.stub
 
+    def _raw(self, kind: int, request, reply_cls):
+        """One call over the plain TCP protocol: length, type, protobuf -> length, status, protobuf."""
+        self._ensure()
+        body = request.SerializeToString()
+        with self.sock_lock:
+            sock = self.sock
+            sock.sendall(struct.pack("<iB", len(body), kind) + body)
+            head = self._recv(sock, 5)
+            length, status = struct.unpack("<iB", head)
+            data = self._recv(sock, length)
+        if status != 0:
+            raise RuntimeError("engine: " + data.decode("utf-8", "replace")[:2000])
+        return reply_cls.FromString(data)
+
+    @staticmethod
+    def _recv(sock: socket.socket, n: int) -> bytes:
+        buf = bytearray(n)
+        view = memoryview(buf)
+        got = 0
+        while got < n:
+            k = sock.recv_into(view[got:], n - got)
+            if k == 0:
+                raise ConnectionError("engine closed the connection")
+            got += k
+        return bytes(buf)
+
     def create(self, map_file: str, bots: str, seed: int, lobby: dict) -> str:
-        stub = self._ensure()
         options = ";".join(f"{k}={v}" for k, v in lobby.items())
-        return stub.CreateSession(pb.CreateSessionRequest(map_name=map_file, bots=bots, seed=seed,
-                                                          lobby_options=options), timeout=120).session_id
+        request = pb.CreateSessionRequest(map_name=map_file, bots=bots, seed=seed, lobby_options=options)
+        if self.RAW:
+            return self._raw(self.CREATE, request, pb.CreateSessionResponse).session_id
+        return self._ensure().CreateSession(request, timeout=120).session_id
 
     def step(self, request: pb.StepRequest):
+        if self.RAW:
+            return self._raw(self.STEP, request, pb.StepReply)
         return self._ensure().Step(request, timeout=600)
 
     def destroy(self, session_id: str) -> None:
+        if self.stub is None:
+            return
         try:
-            if self.stub is not None:
-                self.stub.DestroySession(pb.DestroySessionRequest(session_id=session_id), timeout=30)
-        except grpc.RpcError:
+            request = pb.DestroySessionRequest(session_id=session_id)
+            if self.RAW:
+                self._raw(self.DESTROY, request, pb.DestroySessionResponse)
+            else:
+                self.stub.DestroySession(request, timeout=30)
+        except (grpc.RpcError, OSError, RuntimeError):
             pass
 
     def alive(self) -> bool:
@@ -273,6 +324,12 @@ class EngineHost:
                         pass
             self.proc = None
             self.stub = None
+            if self.sock is not None:
+                try:
+                    self.sock.close()
+                except OSError:
+                    pass
+                self.sock = None
 
 
 class HostPool:

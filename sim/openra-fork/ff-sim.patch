@@ -1202,10 +1202,10 @@ index 582a0b7..54cb8b4 100644
  			{
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
 new file mode 100644
-index 0000000..67c7487
+index 0000000..7f6b6ce
 --- /dev/null
 +++ b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
-@@ -0,0 +1,209 @@
+@@ -0,0 +1,308 @@
 +#region Copyright & License Information
 +/*
 + * Copyright (c) The OpenRA Developers and Contributors
@@ -1222,8 +1222,12 @@ index 0000000..67c7487
 +using System.Collections.Generic;
 +using System.Diagnostics;
 +using System.Linq;
++using System.Net;
++using System.Net.Sockets;
++using System.Text;
 +using System.Threading;
 +using System.Threading.Tasks;
++using Google.Protobuf;
 +using Grpc.Core;
 +using RLProto = OpenRA.Mods.Common.RL;
 +
@@ -1413,13 +1417,119 @@ index 0000000..67c7487
 +				state.TickLock.Release();
 +			}
 +		}
++	
++		/// <summary>
++		/// A plain TCP alternative to the gRPC service for the calls of a stepped multi-session game
++		/// (RL_RAW_PORT): about a millisecond of CPU less per call on each side. A message is a
++		/// 4-byte little-endian length, a type byte (1 Step, 2 CreateSession, 3 DestroySession)
++		/// and the request's protobuf; the answer has a status byte (0 ok, 1 error text) instead.
++		/// </summary>
++		internal static void StartRawServer(int port)
++		{
++			var listener = new TcpListener(IPAddress.Loopback, port);
++			listener.Start();
++			new Thread(() =>
++			{
++				while (true)
++				{
++					var client = listener.AcceptTcpClient();
++					client.NoDelay = true;
++					new Thread(() => ServeRaw(client)) { IsBackground = true, Name = "RL-Raw" }.Start();
++				}
++			})
++			{ IsBackground = true, Name = "RL-Raw-Accept" }.Start();
++			Log.Write("rl-bridge", $"Raw lockstep server on port {port}");
++		}
++
++		static bool ReadExact(NetworkStream stream, byte[] buffer, int count)
++		{
++			var read = 0;
++			while (read < count)
++			{
++				var n = stream.Read(buffer, read, count - read);
++				if (n <= 0)
++					return false;
++
++				read += n;
++			}
++
++			return true;
++		}
++
++		static void ServeRaw(TcpClient client)
++		{
++			using var stream = client.GetStream();
++			var header = new byte[5];
++			try
++			{
++				while (ReadExact(stream, header, 5))
++				{
++					var length = BitConverter.ToInt32(header, 0);
++					var body = new byte[length];
++					if (!ReadExact(stream, body, length))
++						return;
++
++					byte status = 0;
++					byte[] reply;
++					try
++					{
++						switch (header[4])
++						{
++							case 1:
++								reply = StepSession(RLProto.StepRequest.Parser.ParseFrom(body), CancellationToken.None).ToByteArray();
++								break;
++							case 2:
++							{
++								var r = RLProto.CreateSessionRequest.Parser.ParseFrom(body);
++								var id = RLSessionManager.CreateSession(r.MapName, r.Bots, r.Seed, r.LobbyOptions);
++								reply = new RLProto.CreateSessionResponse { SessionId = id }.ToByteArray();
++								break;
++							}
++
++							case 3:
++								RLSessionManager.DestroySession(RLProto.DestroySessionRequest.Parser.ParseFrom(body).SessionId);
++								reply = new RLProto.DestroySessionResponse().ToByteArray();
++								break;
++							default:
++								throw new InvalidOperationException($"unknown message type {header[4]}");
++						}
++					}
++					catch (Exception e)
++					{
++						status = 1;
++						reply = Encoding.UTF8.GetBytes(e.ToString());
++					}
++
++					var head = new byte[5];
++					BitConverter.GetBytes(reply.Length).CopyTo(head, 0);
++					head[4] = status;
++					stream.Write(head, 0, 5);
++					stream.Write(reply, 0, reply.Length);
++				}
++			}
++			catch (Exception e)
++			{
++				Log.Write("rl-bridge", $"Raw connection closed: {e.Message}");
++			}
++		}
 +	}
 +}
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
-index 3163740..ca9ec3c 100644
+index 3163740..cffbb2c 100644
 --- a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
-@@ -175,7 +175,7 @@ public static void StartGrpcServer(int port)
+@@ -107,6 +107,10 @@ public static void Initialize(ModData md)
+ 			}
+ 
+ 			Log.Write("rl-bridge", $"RLSessionManager initialized: {workerCount} workers, queue capacity {workerCount * 4}");
++
++			// friendly-fighter sim: the plain TCP lockstep server (RLLockstep.StartRawServer)
++			if (int.TryParse(Environment.GetEnvironmentVariable("RL_RAW_PORT"), out var rawPort) && rawPort > 0)
++				RLLockstep.StartRawServer(rawPort);
+ 		}
+ 
+ 		/// <summary>
+@@ -175,7 +179,7 @@ public static void StartGrpcServer(int port)
  		/// the game world is created asynchronously on a background thread.
  		/// FastAdvance will wait for the bridge to activate before proceeding.
  		/// </summary>
@@ -1428,7 +1538,7 @@ index 3163740..ca9ec3c 100644
  		{
  			var sessionId = Guid.NewGuid().ToString("N")[..12];
  			Log.Write("rl-bridge", $"Creating session {sessionId}: map={mapName}, bots={bots}, seed={seed}");
-@@ -184,7 +184,7 @@ public static string CreateSession(string mapName, string bots, int seed)
+@@ -184,7 +188,7 @@ public static string CreateSession(string mapName, string bots, int seed)
  			{
  				try
  				{
@@ -1437,7 +1547,7 @@ index 3163740..ca9ec3c 100644
  				}
  				catch (Exception e)
  				{
-@@ -285,7 +285,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
+@@ -285,7 +289,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
  		/// Initialize a game session: create World, find bridge, register state.
  		/// The calling thread exits after this returns — no persistent tick loop.
  		/// </summary>
@@ -1446,7 +1556,7 @@ index 3163740..ca9ec3c 100644
  		{
  			// 1. Resolve map (cached — only first request per map name hits MapCache).
  			//    MapCache.GetEnumerator() calls UpdateMaps() which mutates collections,
-@@ -366,6 +366,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
+@@ -366,6 +370,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
  			// 5. Build LobbyInfo with map slots and bot assignments
  			SetupLobbyInfo(orderManager, mapPreview, map, bots, seed);
  

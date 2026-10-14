@@ -284,10 +284,41 @@ def _pydantic_missing(tool: str, missing: list[str], arguments: dict) -> str:
     return "\n".join(lines)
 
 
+class _Headers(dict):
+    """Request headers by lower-case name (what the handler reads: Content-Length, Authorization, Host)."""
+
+    def get(self, key, default=None):
+        return dict.get(self, key.lower(), default)
+
+    def __getitem__(self, key):
+        return dict.get(self, key.lower())
+
+
 def make_handler(platform: Platform):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         disable_nagle_algorithm = True  # headers and body go out as separate writes: no 40 ms delayed-ACK stall
+
+        def parse_request(self):
+            """The standard parser runs every header block through the email package (~1 ms a
+            request); ours are a handful of plain lines."""
+            requestline = str(self.raw_requestline, "iso-8859-1").rstrip("\r\n")
+            self.requestline = requestline
+            words = requestline.split()
+            if len(words) != 3 or not words[2].startswith("HTTP/"):
+                return super().parse_request()  # (it reads nothing more; errors are its business)
+            self.command, self.path, self.request_version = words
+            headers = _Headers()
+            while True:
+                line = self.rfile.readline(65537)
+                if line in (b"\r\n", b"\n", b""):
+                    break
+                name, _, value = line.decode("iso-8859-1").partition(":")
+                headers[name.strip().lower()] = value.strip()
+            self.headers = headers
+            conn = (headers.get("connection") or "").lower()
+            self.close_connection = conn == "close" or (self.request_version == "HTTP/1.0" and conn != "keep-alive")
+            return True
 
         def log_message(self, *args):
             pass

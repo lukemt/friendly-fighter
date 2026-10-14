@@ -60,10 +60,12 @@ The runtimes write their usual recordings to `recordings/sim-*`.
 
 **Cost.**
 
-- Virtual time: a 10-minute game takes ~35 s of wall time alone (17x real time). In a
-  batch, 12 games vs Normal AI took 171 s with `--parallel 3` (4.2 games a minute; real
-  time: 0.1 a minute per slot). A game costs ~40 CPU-s: ~11-15 s engine (the first game
-  of a lane ~20 s, loading included), ~10 s server, ~7-9 s per seat worker.
+- Virtual time: a 10-minute game takes ~26 s of wall time alone (23x real time; 28 s in
+  self-play). In a batch, 12 games vs Normal AI took ~150 s with `--parallel 3` (about 5
+  games a minute). A game costs ~36 CPU-s: ~11-15 s engine (the first game of a lane ~20 s,
+  loading included), ~8 s server, ~7-9 s per seat worker (~3 s of it starting up).
+- Real time costs more CPU, not less: the engine alone uses ~0.3 core for the whole 10
+  minutes (~160 CPU-s a game).
 - **This container has 4 CPUs of quota** (`/sys/fs/cgroup/cpu.max`), though it shows 6:
   `--parallel 3` or `4` is best; at 6 the quota throttles everything (each engine tick 2.8x
   slower) and throughput does not grow.
@@ -110,6 +112,10 @@ other's economies when OpenRA's AI played (half of six parallel sessions harvest
 first 1000 ore ~1500 ticks late), which showed as 3 kills a game instead of 29 vs the AI.
 `--engine single` starts a `Launch.Map` engine per game instead (the real-time setup,
 stepped).
+
+**Engine calls.** The server talks to its engine lane over a plain TCP protocol
+(length-prefixed protobuf, `RL_RAW_PORT`): a call costs ~0.2 ms instead of ~1.3 ms over
+gRPC (`FF_ENGINE_GRPC=1` switches back).
 
 **Lean defaults for batches.** The simulated runtimes run without the wire log
 (`FF_WIRE=0`; set `FF_SIM_WIRE=1` to keep it: the server sees every call anyway), and
