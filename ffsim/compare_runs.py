@@ -42,13 +42,26 @@ def collect(run: Path) -> dict[str, list[float]]:
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             m.setdefault(key, []).append(float(value))
 
+    try:  # seat labels (agent:A, agent:T...) are in the run's summary
+        labels_of = {r["session_id"]: [x.get("label") for x in r["seats"]]
+                     for r in json.loads((run / "summary.json").read_text()).get("results", [])}
+    except (OSError, ValueError, KeyError):
+        labels_of = {}
     for g in _games(run):
+        for s, label in zip(g.get("seats") or [], labels_of.get(g.get("session_id"), [])):
+            s.setdefault("label", label)
         res = g.get("result") or {}
         winner = res.get("winner_seat")
         add("game_seconds", g.get("game_seconds"))
         add("wall_seconds", g.get("wall_seconds"))
-        for s in _agent_seats(g):
-            add("points", 1.0 if winner == s["seat"] else 0.5 if res.get("reason") == "draw" or (winner is None and res.get("outcome") != "no_result") else 0.0)
+        seats = _agent_seats(g)
+        labels = {s.get("label") for s in seats}
+        for s in seats:
+            points = 1.0 if winner == s["seat"] else 0.5 if res.get("reason") == "draw" or (winner is None and res.get("outcome") != "no_result") else 0.0
+            add("points", points)
+            if len(labels) > 1:  # two different agents (self-play of two variants): each one's own share too
+                add(f"{s.get('label')}:points", points)
+                add(f"{s.get('label')}:tiebreak_net", (s.get("tiebreak") or [None])[0])
             mil = s.get("military") or {}
             for k in ("kills_cost", "deaths_cost", "assets_value", "army_value", "units_killed", "units_lost",
                       "buildings_killed", "buildings_lost"):

@@ -54,6 +54,72 @@ index 18413ce..269f34b 100644
  			orders.Add(Order.Command($"state {Session.ClientState.Ready}"));
  
  			var map = ModData.MapCache.SingleOrDefault(m => m.Uid == launchMap || Path.GetFileName(m.Path) == launchMap);
+diff --git a/OpenRA.Game/Graphics/Animation.cs b/OpenRA.Game/Graphics/Animation.cs
+index 20fc207..a28c3ea 100644
+--- a/OpenRA.Game/Graphics/Animation.cs
++++ b/OpenRA.Game/Graphics/Animation.cs
+@@ -34,6 +34,11 @@ public class Animation
+ 		int timeUntilNextFrame;
+ 		Action tickFunc;
+ 
++		// friendly-fighter sim: an action waits for this animation to end (PlayThen with an action).
++		// Unrendered (Game.Unrendered), only such animations need to tick: the frame of any other is
++		// read by drawing alone.
++		bool endAction;
++
+ 		public Animation(World world, string name)
+ 			: this(world, name, () => WAngle.Zero) { }
+ 
+@@ -140,6 +145,7 @@ public void PlayRepeating(string sequenceName)
+ 			PlaySequence(sequenceName);
+ 
+ 			frame = 0;
++			endAction = false;
+ 			tickFunc = () =>
+ 			{
+ 				++frame;
+@@ -166,6 +172,7 @@ public void PlayThen(string sequenceName, Action after)
+ 			PlaySequence(sequenceName);
+ 
+ 			frame = 0;
++			endAction = after != null;
+ 			tickFunc = () =>
+ 			{
+ 				++frame;
+@@ -173,6 +180,7 @@ public void PlayThen(string sequenceName, Action after)
+ 				{
+ 					frame = CurrentSequence.Length - 1;
+ 					tickFunc = null;
++					endAction = false;
+ 					after?.Invoke();
+ 				}
+ 			};
+@@ -191,6 +199,7 @@ public void PlayFetchIndex(string sequenceName, Func<int> func)
+ 			PlaySequence(sequenceName);
+ 
+ 			frame = func();
++			endAction = false;
+ 			tickFunc = () => frame = func();
+ 		}
+ 
+@@ -200,6 +209,7 @@ public void PlayFetchDirection(string sequenceName, Func<int> direction)
+ 			PlaySequence(sequenceName);
+ 
+ 			frame = 0;
++			endAction = false;
+ 			tickFunc = () =>
+ 			{
+ 				var d = direction();
+@@ -213,6 +223,9 @@ public void PlayFetchDirection(string sequenceName, Func<int> direction)
+ 
+ 		public void Tick()
+ 		{
++			if (Game.Unrendered && !endAction)
++				return;
++
+ 			if (paused == null || !paused())
+ 				Tick(40); // tick one frame
+ 		}
 diff --git a/OpenRA.Game/Map/Map.cs b/OpenRA.Game/Map/Map.cs
 index 9f870c8..1c0408a 100644
 --- a/OpenRA.Game/Map/Map.cs
