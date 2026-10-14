@@ -48,10 +48,12 @@ IDLE_SECONDS = 1200
 # The platform's timing, measured in its wire logs (docs/SIMULATOR.md, "Timing"):
 # - wait_for_update looks for a change when it arrives and then every 0.1 s: its durations
 #   cluster at the round trip + 0, 0.1, 0.2, 0.3 s;
-# - a view shows in the served state ~45 ms (exponential) after its tick, while batches are
-#   stamped with the newest tick at once: so a batch sent right after a state usually lands
-#   one view later (arrival - state_version: 0 / 6 / 12 ticks in 8 / 80+ / 5 % of batches).
-PLATFORM_TIMING = {"wait_poll": 0.1, "publish_delay_mean": 0.045}
+# - a view shows in the served state some time after its tick (45 ms, exponential; one view in
+#   ten 0.1 s more), in order, while batches are stamped with the newest tick at once: so a
+#   batch sent right after a state usually lands one view later (arrival - state_version:
+#   0 / 6 / 12 ticks in ~8 / 83 / 4+ % of batches). Fitted to the lags, the wait_for_update
+#   durations and the views each wait advanced (one in 96.5 %) in the wire logs.
+PLATFORM_TIMING = {"wait_poll": 0.1, "publish_delay_mean": 0.045, "publish_tail_p": 0.1, "publish_tail_mean": 0.1}
 PLAYING_AFTER_VIEWS = 2  # views in "starting" before "playing" (the platform showed two)
 
 STATUS_IN_PROGRESS = "in_progress"
@@ -165,6 +167,8 @@ class Match:
         timing = timing or {}
         self.wait_poll: float | None = timing.get("wait_poll")
         self.publish_delay_mean: float = timing.get("publish_delay_mean", 0.0)
+        self.publish_tail_p: float = timing.get("publish_tail_p", 0.0)
+        self.publish_tail_mean: float = timing.get("publish_tail_mean", 0.0)
         self.rng = random.Random(seed if seed is not None else session_id)
         self.publish_delays: dict[int, float] = {}  # view tick -> its delay (the same for both seats)
         # The platform shows "starting" while it waits for the seats to check in (waiting_for_players lists them).
@@ -290,7 +294,10 @@ class Match:
             if self.publish_delay_mean:
                 delay = self.publish_delays.get(tick)
                 if delay is None:
-                    delay = self.publish_delays[tick] = self.rng.expovariate(1.0 / self.publish_delay_mean)
+                    delay = self.rng.expovariate(1.0 / self.publish_delay_mean)
+                    if self.publish_tail_p and self.rng.random() < self.publish_tail_p:
+                        delay += self.rng.expovariate(1.0 / self.publish_tail_mean)
+                    self.publish_delays[tick] = delay
                     self.publish_delays.pop(tick - 600, None)
             # In virtual time a view is made exactly at its tick; in real time when it reaches us.
             made = tick / TICKS_PER_SECOND if self.vclock is not None else self.clock()

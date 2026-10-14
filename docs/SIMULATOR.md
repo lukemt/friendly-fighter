@@ -142,10 +142,12 @@ analysis in docs/BACKEND_ANALYSIS.md section 8):
 | Ticks per second | 25.0 (every 60 s window 24.8-25.8) | 25 (virtual) |
 | Views | every 6 ticks, on ticks 5, 11, 17... | same (`RL_OBS_PHASE=5`) |
 | Round trip of a call | median 0.195 s, p90 0.21, max 0.34 | drawn from the 426 measured ones |
-| `wait_for_update` | answers at once if the state changed, else looks again every 0.1 s: durations cluster at RTT + 0 / 0.1 / 0.2 / 0.3 s (51 / 21 / 4 / 1 %) | same |
+| `wait_for_update` | answers at once if the state changed, else looks again every 0.1 s: durations cluster at RTT + 0 / 0.1 / 0.2 / 0.3 s (51 / 21 / 4 / 1 %) | 47 / 19 / 3.5 / <1 % |
 | Batch stamp | the newest view's tick (`arrival - state_version` is 0, 6 or 12) | same |
-| A view in the served state | ~45 ms after its tick (fits exponential) | same |
-| Lag (arrival - state acted on) | 0 / 6 / 12 ticks: 7-12 / 80-85 / 3-6 % | 5 / 93 / 1-2 % |
+| A view in the served state | after its tick, in order: 45 ms (exponential), one view in ten 0.1 s more (fitted) | same |
+| Views a wait advances | one in 96.5 %, two 2 %, three 1.2 % | mean gap 6.3-6.5 ticks (platform 6.2-6.4) |
+| States the agent sees | 236-242 a minute | 231-240 |
+| Lag (arrival - state acted on) | 0 / 6 / 12 ticks: 7-12 / 80-90 / 3-6 % | 3-8 / 87-93 / 3-5 % |
 | Orders run | 12 ticks after the stamp; deploy shows its `fact` 24 ticks after | same (24) |
 
 ## What is replicated, and how faithfully
