@@ -48,6 +48,55 @@ index 18413ce..9ec6de4 100644
  			orders.Add(Order.Command($"state {Session.ClientState.Ready}"));
  
  			var map = ModData.MapCache.SingleOrDefault(m => m.Uid == launchMap || Path.GetFileName(m.Path) == launchMap);
+diff --git a/OpenRA.Game/Network/OrderManager.cs b/OpenRA.Game/Network/OrderManager.cs
+index 3a68e04..55b0657 100644
+--- a/OpenRA.Game/Network/OrderManager.cs
++++ b/OpenRA.Game/Network/OrderManager.cs
+@@ -62,6 +62,7 @@ public sealed class OrderManager : IDisposable
+ 
+ 		bool disposed;
+ 		bool generateSyncReport = false;
++		readonly bool skipSyncHash;
+ 		int sentOrdersFrame = 0;
+ 		float tickScale = 1f;
+ 
+@@ -122,6 +123,7 @@ public OrderManager(IConnection conn)
+ 		{
+ 			Connection = conn;
+ 			syncReport = new SyncReport(this);
++			skipSyncHash = conn is EchoConnection && Environment.GetEnvironmentVariable("RL_LOCKSTEP") == "1";
+ 
+ 			LastTickTime = new TickTime(() => SuggestedTimestep, Game.RunTime);
+ 		}
+@@ -272,7 +274,9 @@ void ProcessOrders()
+ 					if (World.Players[i].WinState == WinState.Lost)
+ 						defeatState |= 1UL << i;
+ 
+-				Connection.SendSync(NetFrameNumber, World.SyncHash(), defeatState);
++				// friendly-fighter sim: a stepped session (one client on an EchoConnection) has nobody to
++				// compare sync hashes with: skip computing them (~5 % of its ticks).
++				Connection.SendSync(NetFrameNumber, skipSyncHash ? 0 : World.SyncHash(), defeatState);
+ 			}
+ 			else
+ 				Connection.SendSync(NetFrameNumber, 0, 0);
+diff --git a/OpenRA.Game/World.cs b/OpenRA.Game/World.cs
+index 9bdaea6..f2c2662 100644
+--- a/OpenRA.Game/World.cs
++++ b/OpenRA.Game/World.cs
+@@ -207,7 +207,12 @@ public World(Map map, ModData modData, OrderManager orderManager, WorldType type
+ 			Timestep = ReplayTimestep = GameSpeed.Timestep;
+ 
+ 			SharedRandom = new MersenneTwister(orderManager.LobbyInfo.GlobalSettings.RandomSeed);
+-			LocalRandom = new MersenneTwister();
++
++			// friendly-fighter sim: in virtual time the bots' local randomness follows the game seed too,
++			// so a game is reproducible (OpenRA's AIs draw from LocalRandom).
++			LocalRandom = Environment.GetEnvironmentVariable("RL_LOCKSTEP") == "1"
++				? new MersenneTwister(orderManager.LobbyInfo.GlobalSettings.RandomSeed ^ 0x5EED)
++				: new MersenneTwister();
+ 
+ 			var worldActorType = type == WorldType.Editor ? SystemActors.EditorWorld : SystemActors.World;
+ 			WorldActor = CreateActor(worldActorType.ToString(), []);
 diff --git a/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs b/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs
 index 93c4c96..365ca0a 100644
 --- a/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs
@@ -705,7 +754,7 @@ index 5b6b39d..6c775a5 100644
  	}
  }
 diff --git a/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs b/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
-index c11dec0..526a871 100644
+index c11dec0..a2ff0bf 100644
 --- a/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/ExternalBotBridge.cs
 @@ -116,6 +116,13 @@ public sealed class ExternalBotBridge : ITick, IBot, INotifyCreated
@@ -734,7 +783,7 @@ index c11dec0..526a871 100644
  		public ExternalBotBridge(ExternalBotBridgeInfo info, ActorInitializer init)
  		{
  			this.info = info;
-@@ -252,9 +264,23 @@ public void Activate(Player p)
+@@ -252,9 +264,27 @@ public void Activate(Player p)
  			player = p;
  			observationSerializer = new ObservationSerializer(world, player, episodeId);
  			actionHandler = new ActionHandler(world, player);
@@ -753,6 +802,10 @@ index c11dec0..526a871 100644
 +			if (RLLockstep.Enabled)
 +				RLLockstep.Install(world);
 +
++			// friendly-fighter sim: RL_DUMP_LOBBY=1 writes the game's lobby (slots, clients, options) to rl-bridge.log
++			if (Environment.GetEnvironmentVariable("RL_DUMP_LOBBY") == "1")
++				Log.Write("rl-bridge", $"Lobby of {p.InternalName}:\n{world.LobbyInfo.Serialize()}");
++
 +			// Register in the session registry (friendly-fighter sim: a lockstep session has one bridge
 +			// per agent seat, so each registers under "<session>/<player>")
 +			registryKey = MultiSessionMode && RLLockstep.Enabled ? $"{episodeId}/{p.InternalName}" : episodeId;
@@ -760,7 +813,7 @@ index c11dec0..526a871 100644
  
  			// Pause game until RL agent connects (gives LLM time to plan)
  			if (MultiSessionMode)
-@@ -265,9 +291,9 @@ public void Activate(Player p)
+@@ -265,9 +295,9 @@ public void Activate(Player p)
  			}
  			else
  			{
@@ -773,7 +826,7 @@ index c11dec0..526a871 100644
  			}
  
  			Log.Write("rl-bridge", "Game paused — waiting for RL agent to connect");
-@@ -297,7 +323,7 @@ public void Activate(Player p)
+@@ -297,7 +327,7 @@ public void Activate(Player p)
  		/// </summary>
  		internal void Deactivate()
  		{
@@ -782,7 +835,7 @@ index c11dec0..526a871 100644
  			SessionDone.Set();
  			TickRequested.Set(); // Wake tick loop so it can exit
  
-@@ -313,6 +339,8 @@ void IBot.QueueOrder(Order order)
+@@ -313,6 +343,8 @@ void IBot.QueueOrder(Order order)
  		}
  
  		bool gameOverHandled;
@@ -791,7 +844,7 @@ index c11dec0..526a871 100644
  
  		void ITick.Tick(Actor self)
  		{
-@@ -480,8 +508,18 @@ void ITick.Tick(Actor self)
+@@ -480,8 +512,18 @@ void ITick.Tick(Actor self)
  			try
  			{
  				// Process all pending actions from agent (non-blocking drain)
@@ -811,7 +864,7 @@ index c11dec0..526a871 100644
  					// Intercept FAST_ADVANCE before ActionHandler
  					foreach (var cmd in agentAction.Commands)
  					{
-@@ -494,8 +532,10 @@ void ITick.Tick(Actor self)
+@@ -494,8 +536,10 @@ void ITick.Tick(Actor self)
  						}
  					}
  
@@ -823,7 +876,7 @@ index c11dec0..526a871 100644
  			}
  			catch (ChannelClosedException)
  			{
-@@ -508,7 +548,7 @@ void ITick.Tick(Actor self)
+@@ -508,7 +552,7 @@ void ITick.Tick(Actor self)
  				world.IssueOrder(orders.Dequeue());
  
  			// Only send observations at the configured interval
@@ -832,7 +885,7 @@ index c11dec0..526a871 100644
  				return;
  
  			if (!agentConnected)
-@@ -518,7 +558,11 @@ void ITick.Tick(Actor self)
+@@ -518,7 +562,11 @@ void ITick.Tick(Actor self)
  			{
  				// Serialize and push observation (DropOldest — never blocks)
  				var observation = observationSerializer.Serialize(world.WorldTick);
@@ -845,7 +898,7 @@ index c11dec0..526a871 100644
  			}
  			catch (ChannelClosedException)
  			{
-@@ -538,6 +582,16 @@ internal void OnAgentConnected()
+@@ -538,6 +586,16 @@ internal void OnAgentConnected()
  		{
  			agentConnected = true;
  
@@ -862,7 +915,7 @@ index c11dec0..526a871 100644
  			// Use SetLocalPauseState for immediate effect — SetPauseState issues an Order
  			// which requires the game loop to process it, but Tick() doesn't run while
  			// Paused is true, creating a deadlock for custom maps where loading is slow.
-@@ -545,6 +599,16 @@ internal void OnAgentConnected()
+@@ -545,6 +603,16 @@ internal void OnAgentConnected()
  			Log.Write("rl-bridge", "RL agent connected — game unpaused");
  		}
  
@@ -879,6 +932,26 @@ index c11dec0..526a871 100644
  		/// <summary>
  		/// Called by RLBridgeService to signal that the agent has disconnected.
  		/// In multi-session mode, deactivates the session. In legacy mode, exits the process.
+diff --git a/OpenRA.Mods.Common/Traits/Player/ModularBot.cs b/OpenRA.Mods.Common/Traits/Player/ModularBot.cs
+index 3643dec..34c4a3c 100644
+--- a/OpenRA.Mods.Common/Traits/Player/ModularBot.cs
++++ b/OpenRA.Mods.Common/Traits/Player/ModularBot.cs
+@@ -80,9 +80,15 @@ public void Activate(Player p)
+ 
+ 		void IBot.QueueOrder(Order order)
+ 		{
++			// friendly-fighter sim: RL_DEBUG_BOT_ORDERS=1 logs orders for actors this bot does not own
++			if (DebugOrders && order.Subject != null && order.Subject.Owner != player)
++				Log.Write("rl-bridge", $"BOT {player?.InternalName} tick {player?.World.WorldTick} orders {order.OrderString} for {order.Subject.Info.Name} {order.Subject.ActorID} of {order.Subject.Owner.InternalName}");
++
+ 			orders.Enqueue(order);
+ 		}
+ 
++		static readonly bool DebugOrders = System.Environment.GetEnvironmentVariable("RL_DEBUG_BOT_ORDERS") == "1";
++
+ 		void ITick.Tick(Actor self)
+ 		{
+ 			if (!IsEnabled || self.World.IsLoadingGameSave)
 diff --git a/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs b/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
 index 69cea95..1af47b7 100644
 --- a/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
@@ -1129,10 +1202,10 @@ index 582a0b7..54cb8b4 100644
  			{
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
 new file mode 100644
-index 0000000..761e13b
+index 0000000..67c7487
 --- /dev/null
 +++ b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,209 @@
 +#region Copyright & License Information
 +/*
 + * Copyright (c) The OpenRA Developers and Contributors
@@ -1178,6 +1251,10 @@ index 0000000..761e13b
 +		}
 +
 +		static readonly BlockingCollection<Job> Jobs = new();
++
++		// RL_SERIAL_TICKS=1: sessions of one process never tick at the same time.
++		static readonly bool SerialTicks = Environment.GetEnvironmentVariable("RL_SERIAL_TICKS") == "1";
++		static readonly object TickGate = new();
 +		[ThreadStatic]
 +		static Job current;
 +		static World world;
@@ -1292,6 +1369,10 @@ index 0000000..761e13b
 +				current = job;
 +				var watch = Stopwatch.StartNew();
 +				var idle = 0;
++				if (SerialTicks)
++					Monitor.Enter(TickGate);
++				try
++				{
 +				while (w.WorldTick < job.Until)
 +				{
 +					var before = w.WorldTick;
@@ -1309,6 +1390,12 @@ index 0000000..761e13b
 +						idle = 0;
 +					else if (++idle > 100000)
 +						throw new InvalidOperationException($"the world is stuck at tick {before}");
++				}
++				}
++				finally
++				{
++					if (SerialTicks)
++						Monitor.Exit(TickGate);
 +				}
 +
 +				var reply = new RLProto.StepReply

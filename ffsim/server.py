@@ -42,7 +42,7 @@ def agent_id_for(key: str, position: int) -> str:
 class Platform:
     def __init__(self, engine_factory, *, results_dir: Path | None = None, rtt_ms: float | str = 0.0,
                  time_mode: str = "real", think: str | float = "measured", timing: dict | None = None,
-                 seed: int | None = None) -> None:
+                 seed: int | None = None, prefetch: bool = True) -> None:
         self.engine_factory = engine_factory  # (match, seat_kinds, lobby) -> engine
         self.results_dir = results_dir
         # Simulated network round trip for /mcp calls: half before the call is handled (the batch
@@ -53,6 +53,7 @@ class Platform:
         self.rtt_rng = random.Random(seed)
         self.timing = PLATFORM_TIMING if timing is None else timing
         self.seed = seed
+        self.prefetch = prefetch
         self.created = 0
         self.time_mode = time_mode  # "real" or "virtual" (the default for new matches)
         self.think = think  # virtual time: the agents' think time ("measured" or seconds)
@@ -86,7 +87,7 @@ class Platform:
         time_mode = time_mode or self.time_mode
         if time_mode not in ("real", "virtual"):
             raise ValueError("time_mode is real or virtual")
-        virtual = ({"rtt": self.rtts, "think": self.think if think is None else think}
+        virtual = ({"rtt": self.rtts, "think": self.think if think is None else think, "prefetch": self.prefetch}
                    if time_mode == "virtual" else None)
         self.created += 1
         seed = None if self.seed is None else self.seed * 1000 + self.created
@@ -124,7 +125,7 @@ class Platform:
 
     def _housekeeping(self) -> None:
         while True:
-            time.sleep(1.0)
+            time.sleep(0.2)
             now = time.monotonic()
             with self.lock:
                 items = list(self.matches.items())

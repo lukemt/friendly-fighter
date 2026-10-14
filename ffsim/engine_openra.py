@@ -20,6 +20,7 @@ Two ways to run it:
 
 from __future__ import annotations
 
+import concurrent.futures
 import ctypes
 import os
 import queue
@@ -149,10 +150,20 @@ class _Stream:
             pass
 
 
-# Virtual time runs the engine flat out: server GC with a large gen0 and tiered PGO without the
-# precompiled (ReadyToRun) code made 4 parallel games 20 % faster.
-LOCKSTEP_DOTNET = {"DOTNET_gcServer": "1", "DOTNET_GCgen0size": "0x4000000", "DOTNET_TieredPGO": "1",
-                   "DOTNET_ReadyToRun": "0"}
+# Virtual time runs the engine flat out, and many engines share the cores: a large gen0, tiered
+# PGO without the precompiled (ReadyToRun) code, and no spin-waiting in the thread pool used ~12 %
+# less CPU per game than the defaults (workstation GC: server GC spins on every core).
+LOCKSTEP_DOTNET = {"DOTNET_gcServer": "0", "DOTNET_GCgen0size": "0x4000000", "DOTNET_TieredPGO": "1",
+                   "DOTNET_ReadyToRun": "0", "DOTNET_ThreadPool_UnfairSemaphoreSpinLimit": "0"}
+
+
+# Every engine is started from this one long-lived thread: Linux sends the parent-death signal when
+# the *thread* that forked the child exits, and requests and warm-ups run on short-lived threads.
+_SPAWNER = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="engine-spawner")
+
+
+def _popen(*args, **kwargs) -> subprocess.Popen:
+    return _SPAWNER.submit(subprocess.Popen, *args, **kwargs).result()
 
 
 def _die_with_parent() -> None:
@@ -204,6 +215,9 @@ class EngineHost:
         self.lock = threading.Lock()
         self.proc: subprocess.Popen | None = None
         self.stub = None
+        self.pool: HostPool | None = None  # a HostPool lane: one game at a time
+        self.busy = False
+        self.games = 0
 
     def _ensure(self):
         with self.lock:
@@ -219,8 +233,8 @@ class EngineHost:
                    f"Engine.SupportDir={support}", "Game.Mod=ra", "Game.Platform=Null", "Sound.Mute=True",
                    f"Launch.MultiSession={self.port}"]
             self.log = open(self.dir / "engine-host.log", "ab")
-            self.proc = subprocess.Popen(cmd, cwd=ENGINE_DIR, env=env, stdout=self.log, stderr=subprocess.STDOUT,
-                                         preexec_fn=_die_with_parent)
+            self.proc = _popen(cmd, cwd=ENGINE_DIR, env=env, stdout=self.log, stderr=subprocess.STDOUT,
+                               preexec_fn=_die_with_parent)
             _wait_port(self.port, self.proc)
             opts = [("grpc.max_receive_message_length", 64 << 20)]
             self.channel = grpc.insecure_channel(f"127.0.0.1:{self.port}", options=opts)
@@ -251,7 +265,7 @@ class EngineHost:
             if self.proc and self.proc.poll() is None:
                 try:
                     os.killpg(self.proc.pid, signal.SIGTERM)
-                    self.proc.wait(timeout=10)
+                    self.proc.wait(timeout=1)
                 except (ProcessLookupError, subprocess.TimeoutExpired):
                     try:
                         os.killpg(self.proc.pid, signal.SIGKILL)
@@ -259,6 +273,65 @@ class EngineHost:
                         pass
             self.proc = None
             self.stub = None
+
+
+class HostPool:
+    """Engine processes for virtual time, one game at a time each ("lanes").
+
+    Sessions of one engine process must not run at the same time: with OpenRA's AI playing,
+    concurrent sessions slow each other's economies (measured: half of six parallel sessions
+    harvested their first 1000 ore ~1500 ticks late). One after the other they are fine, so
+    each lane plays its games in turn, without reloading the game data (~5 s) each time,
+    and is restarted every ``recycle`` games. A lane is loaded as soon as the pool is made."""
+
+    def __init__(self, log_dir: Path, size: int = 1, recycle: int = 20) -> None:
+        self.dir = Path(log_dir)
+        self.recycle = recycle
+        self.cond = threading.Condition()
+        self.lanes: list[EngineHost] = []
+        self.n = 0
+        self.closed = False
+        for _ in range(max(1, size)):
+            self.lanes.append(self._new())
+
+    def _new(self) -> EngineHost:
+        self.n += 1
+        host = EngineHost(self.dir / f"lane-{self.n}")
+        host.pool = self
+        threading.Thread(target=self._warm, args=(host,), name="engine-warm", daemon=True).start()
+        return host
+
+    @staticmethod
+    def _warm(host: EngineHost) -> None:
+        try:
+            host._ensure()
+        except Exception:  # noqa: BLE001  (the game that takes it will see the error)
+            pass
+
+    def take(self) -> EngineHost:
+        with self.cond:
+            while True:
+                for i, host in enumerate(self.lanes):
+                    if not host.busy:
+                        if host.games >= self.recycle or (host.proc is not None and not host.alive()):
+                            threading.Thread(target=host.stop, daemon=True).start()
+                            host = self.lanes[i] = self._new()
+                        host.busy = True
+                        host.games += 1
+                        return host
+                self.cond.wait()
+
+    def release(self, host: EngineHost) -> None:
+        with self.cond:
+            host.busy = False
+            self.cond.notify_all()
+
+    def stop(self) -> None:
+        with self.cond:
+            self.closed = True
+            lanes = list(self.lanes)
+        for h in lanes:
+            h.stop()
 
 
 class OpenRAEngine:
@@ -297,6 +370,7 @@ class OpenRAEngine:
         self.step_wall = 0.0  # lockstep: wall seconds spent in steps (engine + transfer)
         self.engine_us = 0  # lockstep: microseconds the engine itself spent ticking
         self.steps = 0
+        self.step_lock = threading.Lock()  # one step at a time; stop() waits for the last one
 
     # -- lifecycle ----------------------------------------------------------------------
 
@@ -321,8 +395,8 @@ class OpenRAEngine:
                f"Engine.SupportDir={support}", "Game.Mod=ra", "Game.Platform=Null", f"Launch.Map={self.map_file}",
                f"Launch.Bots={self._bots()}", "Sound.Mute=True"]
         self.log = open(self.run_dir / "engine.log", "wb")
-        self.proc = subprocess.Popen(cmd, cwd=ENGINE_DIR, env=env, stdout=self.log, stderr=subprocess.STDOUT,
-                                     preexec_fn=_die_with_parent)
+        self.proc = _popen(cmd, cwd=ENGINE_DIR, env=env, stdout=self.log, stderr=subprocess.STDOUT,
+                           preexec_fn=_die_with_parent)
         if not self.lockstep:
             threading.Thread(target=self._connect, name=f"connect-{self.session_id[:8]}", daemon=True).start()
         threading.Thread(target=self._watch, name=f"watch-{self.session_id[:8]}", daemon=True).start()
@@ -364,13 +438,17 @@ class OpenRAEngine:
     def step(self, until_tick: int) -> list[tuple[int, dict]]:
         """Virtual time: run the world up to ``until_tick`` (with the actions queued since the
         last step) and return the views those ticks made, as (seat position, view)."""
-        with self.lock:
-            actions, self.outgoing = self.outgoing, []
-        t0 = time.perf_counter()
-        if self.host is not None:
-            reply = self.host.step(pb.StepRequest(until_tick=until_tick, actions=actions, session_id=self.host_session))
-        else:
-            reply = self._lockstep_stub().Step(pb.StepRequest(until_tick=until_tick, actions=actions), timeout=600)
+        with self.step_lock:
+            if self.stopping:
+                raise RuntimeError("engine stopped")
+            with self.lock:
+                actions, self.outgoing = self.outgoing, []
+            t0 = time.perf_counter()
+            if self.host is not None:
+                reply = self.host.step(pb.StepRequest(until_tick=until_tick, actions=actions,
+                                                      session_id=self.host_session))
+            else:
+                reply = self._lockstep_stub().Step(pb.StepRequest(until_tick=until_tick, actions=actions), timeout=600)
         self.step_wall += time.perf_counter() - t0
         self.engine_us += reply.elapsed_us
         self.steps += 1
@@ -420,10 +498,19 @@ class OpenRAEngine:
         self.send(position, 0, 0, [{"action": "SURRENDER"}])
 
     def stop(self) -> None:
+        if self.stopping:
+            return
         self.stopping = True
         if self.host is not None:
-            if self.host_session:
-                self.host.destroy(self.host_session)
+            got = self.step_lock.acquire(timeout=60)  # a prefetch may still be running
+            try:
+                if self.host_session:
+                    self.host.destroy(self.host_session)
+            finally:
+                if got:
+                    self.step_lock.release()
+            if self.host.pool is not None:
+                self.host.pool.release(self.host)
             return
         for s in self.streams.values():
             s.close()
@@ -438,7 +525,7 @@ class OpenRAEngine:
                 time.sleep(1.0)  # let a surrender / the last views through
             try:
                 os.killpg(self.proc.pid, signal.SIGTERM)
-                self.proc.wait(timeout=10)
+                self.proc.wait(timeout=3)
             except (ProcessLookupError, subprocess.TimeoutExpired):
                 try:
                     os.killpg(self.proc.pid, signal.SIGKILL)

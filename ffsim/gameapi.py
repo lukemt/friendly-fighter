@@ -159,7 +159,7 @@ class Match:
         self.vclock: VirtualClock | None = None
         if virtual is not None:
             self.vclock = VirtualClock(self.cond, [i for i, s in enumerate(seats) if s.kind == "agent"],
-                                       **{"seed": f"{seed}:{session_id}", **virtual})
+                                       **{"seed": str(seed) if seed is not None else session_id, **virtual})
             self.clock, self.sleep = clock, sleep = self.vclock.now, self.vclock.sleep
         self.latest_tick = 0  # the tick of the newest view: GameAPI's "current tick"
         timing = timing or {}

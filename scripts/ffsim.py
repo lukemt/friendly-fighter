@@ -40,7 +40,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from ffsim.engine_openra import EngineHost, OpenRAEngine  # noqa: E402
+from ffsim.engine_openra import HostPool, OpenRAEngine  # noqa: E402
 from ffsim.rules import Rules  # noqa: E402
 from ffsim.server import Platform, serve  # noqa: E402
 
@@ -51,10 +51,11 @@ def local_key(label: str) -> str:
     return "eak_live_" + hashlib.sha256(f"ffsim:{label}".encode()).hexdigest()
 
 
-def engine_factory(out: Path, engine: str = "host"):
-    """Real time: one engine process per game. Virtual time: by default every game is a session of
-    one shared engine process (``EngineHost``); ``engine="single"`` starts one per game instead."""
-    hosts: list[EngineHost] = []
+def engine_factory(out: Path, engine: str = "host", parallel: int = 1):
+    """Real time: one engine process per game (``Launch.Map``). Virtual time: by default each game
+    is the only session of an engine process loaded in advance (``HostPool``); ``engine="single"``
+    starts a ``Launch.Map`` engine per game instead (stepped too)."""
+    pools: list[HostPool] = []
     lock = threading.Lock()
 
     def make(match, kinds, lobby):
@@ -62,13 +63,13 @@ def engine_factory(out: Path, engine: str = "host"):
         host = None
         if virtual and engine == "host":
             with lock:
-                if not hosts:
-                    hosts.append(EngineHost(out / "engine"))  # (re)started on demand
-            host = hosts[0]
+                if not pools:
+                    pools.append(HostPool(out / "engine", parallel))
+            host = pools[0].take()
         return OpenRAEngine(match.session_id, match.map_id, kinds, lobby=lobby, log_dir=out / "engine" / match.session_id,
                             lockstep=virtual, host=host, seed=match.rng.randrange(1, 2 ** 31))
 
-    make.hosts = hosts
+    make.hosts = pools
     return make
 
 
@@ -91,7 +92,9 @@ def start_runtime(label: str, url: str, out: Path, agent: str | None, env_extra:
         (remote / "probe.json").write_text(json.dumps({"enabled": True, "seat": probe_seat, "resign_at_end": True}))
     env = dict(os.environ, ALTRUAGENT_CONTROL_URL=url, ALTRUAGENT_OFFICIAL_AGENT_KEY=local_key(label),
                FF_REMOTE_DIR=str(remote), FF_CONSOLE_BASE_PORT=str(8870 + 10 * (ord(label[0]) % 10)),
-               PYTHONUNBUFFERED="1", **env_extra)
+               PYTHONUNBUFFERED="1", PYTHONHASHSEED="0",  # same set order every run: reproducible
+               FF_WIRE="1" if os.environ.get("FF_SIM_WIRE") else "0",  # the server knows every call already
+               **env_extra)
     if "OPENAI_API_KEY" not in env_extra and not os.environ.get("FF_SIM_OPENAI"):
         env["OPENAI_API_KEY"] = ""  # no LLM commander in local games unless FF_SIM_OPENAI=1 (dotenv won't override "")
     cmd = [sys.executable, "-u", "-m", "agent", "--match"] + (["--agent", agent] if agent else [])
@@ -120,9 +123,12 @@ def summarize(results: list[dict]) -> dict:
 def cmd_run(a) -> int:
     out = Path(a.out or ROOT / "sim" / "results" / datetime.now().strftime("%Y%m%d-%H%M%S"))
     out.mkdir(parents=True, exist_ok=True)
-    factory = engine_factory(out, a.engine)
+    factory = engine_factory(out, a.engine, getattr(a, "parallel", 1))
+    # Prefetching ticks hides engine time behind the agents' when one game runs alone; with
+    # several, the cores are busy anyway and the extra step per view only costs CPU.
+    prefetch = getattr(a, "parallel", 1) <= 1
     platform = Platform(factory, results_dir=out, rtt_ms=a.rtt_ms, time_mode=a.time,
-                        think=think_arg(a.think), seed=getattr(a, "seed", None))
+                        think=think_arg(a.think), seed=getattr(a, "seed", None), prefetch=prefetch)
     server = serve(platform, a.port)
     url = f"http://127.0.0.1:{server.server_address[1]}"
     print(f"[ffsim] platform at {url}; results in {out}")
@@ -181,7 +187,7 @@ def cmd_run(a) -> int:
         for _ in range(min(a.parallel, a.games)):
             start_one()
         while not finished.is_set():
-            finished.wait(1.0)
+            finished.wait(0.2)
             with platform.lock:
                 live = sum(1 for m in platform.matches.values() if m.phase != "finished")
             while not stop["flag"] and started < a.games and live < a.parallel:
@@ -224,9 +230,12 @@ def cmd_run(a) -> int:
 
 def cmd_serve(a) -> int:
     out = Path(a.out or ROOT / "sim" / "results" / ("serve-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
-    factory = engine_factory(out, a.engine)
+    factory = engine_factory(out, a.engine, getattr(a, "parallel", 1))
+    # Prefetching ticks hides engine time behind the agents' when one game runs alone; with
+    # several, the cores are busy anyway and the extra step per view only costs CPU.
+    prefetch = getattr(a, "parallel", 1) <= 1
     platform = Platform(factory, results_dir=out, rtt_ms=a.rtt_ms, time_mode=a.time,
-                        think=think_arg(a.think), seed=getattr(a, "seed", None))
+                        think=think_arg(a.think), seed=getattr(a, "seed", None), prefetch=prefetch)
     server = serve(platform, a.port)
     print(f"[ffsim] platform at http://127.0.0.1:{server.server_address[1]} (maps {sorted(Rules.load().maps)})")
     print("  POST /sim/matches {\"map_id\": \"trapped\", \"max_minutes\": 10, \"seats\": [{\"kind\": \"agent\", \"key\": KEY}, "
@@ -239,6 +248,9 @@ def cmd_serve(a) -> int:
 
 
 def main() -> int:
+    # Many threads here wake for a moment each (a view, an answer): hand the GIL over sooner than
+    # every 5 ms, or each wake-up waits behind a JSON encoding.
+    sys.setswitchinterval(float(os.environ.get("FF_SWITCH_INTERVAL", "0.0005")))
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
     r = sub.add_parser("run", help="play games and report")

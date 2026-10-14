@@ -79,6 +79,29 @@ class _SeatClock:
     back: float = 0.0  # that answer's way back to the agent
     calls: list = field(default_factory=list)
     think: list = field(default_factory=list)  # charged think times (virtual seconds), for reports
+    rng: random.Random = field(default_factory=random.Random)  # its round trips (one stream per seat: reproducible)
+
+
+class _Prefetch:
+    """``engine.step(until)`` on a thread of its own."""
+
+    def __init__(self, engine, until: int) -> None:
+        self.views: list = []
+        self.error: BaseException | None = None
+        self.thread = threading.Thread(target=self._run, args=(engine, until), name="vclock-prefetch", daemon=True)
+        self.thread.start()
+
+    def _run(self, engine, until: int) -> None:
+        try:
+            self.views = engine.step(until)
+        except BaseException as exc:  # noqa: BLE001
+            self.error = exc
+
+    def result(self) -> list:
+        self.thread.join()
+        if self.error is not None:
+            raise self.error
+        return self.views
 
 
 class VirtualClock:
@@ -89,17 +112,18 @@ class VirtualClock:
 
     def __init__(self, cond: threading.Condition, seats: list[int], *, rtt: float | list[float] = 0.19,
                  think: str | float = "measured", patience: float = 5.0, wall=time.monotonic,
-                 seed: int | str | None = None) -> None:
+                 seed: int | str | None = None, prefetch: bool = True) -> None:
         self.cond = cond
         self.rtts = list(rtt) if isinstance(rtt, (list, tuple)) else [float(rtt)]
         self.min_half = min(self.rtts) / 2
-        self.rng = random.Random(seed)
         self.think = think
         self.patience = patience  # fixed think: a seat silent this long (wall) is timed by the wall clock
+        self.prefetch = prefetch  # run the ticks before each view while the agents think
         self.wall = wall
         self.t = 0.0
         self.gen = 0
-        self.seats = {p: _SeatClock() for p in seats}
+        self.seed = seed
+        self.seats = {p: _SeatClock(rng=random.Random(f"{seed}:{p}")) for p in seats}
         self.local = threading.local()
         self.running = False  # the engine is under our control
         self.stopped = False
@@ -164,7 +188,7 @@ class VirtualClock:
         now_wall = self.wall() if received is None else received
         with self.cond:
             sc = self.seats[seat]
-            half = self.rng.choice(self.rtts) / 2
+            half = sc.rng.choice(self.rtts) / 2
             if sc.departed is None:
                 arrival = self.t + half
             else:
@@ -226,9 +250,12 @@ class VirtualClock:
     def start(self, engine, on_views, on_error, on_time=None) -> None:
         self.engine, self.on_views, self.on_error, self.on_time = engine, on_views, on_error, on_time
         with self.cond:
-            for sc in self.seats.values():
+            for p, sc in self.seats.items():
                 if sc.departed is None and not sc.calls:  # (checked in, not calling): timed from now
                     sc.departed, sc.departed_wall = self.t, self.wall()
+                # How many calls a seat made before the start depends on the wall clock: draw the
+                # round trips of the game itself from a fresh stream, so a seeded game repeats.
+                sc.rng = random.Random(f"{self.seed}:{p}:game")
             self.running = True
             self.cond.notify_all()  # calls waiting since before the start: block properly now
         threading.Thread(target=self.run, name="vclock", daemon=True).start()
@@ -248,14 +275,21 @@ class VirtualClock:
                 if views:
                     self.on_views(views)
             interval, phase = engine.view_interval, engine.view_phase
+            last = engine.tick
+            prefetch = None
             while True:
+                # The engine moves one view at a time: nothing between two views can be seen,
+                # and an order is never due before the view after the one it was stamped with.
+                target = last + 1 + (phase - last - 1) % interval
+                if self.prefetch and prefetch is None and target - 1 > last:
+                    # Run the ticks before the next view now, while the agents think: every order
+                    # still to come is stamped with the last view or later, so due at its tick + 6
+                    # (the next view) at the earliest.
+                    prefetch = _Prefetch(engine, target - 1)
                 with self.cond:
                     while True:
                         if self.stopped:
                             return
-                        # The engine moves one view at a time: nothing between two views can be seen,
-                        # and an order is never due before the view after the one it was stamped with.
-                        target = engine.tick + 1 + (phase - engine.tick - 1) % interval
                         h = self.horizon()
                         # Time only jumps to what happens next: a call arriving, a wait ending, the view.
                         event = min(self._next_event(), target / TICKS_PER_SECOND)
@@ -268,7 +302,12 @@ class VirtualClock:
                             self.cond.notify_all()
                             continue
                         self._idle_wait(h, event)
-                views = engine.step(target)
+                views = []
+                if prefetch is not None:
+                    views = prefetch.result()  # views only when the game ended in those ticks
+                    prefetch = None
+                views += engine.step(target)
+                last = target
                 with self.cond:
                     self.stats["steps"] += 1
                     self.stats["views"] += len(views)

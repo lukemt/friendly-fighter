@@ -22,8 +22,8 @@ sim/openra-fork/setup.sh          # ~/openra-sim: .NET 8, the fork + ff-sim.patc
 ## Running games
 
 ```bash
-python scripts/ffsim.py run                                  # our agent vs itself, trapped, 10 min (~40 s)
-python scripts/ffsim.py run --seat1 ai:normal --games 6 --parallel 6   # vs OpenRA's Normal AI (~85 s for all 6)
+python scripts/ffsim.py run                                  # our agent vs itself, trapped, 10 min (~35 s)
+python scripts/ffsim.py run --seat1 ai:normal --games 12 --parallel 3  # vs OpenRA's Normal AI (~3 min for all 12)
 python scripts/ffsim.py run --map random --games 6 --parallel 3 --swap
 python scripts/ffsim.py run --seat0 agent:A --seat1 agent:B --env B:FF_SOME_KNOB=1 --games 10 --parallel 5 --swap
 python scripts/ffsim.py run --probe                          # the probe on seat 0, then compare (below)
@@ -32,7 +32,7 @@ python scripts/ffsim.py serve --port 8800                    # just the platform
 ```
 
 Games run in **virtual time** by default (next section): a 10-minute game takes about
-40 s, and parallel games share one engine process.
+35 s alone, and a batch runs at about 4 games a minute.
 
 **Seats.**
 
@@ -60,10 +60,13 @@ The runtimes write their usual recordings to `recordings/sim-*`.
 
 **Cost.**
 
-- Virtual time: a 10-minute game takes 35-45 s of wall time (15x real time). Six in
-  parallel finished in 84 s (43x one-by-one real time); the machine was half busy then, so
-  more parallel games help further. Per game: ~12-15 s of engine CPU, ~5 s of server,
-  ~5 s per seat worker.
+- Virtual time: a 10-minute game takes ~35 s of wall time alone (17x real time). In a
+  batch, 12 games vs Normal AI took 171 s with `--parallel 3` (4.2 games a minute; real
+  time: 0.1 a minute per slot). A game costs ~40 CPU-s: ~11-15 s engine (the first game
+  of a lane ~20 s, loading included), ~10 s server, ~7-9 s per seat worker.
+- **This container has 4 CPUs of quota** (`/sys/fs/cgroup/cpu.max`), though it shows 6:
+  `--parallel 3` or `4` is best; at 6 the quota throttles everything (each engine tick 2.8x
+  slower) and throughput does not grow.
 - Real time: one headless engine is about 0.3 core and 240 MB; a 10-minute game takes 10
   minutes.
 
@@ -88,11 +91,33 @@ do. Locally it runs on a **virtual clock** (`ffsim/vclock.py`):
 So whatever an agent does in game time comes out the same as on the platform; only the
 waiting is gone.
 
-**Engine host.** In virtual time every game is a session of one shared engine process
-(the fork's multi-session mode, `Launch.MultiSession`, extended for two agents per game):
-the map data is loaded once, a new game takes about 1 s, and no local server sits
-between the bots and the world. `--engine single` starts one engine per game instead
-(the real-time setup, but stepped).
+**Prefetch.** While the agents think, the engine already runs the five ticks before the
+next view. That is safe: every order still to come is stamped with the last view or later,
+so it is due at the next view at the earliest.
+
+**Reproducible games.** With a fixed think time (`--think 3`) and a `--seed`, a game is
+the same every time: the round trips are drawn from one stream per seat, the views'
+publication delays from the match's seed, the engine's world seed and OpenRA's bot
+randomness (its `LocalRandom`) from the game seed, and the runtimes run with
+`PYTHONHASHSEED=0`. Use it for paired A/B tests: the same seeds for both variants.
+
+**Engine lanes.** In virtual time each game is a session of an engine process in the fork's
+multi-session mode (`Launch.MultiSession`, extended for two agents per game): no local
+server sits between the bots and the world, and a lane (one per `--parallel` slot) plays
+its games one after the other without reloading the game data (~5 s), restarted every 20
+games. One game at a time per process: concurrent sessions in one process slowed each
+other's economies when OpenRA's AI played (half of six parallel sessions harvested their
+first 1000 ore ~1500 ticks late), which showed as 3 kills a game instead of 29 vs the AI.
+`--engine single` starts a `Launch.Map` engine per game instead (the real-time setup,
+stepped).
+
+**Lean defaults for batches.** The simulated runtimes run without the wire log
+(`FF_WIRE=0`; set `FF_SIM_WIRE=1` to keep it: the server sees every call anyway), and
+prefetch is on only when one game runs at a time.
+
+**Caveat: background threads.** Only the game loop's own calls are timed. A thread that
+works on the wall clock beside it (an LLM commander every 15 s, say) gets about 15 times
+less game time per call than on the platform. Test such agents with `--time real`.
 
 **Caveat: wall-clock deadlines in agent code.** Network round trips and server waits cost
 no wall time in virtual time. So a loop like "poll for 12 seconds by `time.time()`" covers
@@ -153,7 +178,19 @@ FF_SIM_ENGINE=1 .venv/bin/python -m pytest -q tests/test_ffsim_engine.py  # real
 python -m ffsim.conformance recordings/<real session> recordings/<sim session>
 python -m ffsim.probe_compare recordings/<real>/probe-seat0.jsonl recordings/<sim>/probe-seat0.jsonl
 python -m ffsim.timing recordings/<real session> recordings/<sim session>   # lags, view gaps, cadence in ticks
+python -m ffsim.compare_runs sim/results/<run A> sim/results/<run B>         # two batches of games, means ± se
 ```
+
+**Virtual vs real time, same matchup (6 games each vs Normal AI, `compare_runs`):**
+
+| Per game (agent seat) | Real time | Virtual (lanes) | \|z\| |
+|---|---|---|---|
+| kills / deaths (cost) | 10,942 / 15,733 | 10,233 / 13,367 | 0.2 / 1.3 |
+| units killed / lost | 28.7 / 40.8 | 19.0 / 36.2 | 1.3 / 1.1 |
+| assets / army value | 21,217 / 8,150 | 22,392 / 9,492 | 0.7 / 1.0 |
+| batches / min, lag 6 share | 10.0, 0.92 | 10.2, 0.91 | 0.1, 0.4 |
+| AI wins | 6 / 6 | 5 / 6 | |
+| wall time | 628 s | 107 s | |
 
 The probe run in virtual time matches the platform on every step (`probe_compare`),
 including `a04` (when a batch sent 0 / 0.5 / 2 s after its state is applied: 24 / 36 / 72
