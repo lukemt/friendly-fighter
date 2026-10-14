@@ -47,6 +47,23 @@ from ffsim.server import Platform, serve  # noqa: E402
 MAPS = ["sidestep", "trapped", "shadowfiend-ii"]
 
 
+def cpu_quota() -> float:
+    """CPUs this container may use: the cgroup quota (``cpu.max``) if there is one, else the core count."""
+    try:
+        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()[:2]
+        if quota != "max":
+            return int(quota) / int(period)
+    except (OSError, ValueError):
+        pass
+    return float(os.cpu_count() or 1)
+
+
+def default_parallel(games: int) -> int:
+    """Virtual time: one game less than the CPUs (each game keeps ~1 CPU busy); past the quota
+    everything is throttled and nothing is gained (measured: 4 CPUs of quota, 3-4 best)."""
+    return max(1, min(games, int(cpu_quota()) - 1))
+
+
 def local_key(label: str) -> str:
     return "eak_live_" + hashlib.sha256(f"ffsim:{label}".encode()).hexdigest()
 
@@ -121,6 +138,8 @@ def summarize(results: list[dict]) -> dict:
 
 
 def cmd_run(a) -> int:
+    if a.parallel is None:
+        a.parallel = default_parallel(a.games) if a.time == "virtual" else a.games
     out = Path(a.out or ROOT / "sim" / "results" / datetime.now().strftime("%Y%m%d-%H%M%S"))
     out.mkdir(parents=True, exist_ok=True)
     factory = engine_factory(out, a.engine, getattr(a, "parallel", 1))
@@ -229,6 +248,8 @@ def cmd_run(a) -> int:
 
 
 def cmd_serve(a) -> int:
+    if a.parallel is None:
+        a.parallel = default_parallel(64)
     out = Path(a.out or ROOT / "sim" / "results" / ("serve-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
     factory = engine_factory(out, a.engine, getattr(a, "parallel", 1))
     # Prefetching ticks hides engine time behind the agents' when one game runs alone; with
@@ -259,7 +280,8 @@ def main() -> int:
     r.add_argument("--map", default="trapped", choices=MAPS + ["random"])
     r.add_argument("--minutes", type=int, default=10)
     r.add_argument("--games", type=int, default=1)
-    r.add_argument("--parallel", type=int, default=1)
+    r.add_argument("--parallel", type=int, default=None,
+                   help="games at once (default: virtual time, the CPU quota minus one; real time, all)")
     r.add_argument("--swap", action="store_true", help="swap seats every other game")
     r.add_argument("--agent", action="append", default=[], metavar="LABEL:MODULE")
     r.add_argument("--env", action="append", default=[], metavar="LABEL:K=V")
@@ -278,6 +300,7 @@ def main() -> int:
     s.add_argument("--rtt-ms", default="platform")
     s.add_argument("--time", choices=["virtual", "real"], default="virtual")
     s.add_argument("--engine", choices=["host", "single"], default="host")
+    s.add_argument("--parallel", type=int, default=None, help="engine lanes: games at once in virtual time")
     s.add_argument("--think", default="measured")
     s.add_argument("--out")
     a = p.parse_args()

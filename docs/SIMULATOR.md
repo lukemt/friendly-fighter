@@ -23,7 +23,7 @@ sim/openra-fork/setup.sh          # ~/openra-sim: .NET 8, the fork + ff-sim.patc
 
 ```bash
 python scripts/ffsim.py run                                  # our agent vs itself, trapped, 10 min (~35 s)
-python scripts/ffsim.py run --seat1 ai:normal --games 12 --parallel 3  # vs OpenRA's Normal AI (~3 min for all 12)
+python scripts/ffsim.py run --seat1 ai:normal --games 12   # vs OpenRA's Normal AI (~2.5 min for all 12)
 python scripts/ffsim.py run --map random --games 6 --parallel 3 --swap
 python scripts/ffsim.py run --seat0 agent:A --seat1 agent:B --env B:FF_SOME_KNOB=1 --games 10 --parallel 5 --swap
 python scripts/ffsim.py run --probe                          # the probe on seat 0, then compare (below)
@@ -67,8 +67,9 @@ The runtimes write their usual recordings to `recordings/sim-*`.
 - Real time costs more CPU, not less: the engine alone uses ~0.3 core for the whole 10
   minutes (~160 CPU-s a game).
 - **This container has 4 CPUs of quota** (`/sys/fs/cgroup/cpu.max`), though it shows 6:
-  `--parallel 3` or `4` is best; at 6 the quota throttles everything (each engine tick 2.8x
-  slower) and throughput does not grow.
+  3 or 4 games at once is best; at 6 the quota throttles everything (each engine tick 2.8x
+  slower) and throughput does not grow. `--parallel` defaults to the quota minus one in
+  virtual time (all games at once in real time).
 - Real time: one headless engine is about 0.3 core and 240 MB; a 10-minute game takes 10
   minutes.
 
