@@ -202,6 +202,9 @@ python scripts/ff_play.py status | attack X Y [all|ids] | build powr | train 3tn
 
 ## Next steps (in priority order)
 
+The longer-term direction (modular bot, league of bots, snapshot branching) is in
+[ROADMAP.md](ROADMAP.md).
+
 1. **User:** click "Register my agent" before 11:59 PM PDT. Revoke the
    GitHub token. Consider rotating the agent key.
 2. (Done: fast transport confirmed live, 0.24 s per decision.) Run a
