@@ -211,3 +211,42 @@ def test_the_dashboard_is_one_page(db):
     fake_arena(db).play(GameJob(bots=["ff-default", "ai-normal"], minutes=0.5, seed=1))
     page = dashboard.build(db)
     assert page.startswith("<!doctype html>") and "const D={" in page and "ff-default" in page
+
+
+def test_go_stops_when_enemies_reach_the_base(db):
+    engines = []
+
+    def factory(match, kinds, lobby, opts):
+        engines.append(FakeEngine(kinds))
+        return engines[-1]
+
+    arena = Arena(db=db, engine_factory=factory)
+    box = {}
+
+    def human(platform, sid, pos, bot):
+        box["seat"] = HumanSeat(platform, sid, pos, bot, autopilot="off", db=db)
+        return box["seat"]
+
+    table = registry.load()
+    me = registry.get("human:t")
+    table[me.name] = me
+    t = threading.Thread(target=lambda: arena.play(GameJob(bots=[me.name, "ai-normal"], minutes=2, seed=4),
+                                                   human_factory=human, bots=table), daemon=True)
+    t.start()
+    for _ in range(200):
+        if "seat" in box and box["seat"].state is not None and box["seat"].state.phase == "playing":
+            break
+        time.sleep(0.05)
+    seat = box["seat"]
+    assert "@first: 1 units" in seat.command(["group", "first", "100"])
+    out = seat.command(["go", "5"])
+    assert "ALERT" not in out
+    engines[0].world[0]["visible_enemies"] = [
+        {"id": 900 + i, "type": "e1", "x": 64 + i, "y": 70, "hp_percent": 1.0, "idle": False, "activity": None,
+         "stance": 0, "is_husk": False} for i in range(3)]
+    start = seat._seconds()
+    out = seat.command(["go", "30"])
+    assert "ALERT" in out and seat._seconds() - start < 5
+    out = seat.command(["go", "120", "nostop"])
+    assert "GAME OVER" in out
+    t.join(30)
