@@ -152,6 +152,12 @@ virtual game with a digest of its views; `python scripts/ffbench.py replay <trac
 the engine's CPU and whether every step matched (a build that leaves the game alone
 matches every step).
 
+```bash
+python scripts/ffbench.py corpus      # record the standard games (wipe-outs, self-play, rush, Normal AI)
+python scripts/ffbench.py check       # replay them on the current build: every step must match
+python scripts/ffbench.py check --engine ~/openra-sim/fork-base --engine ~/openra-sim/fork   # and compare CPU
+```
+
 **Caveat: background threads.** Only the game loop's own calls are timed. A thread that
 works on the wall clock beside it (an LLM commander every 15 s, say) gets about 15 times
 less game time per call than on the platform. Test such agents with `--time real`.

@@ -12,6 +12,12 @@ the platform or the agents, so only the engine runs:
 Each trace is played on each build in turn (A B A B ..., one engine process per build, as a lane
 plays its games); the report gives each build's wall and CPU seconds and whether every step's
 views matched the trace's. A build that changes nothing in the game logic matches every step.
+
+A standard set of recorded games (wipe-outs, self-play of two variants, a rush, the Normal AI;
+seeded, so the same games every time) for checking engine changes:
+
+    python scripts/ffbench.py corpus            # record it with the current build (sim/traces/corpus)
+    python scripts/ffbench.py check             # replay it on the current build: every step must match
 """
 
 from __future__ import annotations
@@ -126,6 +132,42 @@ def cmd_replay(a) -> int:
     return 0 if all(r["match"] for r in rows) else 1
 
 
+# The standard games: (label, ffsim run arguments). Seeded with a fixed think time: reproducible.
+CORPUS = [
+    ("eco-vs-rush", ["--seat0", "agent:E", "--seat1", "ai:rush", "--map", "sidestep", "--games", "4", "--seed", "5",
+                     "--env", 'E:FF_KNOBS={"posture":"eco","attack_threshold":14,"unit_focus":"vehicles","target":"enemy_base"}']),
+    ("self-play", ["--seat0", "agent:A", "--seat1", "agent:T", "--map", "shadowfiend-ii", "--games", "2", "--seed", "6",
+                   "--env", 'T:FF_KNOBS={"posture":"defend","attack_threshold":20}']),
+    ("rush-vs-normal", ["--seat0", "agent:R", "--seat1", "ai:normal", "--games", "2", "--seed", "7",
+                        "--env", 'R:FF_KNOBS={"posture":"attack","attack_threshold":4,"unit_focus":"infantry","target":"nearest"}']),
+    ("default-vs-normal", ["--seat1", "ai:normal", "--games", "3", "--seed", "11"]),
+]
+
+
+def cmd_corpus(a) -> int:
+    import subprocess
+
+    out = Path(a.dir)
+    out.mkdir(parents=True, exist_ok=True)
+    for label, args in CORPUS:
+        print(f"[corpus] {label}", flush=True)
+        env = dict(os.environ, FF_ENGINE_TRACE=str(out))
+        subprocess.run([sys.executable, str(ROOT / "scripts" / "ffsim.py"), "run", "--think", "3", "--fresh-engines",
+                        "--out", str(ROOT / "sim" / "results" / f"corpus-{label}")] + args, env=env, check=True)
+    print(f"[corpus] {len(list(out.glob('*.trace')))} traces in {out}")
+    return 0
+
+
+def cmd_check(a) -> int:
+    traces = sorted(Path(a.dir).glob("*.trace"))
+    if not traces:
+        print(f"no traces in {a.dir}: record them with 'ffbench.py corpus' first")
+        return 2
+    a.traces, a.engine, a.repeat, a.until, a.no_check, a.pace, a.affinity, a.json = (
+        [str(t) for t in traces], a.engine, 1, None, False, 0.0, None, None)
+    return cmd_replay(a)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
@@ -141,8 +183,14 @@ def main() -> int:
     r.add_argument("--pace", type=float, default=0.0, help="ms to wait after each step (as the agents make it wait)")
     r.add_argument("--affinity", help="pin the engine processes to these CPUs (comma-separated)")
     r.add_argument("--json")
+    c = sub.add_parser("corpus", help="record the standard games' traces with the current build")
+    c.add_argument("--dir", default=str(ROOT / "sim" / "traces" / "corpus"))
+    k = sub.add_parser("check", help="replay the standard games on a build: every step must match")
+    k.add_argument("--dir", default=str(ROOT / "sim" / "traces" / "corpus"))
+    k.add_argument("--engine", action="append", help="engine dir (default: the current build)")
+    k.add_argument("--env", action="append", default=[], metavar="K=V")
     a = p.parse_args()
-    return cmd_replay(a)
+    return {"replay": cmd_replay, "corpus": cmd_corpus, "check": cmd_check}[a.command](a)
 
 
 if __name__ == "__main__":

@@ -36,11 +36,18 @@ try:  # orjson (pip install .[sim]) encodes a state ~10x faster; the JSON means 
         return orjson.dumps(data, default=str, option=orjson.OPT_NON_STR_KEYS)
 
     loads = orjson.loads
+
+    def encoded(data: bytes):
+        """JSON already encoded, to be put in a document as it is (not encoded again)."""
+        return orjson.Fragment(data)
 except ImportError:  # pragma: no cover
     def dumps(data) -> bytes:
         return json.dumps(data, separators=(",", ":"), default=str).encode()
 
     loads = json.loads
+
+    def encoded(data: bytes):
+        return json.loads(data)
 from .vclock import platform_rtts
 from .rules import Rules, list_games, tools_list
 
@@ -478,8 +485,8 @@ def make_handler(platform: Platform):
                 payload = platform.call_tool(token, name, arguments)
             except Exception as exc:  # noqa: BLE001
                 return {"content": [{"type": "text", "text": f"Error executing tool {name}: {exc!r}"}], "isError": True}
-            return {"content": [{"type": "text", "text": dumps(payload).decode()}],
-                    "structuredContent": payload, "isError": False}
+            raw = dumps(payload)  # (the structured copy is these bytes again, not a second encoding)
+            return {"content": [{"type": "text", "text": raw.decode()}], "structuredContent": encoded(raw), "isError": False}
 
     return Handler
 
