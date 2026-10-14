@@ -64,7 +64,13 @@ def replay(host: EngineHost, head: dict, steps, *, check: bool = True, until: in
             first_diff = {"step": n, "tick": reply.tick, "want_tick": tick}
     wall = time.perf_counter() - t_created
     host.destroy(session)
+    try:
+        rss = int(next(x for x in Path(f"/proc/{host.proc.pid}/status").read_text().splitlines()
+                       if x.startswith("VmRSS")).split()[1]) // 1024
+    except (OSError, StopIteration, ValueError):
+        rss = 0
     return {"steps": n, "ticks": steps[n - 1][0].until_tick if n else 0, "create_s": t_created - t0, "wall_s": wall,
+            "rss_mb": rss,
             "engine_s": engine_us / 1e6, "cpu_s": host.cpu_seconds() - cpu0, "match": first_diff is None,
             "first_diff": first_diff}
 
@@ -103,7 +109,7 @@ def cmd_replay(a) -> int:
                     diff = "" if r["match"] else f"  DIFFERS from step {r['first_diff']['step']} (tick {r['first_diff']['tick']})"
                     print(f"[{names[i][-30:]}] {t.name[:24]:24} {r['ticks']:6d} ticks  wall {r['wall_s']:6.2f}s  "
                           f"engine {r['engine_s']:6.2f}s  cpu {r['cpu_s']:6.2f}s  "
-                          f"({r['ticks'] / max(r['wall_s'], 1e-9):5.0f} ticks/s){diff}", flush=True)
+                          f"({r['ticks'] / max(r['wall_s'], 1e-9):5.0f} ticks/s, {r['rss_mb']} MB){diff}", flush=True)
     finally:
         for h in hosts:
             h.stop()

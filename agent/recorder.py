@@ -29,6 +29,15 @@ from typing import Any
 
 from altruagent.console import print_line
 
+try:  # orjson, when installed, encodes a state several times faster (same JSON)
+    import orjson
+
+    def _encode(record: dict) -> bytes:
+        return orjson.dumps(record, default=repr, option=orjson.OPT_NON_STR_KEYS)
+except ImportError:  # pragma: no cover
+    def _encode(record: dict) -> bytes:
+        return json.dumps(record, separators=(",", ":"), default=repr).encode()
+
 ROOT = Path(__file__).resolve().parent.parent / "recordings"
 FLUSH_EVERY = 25  # records between flushes, so a killed worker loses little
 
@@ -77,7 +86,7 @@ class Recorder:
             return
         try:
             record = {"t": round(time.time(), 3), **record}
-            handle.write(json.dumps(record, separators=(",", ":"), default=repr).encode() + b"\n")
+            handle.write(_encode(record) + b"\n")
             self._pending += 1
             if self._pending >= FLUSH_EVERY:
                 handle.flush()

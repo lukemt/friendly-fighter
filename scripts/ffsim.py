@@ -59,9 +59,10 @@ def cpu_quota() -> float:
 
 
 def default_parallel(games: int) -> int:
-    """Virtual time: one game less than the CPUs (each game keeps ~1 CPU busy); past the quota
-    everything is throttled and nothing is gained (measured: 4 CPUs of quota, 3-4 best)."""
-    return max(1, min(games, int(cpu_quota()) - 1))
+    """Virtual time: as many games as CPUs (a game keeps less than one busy: it waits on its agents
+    in turn); past the quota everything is throttled (measured with 4 CPUs of quota, 12 games:
+    3 at once 96 s, 4 at once 90 s, 6 at once 100 s)."""
+    return max(1, min(games, int(cpu_quota())))
 
 
 def local_key(label: str) -> str:
@@ -118,6 +119,30 @@ def start_runtime(label: str, url: str, out: Path, agent: str | None, env_extra:
     cmd = [sys.executable, "-u", "-m", "agent", "--match"] + (["--agent", agent] if agent else [])
     log = open(out / f"runtime-{label}.log", "ab")
     return subprocess.Popen(cmd, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+
+
+def _game_workers(pid: int) -> list[int]:
+    """The runtime's match processes still running (not its multiprocessing resource tracker)."""
+    try:
+        children = [int(c) for c in Path(f"/proc/{pid}/task/{pid}/children").read_text().split()]
+    except (OSError, ValueError):
+        return []
+    out = []
+    for c in children:
+        try:
+            state = Path(f"/proc/{c}/stat").read_text().rsplit(")", 1)[1].split()[0]
+            if state != "Z" and b"resource_tracker" not in Path(f"/proc/{c}/cmdline").read_bytes():
+                out.append(c)  # (a match process that ended but isn't reaped yet is a zombie: done)
+        except (OSError, IndexError):
+            pass
+    return out
+
+
+def wait_for_workers(procs, seconds: float) -> None:
+    """Wait (at most ``seconds``) until the runtimes' match processes have ended."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline and any(_game_workers(p.pid) for p in procs if p.poll() is None):
+        time.sleep(0.05)
 
 
 def summarize(results: list[dict]) -> dict:
@@ -219,7 +244,7 @@ def cmd_run(a) -> int:
                     runtimes[lb] = start_runtime(lb, url, out, agents.get(lb), envs.get(lb, {}))
     finally:
         if not stop["flag"]:
-            time.sleep(5)  # let the runtimes finish their last writes (recordings, the probe's last step)
+            wait_for_workers(runtimes.values(), 5.0)  # their last writes (recordings, the probe's last step)
         for proc in runtimes.values():
             try:
                 os.killpg(proc.pid, signal.SIGTERM)
@@ -301,7 +326,7 @@ def main() -> int:
     r.add_argument("--minutes", type=int, default=10)
     r.add_argument("--games", type=int, default=1)
     r.add_argument("--parallel", type=int, default=None,
-                   help="games at once (default: virtual time, the CPU quota minus one; real time, all)")
+                   help="games at once (default: virtual time, the CPU quota; real time, all)")
     r.add_argument("--swap", action="store_true", help="swap seats every other game")
     r.add_argument("--agent", action="append", default=[], metavar="LABEL:MODULE")
     r.add_argument("--env", action="append", default=[], metavar="LABEL:K=V")

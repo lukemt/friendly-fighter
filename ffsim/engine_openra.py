@@ -244,10 +244,15 @@ class _Detached:
     def __init__(self, pid: int, port: int) -> None:
         self.pid, self.port = pid, port
         self.returncode = None
+        self.checked = float("-inf")
 
     def poll(self):
-        if self.returncode is None and not _engine_alive(self.pid, self.port):
-            self.returncode = 0
+        # (/proc is read at most once a second: EngineHost asks before every call)
+        now = time.monotonic()
+        if self.returncode is None and now - self.checked >= 1.0:
+            self.checked = now
+            if not _engine_alive(self.pid, self.port):
+                self.returncode = 0
         return self.returncode
 
     def wait(self, timeout=None):
@@ -393,7 +398,8 @@ class EngineHost:
 
     def _raw(self, kind: int, request, reply_cls):
         """One call over the plain TCP protocol: length, type, protobuf -> length, status, protobuf."""
-        self._ensure()
+        if self.sock is None:  # (once connected, a dead engine shows as a closed connection)
+            self._ensure()
         body = request.SerializeToString()
         with self.sock_lock:
             sock = self.sock
@@ -495,7 +501,7 @@ class HostPool:
     the next run to take over; a lane is one run's at a time (a lock file), and an engine of another
     build or configuration is replaced."""
 
-    def __init__(self, log_dir: Path, size: int = 1, recycle: int = 20, persist: bool = False) -> None:
+    def __init__(self, log_dir: Path, size: int = 1, recycle: int = 100, persist: bool = False) -> None:
         self.dir = Path(log_dir)
         self.recycle = recycle
         self.persist = persist

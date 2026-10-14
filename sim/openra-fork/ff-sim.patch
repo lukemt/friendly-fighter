@@ -1715,7 +1715,7 @@ index 0000000..3a3d09f
 +	}
 +}
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
-index 3163740..f08444e 100644
+index 3163740..b756f88 100644
 --- a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
 @@ -90,6 +90,7 @@ public static void Initialize(ModData md)
@@ -1755,7 +1755,20 @@ index 3163740..f08444e 100644
  				}
  				catch (Exception e)
  				{
-@@ -285,7 +290,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
+@@ -212,6 +217,12 @@ public static void DestroySession(string sessionId)
+ 			if (ExternalBotBridge.Sessions.TryGetValue(sessionId, out var bridge))
+ 				bridge.Deactivate();
+ 
++			// friendly-fighter sim: stepped sessions register a bridge per player ("<session>/<player>");
++			// left registered, each would keep its whole finished game in memory (~14 MB a game)
++			foreach (var kv in ExternalBotBridge.Sessions.ToArray())
++				if (kv.Key.StartsWith(sessionId + "/", StringComparison.Ordinal))
++					kv.Value.Deactivate();
++
+ 			if (SessionStates.TryRemove(sessionId, out var state))
+ 			{
+ 				// Wait for any in-flight work to finish before disposing
+@@ -285,7 +296,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
  		/// Initialize a game session: create World, find bridge, register state.
  		/// The calling thread exits after this returns — no persistent tick loop.
  		/// </summary>
@@ -1764,7 +1777,7 @@ index 3163740..f08444e 100644
  		{
  			// 1. Resolve map (cached — only first request per map name hits MapCache).
  			//    MapCache.GetEnumerator() calls UpdateMaps() which mutates collections,
-@@ -366,6 +371,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
+@@ -366,6 +377,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
  			// 5. Build LobbyInfo with map slots and bot assignments
  			SetupLobbyInfo(orderManager, mapPreview, map, bots, seed);
  

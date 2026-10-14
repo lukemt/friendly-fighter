@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import math
+import queue
 import random
 import threading
 import time
@@ -82,26 +83,37 @@ class _SeatClock:
     rng: random.Random = field(default_factory=random.Random)  # its round trips (one stream per seat: reproducible)
 
 
-class _Prefetch:
-    """``engine.step(until)`` on a thread of its own."""
+class _Prefetcher:
+    """``engine.step(until)`` on a thread of its own: one thread for the whole match (starting one
+    per view cost the server ~6 % of its CPU)."""
 
-    def __init__(self, engine, until: int) -> None:
-        self.views: list = []
-        self.error: BaseException | None = None
-        self.thread = threading.Thread(target=self._run, args=(engine, until), name="vclock-prefetch", daemon=True)
-        self.thread.start()
+    def __init__(self) -> None:
+        self.jobs: queue.SimpleQueue = queue.SimpleQueue()
+        self.done: queue.SimpleQueue = queue.SimpleQueue()
+        self.thread: threading.Thread | None = None
 
-    def _run(self, engine, until: int) -> None:
-        try:
-            self.views = engine.step(until)
-        except BaseException as exc:  # noqa: BLE001
-            self.error = exc
+    def submit(self, engine, until: int) -> None:
+        if self.thread is None:
+            self.thread = threading.Thread(target=self._run, name="vclock-prefetch", daemon=True)
+            self.thread.start()
+        self.jobs.put((engine, until))
+
+    def _run(self) -> None:
+        while (job := self.jobs.get()) is not None:
+            engine, until = job
+            try:
+                self.done.put((engine.step(until), None))
+            except BaseException as exc:  # noqa: BLE001
+                self.done.put(([], exc))
 
     def result(self) -> list:
-        self.thread.join()
-        if self.error is not None:
-            raise self.error
-        return self.views
+        views, error = self.done.get()
+        if error is not None:
+            raise error
+        return views
+
+    def close(self) -> None:
+        self.jobs.put(None)
 
 
 class VirtualClock:
@@ -268,6 +280,7 @@ class VirtualClock:
 
     def run(self) -> None:
         engine = self.engine
+        prefetcher = _Prefetcher()
         try:
             views = engine.step(0)  # waits for the engine to load the map
             with self.cond:
@@ -276,16 +289,17 @@ class VirtualClock:
                     self.on_views(views)
             interval, phase = engine.view_interval, engine.view_phase
             last = engine.tick
-            prefetch = None
+            prefetching = False
             while True:
                 # The engine moves one view at a time: nothing between two views can be seen,
                 # and an order is never due before the view after the one it was stamped with.
                 target = last + 1 + (phase - last - 1) % interval
-                if self.prefetch and prefetch is None and target - 1 > last:
+                if self.prefetch and not prefetching and target - 1 > last:
                     # Run the ticks before the next view now, while the agents think: every order
                     # still to come is stamped with the last view or later, so due at its tick + 6
                     # (the next view) at the earliest.
-                    prefetch = _Prefetch(engine, target - 1)
+                    prefetcher.submit(engine, target - 1)
+                    prefetching = True
                 with self.cond:
                     while True:
                         if self.stopped:
@@ -303,9 +317,9 @@ class VirtualClock:
                             continue
                         self._idle_wait(h, event)
                 views = []
-                if prefetch is not None:
-                    views = prefetch.result()  # views only when the game ended in those ticks
-                    prefetch = None
+                if prefetching:
+                    views = prefetcher.result()  # views only when the game ended in those ticks
+                    prefetching = False
                 views += engine.step(target)
                 last = target
                 with self.cond:
@@ -324,6 +338,8 @@ class VirtualClock:
                 self.cond.notify_all()
             if not stopped and self.on_error:
                 self.on_error(repr(exc))
+        finally:
+            prefetcher.close()
 
     def _next_event(self) -> float:
         """The earliest moment after now that a call arrives or wakes."""
