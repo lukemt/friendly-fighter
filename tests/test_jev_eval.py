@@ -40,9 +40,9 @@ def test_only_the_expected_questions_are_asked_and_a_variant_replaces_text():
 
 
 def test_the_shipped_cases_are_well_formed():
-    from bots.jev_bot import OPENING_QUESTION, QUESTIONS
+    from bots.jev_bot import ECONOMY_QUESTION, OPENING_QUESTION, QUESTIONS
 
-    options = {q: set(v["criteria"]) for q, v in {**QUESTIONS, "opening": OPENING_QUESTION}.items()}
+    options = {q: set(v["criteria"]) for q, v in {**QUESTIONS, "opening": OPENING_QUESTION, "economy": ECONOMY_QUESTION}.items()}
     cases = jev_eval.load_cases()
     assert cases and len({c["id"] for c in cases}) == len(cases)
     for c in cases:

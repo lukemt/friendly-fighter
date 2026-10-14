@@ -138,3 +138,23 @@ def test_a_forced_posture_holds_without_calls(tmp_path):
     retreat.jev = FakeJev()
     retreat.choose_action(state(time=at(200), units=army(5)), CTX)
     assert retreat.posture == "defend"  # (nobody out to pull back)
+
+
+def test_jev_decides_the_economy_but_not_under_attack(tmp_path):
+    class EcoJev(FakeJev):
+        def ask(self, state, questions):
+            answers = super().ask(state, questions)
+            assert "economy" in questions
+            answers["economy"] = {"type": "choice", "choice": "greedy", "probabilities": {"greedy": 0.9}}
+            return answers
+
+    bot = JevBot(log_dir=str(tmp_path), economy="jev")
+    bot.jev = EcoJev()
+    bot.choose_action(state(time=at(300), units=army(12)), CTX)
+    assert bot.bot.knobs.greed == 2 and "greed=2" in bot.note
+    bot.last_call = -1e9
+    bot.choose_action(state(time=at(320), units=army(12),
+                            visible_enemies=[{"id": 900, "type": "e1", "x": 18, "y": 18, "hp": 100}]), CTX)
+    assert bot.bot.knobs.greed == 0
+    plain = JevBot(log_dir=str(tmp_path))
+    assert "economy" not in plain.questions and plain.bot.knobs.greed == 0

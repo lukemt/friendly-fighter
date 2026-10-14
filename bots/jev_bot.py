@@ -45,6 +45,7 @@ COMMIT_HOLD_SECONDS = 25        # once committed, only a retreat ends it before 
 COMMIT_DEFICIT = 500            # "behind" enough to attack: by this much, or by anything near the end
 COMMIT_LATE_SECONDS = 150
 RECOMMIT_SECONDS = 60           # after a failed attack, no new one for this long
+GREED = 2                       # the "greedy" economy: up to 4 refineries and 2 more harvesters
 RETREAT_HOLD_SECONDS = 20
 FINAL_SECONDS = 60
 MAX_ORDERS = 20
@@ -113,6 +114,18 @@ QUESTIONS: dict[str, dict[str, Any]] = {
             "vehicles": "Tanks first: right when money is piling up unspent and the enemy army is mostly infantry",
             "mixed": "Both infantry and tanks: the default once the opening is over",
         },
+    },
+}
+ECONOMY_QUESTION = {
+    "type": "choice",
+    "instructions": {"question": "Should we spend on extra refineries and harvesters now?", "playbook": [
+        "At the time limit, when kills minus losses are equal, the side with more assets (the cost of its units and buildings) wins; unspent money counts for nothing.",
+        "A refinery comes with a free harvester: it adds more to our assets than it costs, and it earns money.",
+        "Money spent on the economy is not spent on the army: against an opponent that attacks, it can cost the base.",
+    ]},
+    "criteria": {
+        "greedy": "Extra refineries and harvesters: right when the opponent has not attacked our base for a long time, or is a turtle, fortified or passive, or when the game looks like a standoff with nobody fighting",
+        "safe": "Normal economy, money into the army and defenses: right against a rusher or an aggressive opponent, while enemies are attacking, or early in the game before we know the opponent",
     },
 }
 OPENING_QUESTION = {
@@ -246,13 +259,19 @@ class JevBot:
 
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = False,
                  commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True,
-                 force: str | None = None) -> None:
+                 force: str | None = None, economy: str | int = "off") -> None:
         """``force``: a posture held whatever Jev says and past every rail (for the coach: what would
         each posture have scored from this moment?)."""
         self.push = push
         self.force = force
+        # "off": the normal economy; a number: that much greed from the start; "jev": Jev decides
+        # (greedy = GREED) whenever it asks.
+        self.economy = economy
+        self.greed = economy if isinstance(economy, int) else 0
         self.scout = scout
         self.questions = load_questions(questions)
+        if economy == "jev":
+            self.questions["economy"] = ECONOMY_QUESTION
         self.commit_deficit = commit_deficit
         self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60),
                                log=lambda line: None)
@@ -650,6 +669,9 @@ class JevBot:
                 extra.append({"cmd": "move", "units": ids, "to": list(facts["home"])})
         if production in ("infantry", "rockets", "vehicles", "mixed"):
             self.production = production
+        economy, _ = choice("economy")
+        if self.economy == "jev" and economy in ("greedy", "safe"):
+            self.greed = GREED if economy == "greedy" and not facts["threat"] else 0
         if opening in ("guard", "economy") and now < 240:
             self.opening = "guard" if opening == "guard" else "standard"
         knobs = Knobs(
@@ -660,10 +682,12 @@ class JevBot:
             target="nearest",
             opening=self.opening,
             aim=self._aim(facts) if self.posture == "commit" else None,
+            greed=self.greed,
             note=self.posture,
         )
         self.bot.set_knobs(knobs)
         self.note = (f"{self.posture}({p_posture:.2f}) opp={self.opponent} build={self.production}"
+                     + (f" greed={self.greed}" if self.economy != "off" else "")
                      + (f" open={self.opening}" if now < 240 else "") + (f" rails: {', '.join(rails)}" if rails else ""))
         return extra
 

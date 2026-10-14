@@ -23,6 +23,19 @@ the first lab leagues and gates, and from Claude playing OpenRA's three AIs by h
     Claude's Turtle game 3 was +1350 from one Yak shot down at 9:51, with no losses.
 - **A 0-0 draw is worth 0, but it is replayed in the tournament,** so it is not a loss. Against
   an opponent you can't beat, not losing is the floor.
+  - **This holds against OpenRA's AIs only.** Between two agents, equal kills minus losses goes to the
+    second tiebreak, **assets**: the cost of your own units and buildings, with the construction yard
+    at $2,000. Cash doesn't count.
+  - **Evidence:** run 48: every turtle mirror ended 0-0 and was decided by assets, with both sides at
+    $0 cash.
+- **Assets are won with the economy.** A refinery comes with a free harvester, so it adds about
+  $3,100 of assets for $2,000.
+  - **Evidence:** experiment `greed` (run 49): the guard turtle with `greed` 1 or 2 (extra refineries
+    and harvesters) beat `ff-turtle` and `ff-guard-turtle` 8/8 each, from 2/8 and 8/16. It scored a
+    little less against the AIs (19/24 against 21/24), probably the Rush AI meeting a thinner army.
+    Overall: +0.20 points a game, 95% CI +0.04 to +0.36.
+- **A scout that dies loses standoffs.** Two dead riflemen (−200) decided many mirror games.
+  - **Evidence:** run 48: with a scout, 0/8 and 1/8 against our turtles; without, 4/8 and 4/8.
 
 ## OpenRA's AIs (as seen in the lab)
 

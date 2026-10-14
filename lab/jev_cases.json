@@ -465,6 +465,141 @@
    },
    "why": "money unspent and an infantry enemy: tanks",
    "bot_said": ""
+  },
+  {
+   "id": "syn-eco-standoff",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "5:30 played, 4:29 left (middle game)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "5 known (many: a fortified base): 3 pillbox, 2 turret",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'turtle' (about 70% sure)",
+    "what_we_know_of_the_enemy": "buildings seen all game: 3 pillbox, 2 turret, 1 construction yard, 2 power plant; different combat units seen all game: 4 (4 rifle infantry)"
+   },
+   "expect": {
+    "economy": [
+     "greedy"
+    ]
+   },
+   "why": "a turtle that never came: grow the economy, win the assets",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-eco-rush",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "3:40 played, 6:19 left (opening: the rush window)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "enemies first came to our base at 3:20 with 15 units; 1 raid(s) so far",
+    "now_at_our_base": "15 enemy units are attacking our base",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'rusher' (about 80% sure)",
+    "what_we_know_of_the_enemy": "buildings seen all game: 1 flame tower; we have never seen their army: its size is unknown, not zero"
+   },
+   "expect": {
+    "economy": [
+     "safe"
+    ]
+   },
+   "why": "under a rush: money into the army",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-eco-aggressive",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "6:30 played, 3:29 left (middle game)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "enemies first came to our base at 4:10 with 8 units; 4 raid(s) so far",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'aggressive' (about 70% sure)",
+    "what_we_know_of_the_enemy": "buildings seen all game: 1 flame tower; we have never seen their army: its size is unknown, not zero"
+   },
+   "expect": {
+    "economy": [
+     "safe"
+    ]
+   },
+   "why": "raided again and again: keep the army strong",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-eco-start",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "0:40 played, 9:19 left (opening: the rush window)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "0 combat units (none), at home: nothing",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (70% sure)",
+    "what_we_know_of_the_enemy": "we have never seen their base: its defenses are unknown; we have never seen their army: its size is unknown, not zero"
+   },
+   "expect": {
+    "economy": [
+     "safe"
+    ]
+   },
+   "why": "too early to know: the guard first",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-eco-quiet-late",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "7:10 played, 2:49 left (late game)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (70% sure)",
+    "what_we_know_of_the_enemy": "buildings seen all game: 1 flame tower; we have never seen their army: its size is unknown, not zero"
+   },
+   "expect": {
+    "economy": [
+     "greedy"
+    ]
+   },
+   "why": "nobody fought for 7 minutes: a standoff, the assets will decide",
+   "bot_said": ""
   }
  ]
 }

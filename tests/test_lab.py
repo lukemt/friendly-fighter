@@ -258,11 +258,15 @@ def test_a_frozen_bot_keeps_its_code(tmp_path, monkeypatch):
     (tmp_path / "agent" / "redalert_bot.py").write_text("VERSION = 1\n")
     (tmp_path / "bots" / "mine.py").write_text("from agent.redalert_bot import VERSION\n\ndef create_agent():\n    return VERSION\n")
     monkeypatch.setattr(registry, "ROOT", tmp_path)
-    table = {"mine": registry.Bot(name="mine", kind="module", params={"factory": "bots.mine:create_agent", "kwargs": {"x": 1}},
+    (tmp_path / "bots" / "play.json").write_text('{"playbook": ["a"]}')
+    table = {"mine": registry.Bot(name="mine", kind="module", params={"factory": "bots.mine:create_agent",
+                                                                      "kwargs": {"x": 1, "questions": "bots/play.json"}},
                                   tags=["ours"])}
     frozen = registry.freeze(table, "mine", "mine-v1", commit="abc123")
     package = tmp_path / "bots" / "frozen" / "mine_v1"
-    assert frozen.params == {"factory": "bots.frozen.mine_v1.bot:create_agent", "kwargs": {"x": 1}}
+    assert frozen.params == {"factory": "bots.frozen.mine_v1.bot:create_agent",
+                             "kwargs": {"x": 1, "questions": "bots/frozen/mine_v1/play.json"}}
+    assert (package / "play.json").read_text() == '{"playbook": ["a"]}'
     assert "from .redalert_bot import VERSION" in (package / "bot.py").read_text()
     assert (package / "redalert_bot.py").read_text() == "VERSION = 1\n"
     assert "frozen" in frozen.tags and "abc123" in frozen.description and table["mine-v1"] is frozen

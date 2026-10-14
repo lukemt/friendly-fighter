@@ -68,7 +68,7 @@ class Bot:
             module = str(self.params.get("factory", "")).split(":", 1)[0]
             if module.startswith("bots.frozen."):  # (a frozen copy carries all of its code)
                 package = ROOT / Path(*module.split(".")[:3])
-                files += sorted(str(f.relative_to(ROOT)) for f in package.glob("*.py"))
+                files += sorted(str(f.relative_to(ROOT)) for f in package.iterdir() if f.suffix in (".py", ".json"))
             else:
                 files.append(module.replace(".", "/") + ".py")
                 files += CODE["ff"]  # (module bots usually build on our agent's code)
@@ -112,7 +112,15 @@ def freeze(table: dict, name: str, new_name: str, *, commit: str = "") -> "Bot":
     source = source.replace("from agent.redalert_bot import", "from .redalert_bot import")
     (package / "bot.py").write_text(f"# Frozen from {module} ({name} {bot.version()}) at {commit or 'the working tree'}.\n" + source)
     (package / "redalert_bot.py").write_text((ROOT / "agent" / "redalert_bot.py").read_text())
-    frozen = Bot(name=new_name, kind="module", params={**bot.params, "factory": f"bots.frozen.{safe}.bot:{func or 'create_agent'}"},
+    params = {**bot.params, "factory": f"bots.frozen.{safe}.bot:{func or 'create_agent'}"}
+    kwargs = dict(params.get("kwargs") or {})
+    for key, value in kwargs.items():  # (files the bot reads, such as a playbook variant, are frozen too)
+        if isinstance(value, str) and value.endswith(".json") and (ROOT / value).is_file():
+            (package / Path(value).name).write_text((ROOT / value).read_text())
+            kwargs[key] = str((package / Path(value).name).relative_to(ROOT))
+    if kwargs:
+        params["kwargs"] = kwargs
+    frozen = Bot(name=new_name, kind="module", params=params,
                  think=bot.think, description=f"frozen {name} {bot.version()}" + (f" at {commit}" if commit else "")
                  + f": {bot.description}", tags=sorted(set(bot.tags) | {"frozen"}))
     table[new_name] = frozen

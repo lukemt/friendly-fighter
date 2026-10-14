@@ -506,6 +506,100 @@
     "jev",
     "coach"
    ]
+  },
+  {
+   "name": "ff-jev-v6ns",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_jev_v6ns.bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/frozen/ff_jev_v6ns/literal2.json",
+     "scout": false
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-jev-v6-noscout ff-jev-v6-noscout@3b688681 at 38aa662: ff-jev-v6 without the scout",
+   "tags": [
+    "frozen",
+    "jev",
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-greedy-turtle",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "opening": "guard",
+     "posture": "defend",
+     "attack_threshold": 20,
+     "greed": 2
+    }
+   },
+   "think": 0.005,
+   "description": "ff-guard-turtle with greed 2 (wins standoffs on assets: 8/8 vs both turtles)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-jev-v7",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": "jev"
+    }
+   },
+   "think": 0.005,
+   "description": "v7: v6 without the scout, Jev decides when to be greedy (assets tiebreak)",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-v7-greedy",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": 2
+    }
+   },
+   "think": 0.005,
+   "description": "v7 with greed 2 from the start",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-champ-v7",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_jev_champ_v7.bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/frozen/ff_jev_champ_v7/literal2.json",
+     "scout": false,
+     "economy": "jev"
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-jev-v7 ff-jev-v7@507587c8 at 38aa662+changes: v7: v6 without the scout, Jev decides when to be greedy (assets tiebreak)",
+   "tags": [
+    "frozen",
+    "jev",
+    "ours"
+   ]
   }
  ]
 }

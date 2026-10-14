@@ -42,6 +42,7 @@ def questions(variant: dict | None = None, *, opening: bool = False) -> dict:
             json.dump(variant, f)
             path = f.name
     qs = jev_bot.load_questions(path)
+    qs["economy"] = jev_bot.ECONOMY_QUESTION  # (asked only of the cases that expect it)
     if not opening:
         qs.pop("opening", None)
     return qs
