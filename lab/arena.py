@@ -31,6 +31,20 @@ TRACES_DIR = LAB_DIR / "traces"
 GAME_TIMEOUT_SECONDS = 1800.0  # wall time; a 10-minute game takes ~15-40 s
 
 
+def _yield_cpu(host) -> None:
+    """The lane's engine at this process's priority or lower (a lane an earlier run started may not be)."""
+    import os
+
+    try:
+        host._ensure()
+        mine = os.getpriority(os.PRIO_PROCESS, 0)
+        if os.getpriority(os.PRIO_PROCESS, host.proc.pid) < mine:
+            for tid in os.listdir(f"/proc/{host.proc.pid}/task"):
+                os.setpriority(os.PRIO_PROCESS, int(tid), mine)
+    except (OSError, AttributeError, ValueError):
+        pass
+
+
 class _Horizon:
     """Ends the game on the score at a set game time (a branch measured over a set time)."""
 
@@ -87,6 +101,7 @@ class Arena:
                 if self.pool is None:
                     self.pool = HostPool(LAB_DIR / "engines", 1, persist=self.persist)
             host = self.pool.take()
+            _yield_cpu(host)
             seed = opts.get("seed") or match.rng.randrange(1, 2 ** 31)
             engine = OpenRAEngine(match.session_id, match.map_id, kinds, lobby=lobby, lockstep=True, host=host,
                                   seed=seed, trace_path=opts.get("trace"), prefix=opts.get("prefix"))

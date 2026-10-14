@@ -32,9 +32,16 @@ def lab_env() -> None:
         os.environ["OPENAI_API_KEY"] = ""  # no LLM commander in lab games unless FF_SIM_OPENAI=1
 
 
+NICE = 10  # lab games yield the CPU to anything else (the live tournament runtime above all)
+
+
 def _worker(n: int, jobs, results, log_path: str, record: bool, db_path: str | None) -> None:
     log = open(log_path, "a", buffering=1)
     sys.stdout = sys.stderr = log
+    try:
+        os.nice(NICE)
+    except OSError:
+        pass
     from .arena import Arena, GameJob
     from .db import LabDB
 

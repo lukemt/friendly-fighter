@@ -163,3 +163,51 @@ def test_a_league_spreads_the_maps():
     jobs = league.league(list("abcdef"), 15, kinds=kinds)
     maps = [j["map"] for j in jobs]
     assert {maps.count(m) for m in league.MAPS} == {5}
+
+
+def _recording(folder, seat, players, *, result=None):
+    import gzip
+    import json as _json
+
+    folder.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for i, tick in enumerate(range(17, 17 + 6 * 60, 6)):
+        obs = {"tick": tick, "economy": {"cash": 1000}, "military": {"kills_cost": 100 * i, "deaths_cost": 50 * i},
+               "units": [], "buildings": [], "events": [{"seq": i + 1, "tick": tick, "kind": "unit_created", "type": "e1"}]}
+        raw = {"your_seat": f"Multi{seat}", "players": players, "map": {"id": "trapped"},
+               "time": {"game_seconds": (tick - 17) / 25, "max_minutes": 10}, "observation": obs}
+        if result and i == 59:
+            raw["result"] = result
+        rows.append({"t": 1000.0 + i, "kind": "state", "raw": raw})
+        rows.append({"t": 1000.0 + i, "kind": "action", "move": {"action": {"type": "orders", "orders": [
+            {"cmd": "train", "item": "e1", "count": 1}]}, "reasoning": "train"}})
+        rows.append({"t": 1000.0 + i, "kind": "result", "result": {"results": [{"status": "ok", "reason": "ok"}]}})
+    with gzip.open(folder / f"seat{seat}.jsonl.gz", "wt") as f:
+        for r in rows:
+            f.write(_json.dumps(r) + "\n")
+
+
+def test_platform_recordings_are_imported(db, tmp_path):
+    from lab.importer import import_recordings, states_at
+
+    players = [{"seat": "Multi0", "name": "Luke (Player0, Self-hosted)", "faction": "england"},
+               {"seat": "Multi1", "name": "Quicksilver (Player1)", "faction": "russia"}]
+    gid = "12345678-1234-1234-1234-123456789abc"
+    _recording(tmp_path / "rec" / gid, 0, players, result={"outcome": "win", "reason": "time_limit", "winner_seat": "Multi0"})
+    (tmp_path / "rec" / "sim-skipped").mkdir()
+    assert import_recordings(db, tmp_path / "rec") == [gid]
+    assert import_recordings(db, tmp_path / "rec") == []  # (once)
+    seats = db.q("SELECT * FROM seats WHERE game_id = ? ORDER BY position", gid)
+    assert [s["bot"] for s in seats] == ["ff-live", "platform:Quicksilver"]
+    assert [s["result"] for s in seats] == ["win", "loss"] and seats[0]["net"] == 59 * 50 and seats[1]["net"] == -59 * 50
+    assert db.one("SELECT time_mode FROM games WHERE id = ?", gid)["time_mode"] == "platform"
+    assert len(db.decisions(gid, 0)) == 60 and db.one("SELECT COUNT(*) AS n FROM events WHERE game_id = ?", gid)["n"] == 60
+    assert states_at(gid, 10.0, tmp_path / "rec")[0]["time"]["game_seconds"] <= 10.0
+
+
+def test_the_dashboard_is_one_page(db):
+    from lab import dashboard
+
+    fake_arena(db).play(GameJob(bots=["ff-default", "ai-normal"], minutes=0.5, seed=1))
+    page = dashboard.build(db)
+    assert page.startswith("<!doctype html>") and "const D={" in page and "ff-default" in page

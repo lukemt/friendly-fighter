@@ -203,7 +203,12 @@ python scripts/ff_play.py status | attack X Y [all|ids] | build powr | train 3tn
 ## Next steps (in priority order)
 
 The longer-term direction (modular bot, league of bots, snapshot branching) is in
-[ROADMAP.md](ROADMAP.md).
+[ROADMAP.md](ROADMAP.md). The lab that runs those experiments is in [LAB.md](LAB.md)
+(`scripts/lab.py`):
+- play, leagues and gates;
+- you at the controls;
+- snapshots and branches;
+- reports, ratings and the dashboard.
 
 1. **User:** click "Register my agent" before 11:59 PM PDT. Revoke the
    GitHub token. Consider rotating the agent key.

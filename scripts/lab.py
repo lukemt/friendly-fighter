@@ -207,8 +207,25 @@ def cmd_look(a, db) -> int:
     from lab.branch import parse_time, snapshot
     from lab.views import enemies_table, minimap, summary, units_table
 
-    snap = snapshot(db, a.game, parse_time(a.at) / 25)
     g = db.find_game(a.game)
+    if g is None:
+        print(f"no game {a.game!r}")
+        return 1
+    if g["time_mode"] == "platform":  # (no engine trace: the recorded states themselves)
+        from lab.importer import states_at
+
+        states = states_at(g["id"], parse_time(a.at) / 25)
+        if not states:
+            print("no recorded state at that time")
+            return 1
+        snap = {"game": g["id"], "tick": None, "check": "recorded on the platform", "obs": {}, "events": {},
+                "seconds": min((r.get("time") or {}).get("game_seconds") or 0 for r in states.values())}
+        for pos, raw in states.items():
+            snap["obs"][pos] = raw["observation"]
+            snap["events"][pos] = raw["observation"].get("events") or []
+            snap["tick"] = raw["observation"].get("tick")
+    else:
+        snap = snapshot(db, a.game, parse_time(a.at) / 25)
     seats = {s["position"]: s for s in db.q("SELECT * FROM seats WHERE game_id = ?", g["id"])}
     print(f"game {snap['game']} at {clock(snap['seconds'])} (tick {snap['tick']}); replay check: {snap['check']}")
     for pos, obs in sorted(snap["obs"].items()):
@@ -347,6 +364,42 @@ def cmd_replay(a, db) -> int:
     return 0 if snap["check"] == "ok" else 1
 
 
+def cmd_forget(a, db) -> int:
+    """Remove games from the database (a test run, a run with a bug): their rows and traces."""
+    if a.run is not None:
+        ids = [r["id"] for r in db.q("SELECT id FROM games WHERE run_id = ?", a.run)]
+    else:
+        g = db.find_game(a.game) if a.game else None
+        ids = [g["id"]] if g else []
+    if not ids:
+        print("nothing to forget")
+        return 1
+    if not a.yes:
+        print(f"would remove {len(ids)} game(s) and their traces: {', '.join(report.short(i) for i in ids[:10])}"
+              f"{' ...' if len(ids) > 10 else ''}  (add --yes)")
+        return 1
+    for gid in ids:
+        row = db.one("SELECT trace FROM games WHERE id = ?", gid)
+        for table, col in (("timeline", "game_id"), ("events", "game_id"), ("decisions", "game_id"), ("seats", "game_id"),
+                           ("notes", "game_id"), ("human_log", "game_id"), ("games", "id")):
+            db.conn.execute(f"DELETE FROM {table} WHERE {col} = ?", (gid,))
+        if row and row["trace"]:
+            Path(row["trace"]).unlink(missing_ok=True)
+    if a.run is not None:
+        db.conn.execute("UPDATE runs SET status = 'forgotten', games = 0 WHERE id = ?", (a.run,))
+    print(f"removed {len(ids)} game(s)")
+    return 0
+
+
+def cmd_dashboard(a, db) -> int:
+    from lab import dashboard
+
+    out = Path(a.out or LAB_DIR / "dashboard.html")
+    dashboard.write(db, out, a.games)
+    print(f"wrote {out} ({out.stat().st_size / 1e6:.1f} MB): open it in a browser")
+    return 0
+
+
 def cmd_status(a, db) -> int:
     from ffsim.engine_openra import LANES_DIR, _engine_alive
     from lab import human
@@ -370,7 +423,24 @@ def cmd_status(a, db) -> int:
         print(f"{lane.name}: engine {'running' if alive else 'gone'}, {info.get('games', 0)} games")
     if human.SESSION_FILE.exists():
         print(f"human session: {human.SESSION_FILE.read_text()}")
+    for pid in live_runtimes():
+        print(f"the live tournament runtime is running (pid {pid}): lab games run at a lower priority (nice 10)")
     return 0
+
+
+def live_runtimes() -> list[int]:
+    """Processes running ``python -m agent --tournament`` (the live runtime)."""
+    out = []
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            argv = (proc / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if b"-m" in argv and b"agent" in argv and b"--tournament" in argv:
+            out.append(int(proc.name))
+    return out
 
 
 def cmd_import(a, db) -> int:
@@ -590,6 +660,15 @@ def main() -> int:
     sub.add_parser("import", help="import the games our runtime played on the platform (recordings/)")
     sub.add_parser("status", help="the database, engine lanes and any human session")
 
+    s = sub.add_parser("dashboard", help="the database as an HTML page (sim/lab/dashboard.html)")
+    s.add_argument("--out")
+    s.add_argument("--games", type=int, default=200, help="how many recent games it includes")
+
+    s = sub.add_parser("forget", help="remove a run's games (or one game) from the database")
+    s.add_argument("--run", type=int)
+    s.add_argument("--game")
+    s.add_argument("--yes", action="store_true")
+
     s = sub.add_parser("h", help="a command for the human seat (see lab/human.py)")
     s.add_argument("argv", nargs=argparse.REMAINDER)
 
@@ -598,7 +677,7 @@ def main() -> int:
     handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "branch": cmd_branch,
                 "look": cmd_look, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
-                "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
+                "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
                 "h": cmd_h}
     return handlers[a.command](a, db)
 

@@ -161,3 +161,23 @@ def _save(db, gid: str, seats: list[dict], run_id: int | None) -> None:
     timeline = [row for s in seats for row in s["timeline"]]
     events = [row for s in seats for row in s["events"]]
     db.save_game(game, rows, timeline, events, {s["pos"]: s["decisions"] for s in seats})
+
+
+def states_at(game_id: str, seconds: float, root: Path = RECORDINGS) -> dict[int, dict]:
+    """Each recorded seat's last state at or before ``seconds`` of game time (``lab look`` on a platform game)."""
+    out = {}
+    for path in sorted((root / game_id).glob("seat*.jsonl.gz")):
+        best = None
+        for r in _records(path):
+            if r.get("kind") != "state":
+                continue
+            raw = r.get("raw") or {}
+            t = (raw.get("time") or {}).get("game_seconds")
+            if isinstance(t, (int, float)) and isinstance(raw.get("observation"), dict):
+                if t <= seconds or best is None:
+                    best = raw
+                if t > seconds:
+                    break
+        if best is not None:
+            out[int((best.get("your_seat") or "Multi0")[5:])] = best
+    return out

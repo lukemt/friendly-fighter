@@ -5,7 +5,12 @@ runtime** (`python -m agent --match`) plays on it exactly as it does online. It 
 on the **same engine** as the platform: the platform's own OpenRA fork, at the commit
 that `get_game_config` reports.
 
-Use it to:
+**The lab** ([LAB.md](LAB.md), `scripts/lab.py`) builds on this platform:
+- it plays games between any registered bots, you included;
+- it records everything in one database;
+- it rates the bots, and rebuilds or branches any moment of a game.
+
+Use the platform directly to:
 
 - practise, and try bot changes, without waiting for Testing matches;
 - A/B test two variants of our agent against each other;

@@ -77,18 +77,27 @@ Ratings over all their games show who is strongest.
    losing ground against the baselines.
 6. **Write down what we learned,** with the evidence.
 
-## Building blocks that would help
+## Building blocks
 
-- **Queryable game log.** Who played (bot and version), seeds, map, result, score over
-  time, the decisions with their reasons, and the trace. It lets us answer questions instead
-  of digging through folders.
-- **Bot registry.** Every game names exactly which bot and settings played.
-- **League runner.** Picks informative matchups and keeps ratings.
-- **Snapshot branching.** Builds on the deterministic traces `scripts/ffbench.py` already
-  replays.
-- **Observer reports.** A starting point for each review.
-- **LLM pacing in virtual time.** The simulator pauses while a model thinks, and its answer
-  lands as late in the game as it would live.
+Built in the lab (2026-10-14, [LAB.md](LAB.md)):
+
+- **Queryable game log.** `sim/lab/lab.db` holds:
+  - who played (bot and version), seeds, map, result;
+  - the score every 5 s, events, every batch with its reasoning and verdicts;
+  - the trace.
+  Platform games can be imported (`lab import`).
+- **Bot registry.** `lab/bots.json`; a bot's version follows its settings and code.
+- **League runner.** `lab league` / `lab gate` and Bradley-Terry ratings.
+- **Snapshot branching.** `lab look` and `lab branch`, from each game's engine trace.
+- **Observer reports.** `lab report`, `lab show`, and `lab dashboard`.
+- **Playing ourselves.** `lab human`: the game pauses between moves.
+- **LLM pacing in virtual time.** A bot's `think` can be `measured`: its real latency is
+  charged as game time.
+
+Still open:
+- distilled cheap copies;
+- an LLM orchestrator bot;
+- classifiers trained from branch data.
 
 ## Experiments worth trying
 

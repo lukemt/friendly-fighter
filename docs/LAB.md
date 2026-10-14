@@ -23,6 +23,9 @@ lab human start --vs ai-normal                    # play yourself: lab h go 10, 
 lab look <game> --at 6:30                         # the board at that moment of a recorded game
 lab branch <game> --at 6:00 --variants ff-turtle,ff-rush --repeats 3 --stop-after 120
 lab gate ff-turtle --champion ff-default --games 6
+lab dashboard                                     # sim/lab/dashboard.html: ratings, games with charts, runs, notes
+lab import                                        # the games our runtime played on the platform
+lab status                                        # the database, engine lanes, human session, live runtime
 ```
 
 ## Bots
@@ -39,6 +42,8 @@ lab gate ff-turtle --champion ff-default --games 6
 **Bots in the list today:**
 - **Our variants:** `ff-default` (the submitted bot), `ff-turtle`, `ff-rush`, `ff-eco`, `ff-harass` and `ff-tanks`.
 - **Slow versions:** `ff-slow` and `ff-sluggish` are `ff-default` deciding in 0.8 and 2.5 s, like LLM agents.
+- **The starter's LLM player:** `starter-llm`. It needs `OPENAI_API_KEY` and `FF_SIM_OPENAI=1`
+  (lab processes blank the key otherwise). Its think time is `measured`, so its real latency is game time.
 - **Weak baselines:** `builder` builds a base and never an army; `idle` never acts.
 - **OpenRA's AIs:** `ai-normal`, `ai-rush`, `ai-turtle` and `ai-naval`.
 
@@ -82,6 +87,13 @@ lab gate CANDIDATE --champion ff-default --baselines ai-normal,ai-rush,ai-turtle
 the CPU quota, 4 here), each on an engine lane of its own; their bots' log lines go to
 `sim/lab/logs/run-<id>-w<n>.log`.
 
+**Priority.** Workers and their engines run at nice 10, so a live tournament match on this machine
+keeps priority (`lab status` says when the live runtime is up).
+
+**Draws against an OpenRA AI.** When a game against an OpenRA AI ends level on kills, the
+platform would compare assets, but the AI has no view here, so its assets are unknown. Such games
+are recorded as draws: in practice the 0-0 games where nobody fought.
+
 **Reproducible.** The same bots, map and seed play the same game every time. Bots run inside the
 lab's worker process with the runtime's own play loop (`altruagent.runner.run_game`) on
 `lab/driver.py`'s `LocalGame`. That replaces only the HTTP and the processes: every call still
@@ -118,6 +130,8 @@ The game **waits for you**. Between commands no game time passes: your seat's th
 **Autopilot modes:**
 - **`macro`** (the default): our bot runs the economy and production (building, placing,
   training, harvesters, repairs, rallies) and gives the army no orders, so the army is yours.
+  It also places every finished building, including defenses you ordered; switch to `off` to
+  place them yourself.
 - **`full`:** our bot plays everything, and your orders are added on top.
 - **`off`:** only your orders.
 
@@ -154,7 +168,8 @@ and `last-1`.
     what we lost, how many we killed).
   - **Reasoning:** with `--decisions N`, the bot's reasoning each time it changed.
 - **`look`:** rebuilds any moment from the engine trace: the replay is checked step by step against
-  the trace, and you get the seat's summary, the events before it and the map.
+  the trace, and you get the seat's summary, the events before it and the map. For a platform
+  game (no trace) it shows the recorded state at that moment.
 - **`report`:** the observer's report on a batch of games, per bot:
   - wins, draws and losses;
   - the mean score at each minute (when a bot falls behind);
@@ -168,6 +183,21 @@ and `last-1`.
 - **`stats`:** win rates come with 95 % intervals.
 
 Branch games are left out of statistics and ratings unless you pass `--branches`, because they don't start at the start.
+
+**Platform games.** `lab import` reads our runtime's recordings of real matches
+(`recordings/<session>/`). It skips the local simulator's `sim-*` ones, and running it again adds only
+new games. Each becomes a game with:
+- **Bots:** `ff-live` for our seat, `platform:<name>` for the opponent.
+- **The record:** the result, the score every 5 s, the events and every batch.
+
+`stats`, `report`, `show` and `look` work on them too, but they have no trace to branch from.
+
+**Housekeeping.** `lab forget --run R --yes` (or `--game G`) removes a run's games and traces: a
+test run, or one played with a bug. `lab dashboard` writes `sim/lab/dashboard.html`, a single
+page with:
+- ratings and the pair matrix;
+- the recent games, each opening to its charts of score, army and cash, and its fights;
+- bots, runs, experiments and notes.
 
 ## Branching: other choices from the same moment
 
@@ -214,6 +244,7 @@ lab note --game <game> "the wave walked into two pillboxes at 6:29"
 | `sim/lab/traces/<game>.trace.gz` | each game's engine trace (replay, look, branch) |
 | `sim/lab/logs/` | the workers' logs (the bots' log lines) |
 | `sim/lab/human/` | the human session's address and logs |
+| `sim/lab/dashboard.html` | the dashboard (`lab dashboard`) |
 | `lab/bots.json` | the bot registry (committed) |
 
 Database tables:
@@ -246,6 +277,8 @@ assets are unknown.
 | `lab/branch.py` | snapshots from traces (`look`) and branch games |
 | `lab/league.py`, `lab/ratings.py`, `lab/report.py` | scheduling, ratings, reports |
 | `lab/views.py` | the text summary and map |
+| `lab/importer.py` | platform recordings into the database |
+| `lab/dashboard.py` | the HTML dashboard |
 
 The platform side gained these:
 - **Per-seat think times:** `ffsim/vclock.py`'s `seat_think`, including `paused`.
