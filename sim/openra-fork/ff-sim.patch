@@ -54,6 +54,59 @@ index 18413ce..269f34b 100644
  			orders.Add(Order.Command($"state {Session.ClientState.Ready}"));
  
  			var map = ModData.MapCache.SingleOrDefault(m => m.Uid == launchMap || Path.GetFileName(m.Path) == launchMap);
+diff --git a/OpenRA.Game/Map/Map.cs b/OpenRA.Game/Map/Map.cs
+index 9f870c8..1c0408a 100644
+--- a/OpenRA.Game/Map/Map.cs
++++ b/OpenRA.Game/Map/Map.cs
+@@ -1442,9 +1442,23 @@ public bool IsExternalFile(string filename)
+ 			return false;
+ 		}
+ 
++		// friendly-fighter sim: sprites shared with other games of a stepped engine (never disposed)
++		bool sequencesShared;
++
++		/// <summary>friendly-fighter sim: use another instance's loaded sprites for this map (same Uid).</summary>
++		public void ShareSequences(SequenceSet loaded)
++		{
++			if (loaded != Sequences)
++				Sequences.Dispose();
++
++			Sequences = loaded;
++			sequencesShared = true;
++		}
++
+ 		public void Dispose()
+ 		{
+-			Sequences.Dispose();
++			if (!sequencesShared)
++				Sequences.Dispose();
+ 		}
+ 	}
+ }
+diff --git a/OpenRA.Game/ModData.cs b/OpenRA.Game/ModData.cs
+index a267e57..4ada5d8 100644
+--- a/OpenRA.Game/ModData.cs
++++ b/OpenRA.Game/ModData.cs
+@@ -173,13 +173,17 @@ public void InitializeLoaders(IReadOnlyFileSystem fileSystem)
+ 
+ 		public IEnumerable<string> Languages { get; }
+ 
+-		public void PrepareMap(Map map)
++		public void PrepareMap(Map map) { PrepareMap(map, true); }
++
++		/// <summary>friendly-fighter sim: <paramref name="loadSprites"/> false when the map shares sprites already loaded.</summary>
++		public void PrepareMap(Map map, bool loadSprites)
+ 		{
+ 			LoadScreen?.Display();
+ 
+ 			// Reinitialize all our assets
+ 			InitializeLoaders(map);
+-			map.Sequences.LoadSprites();
++			if (loadSprites)
++				map.Sequences.LoadSprites();
+ 
+ 			// Load music with map assets mounted
+ 			using (new Support.PerfTimer("Map.Music"))
 diff --git a/OpenRA.Game/Network/OrderManager.cs b/OpenRA.Game/Network/OrderManager.cs
 index 3a68e04..55b0657 100644
 --- a/OpenRA.Game/Network/OrderManager.cs
@@ -1032,6 +1085,26 @@ index c11dec0..a2ff0bf 100644
  		/// <summary>
  		/// Called by RLBridgeService to signal that the agent has disconnected.
  		/// In multi-session mode, deactivates the session. In legacy mode, exits the process.
+diff --git a/OpenRA.Mods.Common/Traits/Player/MissionObjectives.cs b/OpenRA.Mods.Common/Traits/Player/MissionObjectives.cs
+index d7c77c0..055d4f0 100644
+--- a/OpenRA.Mods.Common/Traits/Player/MissionObjectives.cs
++++ b/OpenRA.Mods.Common/Traits/Player/MissionObjectives.cs
+@@ -166,6 +166,15 @@ void CheckIfGameIsOver(Player player)
+ 			var gameOver = player.World.Players.All(p => p.NonCombatant || p.WinState != WinState.Undefined || !p.HasObjectives);
+ 			if (gameOver)
+ 			{
++				// friendly-fighter sim: a stepped game counts the delay in its own ticks (Game.RunAfterDelay
++				// waits on the wall clock, in Game.Loop, and only for the one current world: in a
++				// multi-session engine the game never ended)
++				if (RLLockstep.Enabled)
++				{
++					RLLockstep.EndGameAfter(player.World, Info.GameOverDelay);
++					return;
++				}
++
+ 				Game.RunAfterDelay(Info.GameOverDelay, () =>
+ 				{
+ 					if (Game.IsCurrentWorld(player.World))
 diff --git a/OpenRA.Mods.Common/Traits/Player/ModularBot.cs b/OpenRA.Mods.Common/Traits/Player/ModularBot.cs
 index 3643dec..34c4a3c 100644
 --- a/OpenRA.Mods.Common/Traits/Player/ModularBot.cs
@@ -1345,10 +1418,10 @@ index 582a0b7..54cb8b4 100644
  			{
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
 new file mode 100644
-index 0000000..3a3d09f
+index 0000000..d1f7158
 --- /dev/null
 +++ b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,399 @@
 +#region Copyright & License Information
 +/*
 + * Copyright (c) The OpenRA Developers and Contributors
@@ -1388,6 +1461,32 @@ index 0000000..3a3d09f
 +	public static class RLLockstep
 +	{
 +		public static readonly bool Enabled = Environment.GetEnvironmentVariable("RL_LOCKSTEP") == "1";
++
++		static readonly ConcurrentDictionary<World, int> EndGameAt = new();
++
++		/// <summary>MissionObjectives: end this stepped game <paramref name="delayMs"/> of game time from now
++		/// (the platform's engine waits that long on the wall clock: ticks run at the game's timestep).</summary>
++		internal static void EndGameAfter(World w, int delayMs)
++		{
++			EndGameAt.TryAdd(w, w.WorldTick + (delayMs + w.Timestep / 2) / w.Timestep);
++		}
++
++		/// <summary>A game destroyed before its end came.</summary>
++		internal static void Forget(World w)
++		{
++			if (w != null)
++				EndGameAt.TryRemove(w, out _);
++		}
++
++		/// <summary>After each tick: end the game when its time has come.</summary>
++		static void EndGameIfDue(World w)
++		{
++			if (!EndGameAt.IsEmpty && EndGameAt.TryGetValue(w, out var at) && w.WorldTick >= at)
++			{
++				EndGameAt.TryRemove(w, out _);
++				w.EndGame();
++			}
++		}
 +
 +		/// <summary>Stepped and headless: skip what is kept only for drawing (Game.Unrendered); RL_UNRENDERED=0 keeps it.</summary>
 +		internal static void SkipRendering()
@@ -1445,6 +1544,10 @@ index 0000000..3a3d09f
 +				{
 +					var before = world.WorldTick;
 +					tick();
++					EndGameIfDue(world);
++					if (world.IsGameOver && world.WorldTick == before)
++						break; // over and paused: no more ticks
++
 +					if (world.WorldTick != before)
 +						idle = 0;
 +					else if (++idle > 200000)
@@ -1539,6 +1642,10 @@ index 0000000..3a3d09f
 +
 +					if (om.TryTick())
 +						w.Tick();
++
++					EndGameIfDue(w);
++					if (w.IsGameOver && w.WorldTick == before)
++						break; // over and paused: no more ticks
 +
 +					if (w.WorldTick != before)
 +						idle = 0;
@@ -1715,10 +1822,16 @@ index 0000000..3a3d09f
 +	}
 +}
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
-index 3163740..b756f88 100644
+index 3163740..8e39984 100644
 --- a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
-@@ -90,6 +90,7 @@ public static void Initialize(ModData md)
+@@ -86,10 +86,13 @@ internal sealed class WorkItem
+ 		/// Initialize with shared ModData. Called once at process start.
+ 		/// Starts the worker pool.
+ 		/// </summary>
++		static readonly ConcurrentDictionary<string, OpenRA.Graphics.SequenceSet> SharedSequences = new();
++
+ 		public static void Initialize(ModData md)
  		{
  			modData = md;
  			ExternalBotBridge.MultiSessionMode = true;
@@ -1726,7 +1839,7 @@ index 3163740..b756f88 100644
  			Support.PerfHistory.Disabled = true;
  
  			var workerCount = Environment.ProcessorCount;
-@@ -107,6 +108,10 @@ public static void Initialize(ModData md)
+@@ -107,6 +110,10 @@ public static void Initialize(ModData md)
  			}
  
  			Log.Write("rl-bridge", $"RLSessionManager initialized: {workerCount} workers, queue capacity {workerCount * 4}");
@@ -1737,7 +1850,7 @@ index 3163740..b756f88 100644
  		}
  
  		/// <summary>
-@@ -175,7 +180,7 @@ public static void StartGrpcServer(int port)
+@@ -175,7 +182,7 @@ public static void StartGrpcServer(int port)
  		/// the game world is created asynchronously on a background thread.
  		/// FastAdvance will wait for the bridge to activate before proceeding.
  		/// </summary>
@@ -1746,7 +1859,7 @@ index 3163740..b756f88 100644
  		{
  			var sessionId = Guid.NewGuid().ToString("N")[..12];
  			Log.Write("rl-bridge", $"Creating session {sessionId}: map={mapName}, bots={bots}, seed={seed}");
-@@ -184,7 +189,7 @@ public static string CreateSession(string mapName, string bots, int seed)
+@@ -184,7 +191,7 @@ public static string CreateSession(string mapName, string bots, int seed)
  			{
  				try
  				{
@@ -1755,7 +1868,7 @@ index 3163740..b756f88 100644
  				}
  				catch (Exception e)
  				{
-@@ -212,6 +217,12 @@ public static void DestroySession(string sessionId)
+@@ -212,6 +219,12 @@ public static void DestroySession(string sessionId)
  			if (ExternalBotBridge.Sessions.TryGetValue(sessionId, out var bridge))
  				bridge.Deactivate();
  
@@ -1768,7 +1881,15 @@ index 3163740..b756f88 100644
  			if (SessionStates.TryRemove(sessionId, out var state))
  			{
  				// Wait for any in-flight work to finish before disposing
-@@ -285,7 +296,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
+@@ -222,6 +235,7 @@ public static void DestroySession(string sessionId)
+ 					catch { /* timeout or cancelled — proceed with dispose */ }
+ 				}
+ 
++				RLLockstep.Forget(state.World);
+ 				try
+ 				{
+ 					state.World?.Dispose();
+@@ -285,7 +299,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
  		/// Initialize a game session: create World, find bridge, register state.
  		/// The calling thread exits after this returns — no persistent tick loop.
  		/// </summary>
@@ -1777,7 +1898,31 @@ index 3163740..b756f88 100644
  		{
  			// 1. Resolve map (cached — only first request per map name hits MapCache).
  			//    MapCache.GetEnumerator() calls UpdateMaps() which mutates collections,
-@@ -366,6 +377,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
+@@ -355,7 +369,22 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
+ 			//    Serialized because it mutates global statics (ChromeMetrics, ChromeProvider, Sound).
+ 			lock (WorldCreateLock)
+ 			{
+-				modData.PrepareMap(map);
++				// friendly-fighter sim (PERF): a stepped engine's games of one map share its loaded
++				// sprites (loading them was half the time it took to start a game; nothing draws them)
++				if (RLLockstep.Enabled && SharedSequences.TryGetValue(map.Uid, out var loaded))
++				{
++					map.ShareSequences(loaded);
++					modData.PrepareMap(map, false);
++				}
++				else
++				{
++					modData.PrepareMap(map);
++					if (RLLockstep.Enabled)
++					{
++						map.ShareSequences(map.Sequences);
++						SharedSequences[map.Uid] = map.Sequences;
++					}
++				}
+ 			}
+ 
+ 			// 4. Create isolated OrderManager with EchoConnection (no network)
+@@ -366,6 +395,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
  			// 5. Build LobbyInfo with map slots and bot assignments
  			SetupLobbyInfo(orderManager, mapPreview, map, bots, seed);
  

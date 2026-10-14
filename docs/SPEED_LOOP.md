@@ -40,10 +40,23 @@ the work goes. Each round:
 |---|---|---|---|---|
 | 0 | start | - | 112 s, 319 CPU-s | 26 s |
 | 1 | engine: logging thread waits, sight cells, explored share, no exception; persistent lanes; control file once a second; gzip 1; orjson | replays match; seeded outcomes equal | 93 s, 227 CPU-s | 21 s |
-| 2 | engine: unrendered (no screen map, no sprite bounds, no decorations/production bars/advice), actor map cleans only touched bins, leak of every finished game fixed; one prefetch thread; engine liveness not checked per step; no 5 s sleep; 4 games at once | replays match; seeded outcomes equal | 12 games: 90 s at 4 at once | 13 s |
+| 2 | engine: unrendered (no screen map, no sprite bounds, no decorations/production bars/advice), actor map cleans only touched bins, leak of every finished game fixed, games of a map share its loaded sprites (a game starts in 0.31 s, not 0.58); one prefetch thread; engine liveness not checked per step; no 5 s sleep; 4 games at once | replays match; seeded outcomes equal | 12 games: 90 s at 4 at once | 13 s |
 
 ## Strategies played (virtual vs real time)
 
 | Round | Our bot | Opponent, map | Real time | Virtual | Largest |z| |
 |---|---|---|---|---|---|
 | 1 | rush: waves of 4, infantry, nearest target | Normal AI, trapped | 0/6, net -8758 | 0/6, net -11475 | 1.8 (6-tick lag share) |
+| 2 | eco: refineries first, waves of 14, vehicles, enemy base | Rush AI, sidestep | 1/6 (5 bases wiped out in 5-9 min) | first 0/6 *at the time limit* (bug, below); fixed: 0/6, 5 wiped out in 4-8 min | 3.4 game length, then 1.3 |
+
+**Found by round 2's strategy: stepped games never ended.** OpenRA ends a game 1.5 s after the
+last opponent lost, with `Game.RunAfterDelay`: a wall-clock timer that only `Game.Loop` runs,
+for the one current world. A multi-session engine has no game loop, so a wiped-out player
+played on with nothing until the time limit (seen before in a few virtual games with 0 assets).
+Stepped games now count the delay in game ticks (38 at 25 ticks/s); real time is unchanged.
+
+## What the strategies taught
+
+- Small infantry waves (4) against the Normal AI feed it kills: ~60 units lost for 9-13 killed.
+- Greed loses to a rush: the eco posture (extra refineries before an army) was wiped out by
+  OpenRA's Rush AI in 5 of 6 games, in both clocks; an early army or defenses come first.

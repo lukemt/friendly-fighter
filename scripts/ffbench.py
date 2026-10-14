@@ -107,7 +107,7 @@ def cmd_replay(a) -> int:
                     r.update(engine=i, trace=t.name, rep=rep, first=(rep == 0 and k == 0))
                     rows.append(r)
                     diff = "" if r["match"] else f"  DIFFERS from step {r['first_diff']['step']} (tick {r['first_diff']['tick']})"
-                    print(f"[{names[i][-30:]}] {t.name[:24]:24} {r['ticks']:6d} ticks  wall {r['wall_s']:6.2f}s  "
+                    print(f"[{names[i][-30:]}] {t.name[:24]:24} {r['ticks']:6d} ticks  create {r['create_s']:4.2f}s  wall {r['wall_s']:6.2f}s  "
                           f"engine {r['engine_s']:6.2f}s  cpu {r['cpu_s']:6.2f}s  "
                           f"({r['ticks'] / max(r['wall_s'], 1e-9):5.0f} ticks/s, {r['rss_mb']} MB){diff}", flush=True)
     finally:
