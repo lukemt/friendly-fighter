@@ -593,6 +593,12 @@ def cmd_jev(a, db) -> int:
     return 0
 
 
+def cmd_curves(a, db) -> int:
+    runs = [int(r) for r in a.runs.split(",")] if a.runs else None
+    print(report.curves(db, runs, _split(a.bots) if a.bots else None))
+    return 0
+
+
 def cmd_dashboard(a, db) -> int:
     from lab import dashboard
 
@@ -912,6 +918,9 @@ def main() -> int:
     s.add_argument("--at", help="the full state and answers of the call nearest this game time")
     s.add_argument("--all", action="store_true", help="every call, not only changes of decision")
     s.add_argument("--attacks", action="store_true", help="every logged attack by opponent: did it gain?")
+    s = sub.add_parser("curves", help="each bot's army, harvesters and assets at 3, 6 and 9 minutes")
+    s.add_argument("--runs", help="runs separated by commas (default: every game)")
+    s.add_argument("--bots", help="bots separated by commas")
     s = sub.add_parser("dashboard", help="the database as an HTML page (sim/lab/dashboard.html)")
     s.add_argument("--out")
     s.add_argument("--games", type=int, default=200, help="how many recent games it includes")
@@ -929,7 +938,7 @@ def main() -> int:
     handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch,
                 "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
-                "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
+                "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
                 "h": cmd_h}
     return handlers[a.command](a, db)
 

@@ -600,6 +600,83 @@
     "jev",
     "ours"
    ]
+  },
+  {
+   "name": "exploit-eco-waves",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "attack_threshold": 4,
+     "opening": "standard",
+     "posture": "eco",
+     "target": "nearest",
+     "unit_focus": "mixed"
+    }
+   },
+   "think": 0.005,
+   "description": "found by lab exploit: beats ff-jev-champ-v7 6/8 (eco economy, constant small waves)",
+   "tags": [
+    "exploiter"
+   ]
+  },
+  {
+   "name": "exploit-eco-tanks",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "attack_threshold": 16,
+     "opening": "standard",
+     "posture": "eco",
+     "target": "nearest",
+     "unit_focus": "vehicles"
+    }
+   },
+   "think": 0.005,
+   "description": "found by lab exploit: beats ff-jev-champ-v7 5/8 (eco economy, waves of 16 tanks)",
+   "tags": [
+    "exploiter"
+   ]
+  },
+  {
+   "name": "ff-jev-v8a",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": 2,
+     "guard_end": 260
+    }
+   },
+   "think": 0.005,
+   "description": "v8a: greedy from the start, the guard ends at 4:20 without a raid",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-v8b",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": "jev",
+     "greed_floor": 16,
+     "guard_end": 260
+    }
+   },
+   "think": 0.005,
+   "description": "v8b: Jev decides greed (only with 16+ units), the guard ends at 4:20 without a raid",
+   "tags": [
+    "ours",
+    "jev"
+   ]
   }
  ]
 }

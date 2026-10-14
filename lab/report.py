@@ -647,6 +647,30 @@ def compare_report(db, run_id: int, candidates: list[str], baselines: list[str])
     return "\n".join(out)
 
 
+def curves(db, runs: list[int] | None = None, bots: list[str] | None = None, minutes=(3, 6, 9)) -> str:
+    """The hands, not the result: each bot's army value, harvesters and assets at these minutes,
+    averaged over its games (from the 5 s timeline)."""
+    where, args = ["g.branch_of IS NULL"], []
+    if runs:
+        where.append(f"g.run_id IN ({','.join('?' * len(runs))})")
+        args += runs
+    if bots:
+        where.append(f"s.bot IN ({','.join('?' * len(bots))})")
+        args += bots
+    cols = []
+    for m in minutes:
+        lo, hi = m * 60 * TPS, m * 60 * TPS + 124
+        cols += [f"ROUND(AVG(CASE WHEN t.tick BETWEEN {lo} AND {hi} THEN t.army_value END)) AS army{m}",
+                 f"ROUND(AVG(CASE WHEN t.tick BETWEEN {lo} AND {hi} THEN t.harvesters END), 1) AS harv{m}",
+                 f"ROUND(AVG(CASE WHEN t.tick BETWEEN {lo} AND {hi} THEN t.assets_value END)) AS assets{m}"]
+    rows = db.q(f"SELECT s.bot, COUNT(DISTINCT t.game_id) AS games, {', '.join(cols)} FROM timeline t "
+                f"JOIN seats s ON s.game_id = t.game_id AND s.position = t.position JOIN games g ON g.id = t.game_id "
+                f"WHERE {' AND '.join(where)} GROUP BY s.bot ORDER BY army{minutes[len(minutes) // 2]} DESC", *args)
+    head = ["bot", "games"] + [f"{k}@{m}:00" for m in minutes for k in ("army", "harv", "assets")]
+    return _table([[r["bot"][:40], r["games"]] + [r[f"{k}{m}"] for m in minutes for k in ("army", "harv", "assets")]
+                   for r in rows], head) if rows else "(no timeline rows)"
+
+
 def runs_table(db, limit: int = 20) -> str:
     rows = [[r["id"], _when(r["started"]), r["kind"], r["games"], r["status"], r["git_commit"] + ("+" if r["git_dirty"] else ""),
              (r["note"] or "")[:40], r["experiment"] or "", (r["command"] or "")[:60]]

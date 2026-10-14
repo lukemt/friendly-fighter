@@ -35,5 +35,9 @@
   "counter",
   "builder",
   "chaotic"
+ ],
+ "exploiters": [
+  "exploit-eco-waves",
+  "exploit-eco-tanks"
  ]
 }
