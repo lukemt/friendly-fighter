@@ -46,6 +46,13 @@ from .rules import MAP_FILES
 SIM_HOME = Path(os.environ.get("FF_SIM_HOME", Path.home() / "openra-sim"))
 ENGINE_DIR = Path(os.environ.get("FF_ENGINE_DIR", SIM_HOME / "fork"))
 DOTNET_ROOT = Path(os.environ.get("FF_DOTNET_ROOT", SIM_HOME / "dotnet8"))
+# The runtime of the stepped engines (virtual time): .NET 10 when sim/openra-fork/setup.sh installed it
+# (the same games step for step as on .NET 8, ~10 % faster ticks), else the engine's own .NET 8;
+# FF_LOCKSTEP_DOTNET_ROOT picks another. Real-time engines (the platform's setup) keep .NET 8.
+_DOTNET10 = SIM_HOME / "dotnet10"
+LOCKSTEP_DOTNET_ROOT = Path(os.environ.get("FF_LOCKSTEP_DOTNET_ROOT")
+                            or (_DOTNET10 if (_DOTNET10 / "shared" / "Microsoft.AspNetCore.App").exists()
+                                and "FF_DOTNET_ROOT" not in os.environ else DOTNET_ROOT))
 CONTENT_DIR = Path(os.environ.get("FF_RA_CONTENT", SIM_HOME / "src" / "Support" / "Content"))
 RUNS_DIR = Path(os.environ.get("FF_SIM_RUNS", SIM_HOME / "runs"))
 # Persistent lanes (HostPool(persist=True)): engines kept running between runs, so a run needn't
@@ -202,15 +209,17 @@ def _die_with_parent() -> None:
     os.setsid()
 
 
-def _engine_env(port: int, view_interval: int, view_phase: int, lockstep: bool, lobby: dict | None = None) -> dict:
-    env = dict(os.environ, DOTNET_ROOT=str(DOTNET_ROOT), DOTNET_ROLL_FORWARD="LatestMajor",
+def _engine_env(port: int, view_interval: int, view_phase: int, lockstep: bool, lobby: dict | None = None,
+                dotnet_root: Path | None = None) -> dict:
+    dotnet_root = dotnet_root or DOTNET_ROOT
+    env = dict(os.environ, DOTNET_ROOT=str(dotnet_root), DOTNET_ROLL_FORWARD="LatestMajor",
                DOTNET_CLI_TELEMETRY_OPTOUT="1", RL_GRPC_PORT=str(port), RL_OBS_INTERVAL=str(view_interval),
                RL_OBS_PHASE=str(view_phase), RL_LOCKSTEP="1" if lockstep else "0")
     if lockstep:
         env = {**LOCKSTEP_DOTNET, **env}
     if lobby:
         env["OPENRA_LOBBY_OPTIONS"] = ";".join(f"{k}={v}" for k, v in lobby.items())
-    env["PATH"] = f"{DOTNET_ROOT}:{env.get('PATH', '')}"
+    env["PATH"] = f"{dotnet_root}:{env.get('PATH', '')}"
     return env
 
 
@@ -292,7 +301,8 @@ class EngineHost:
     def __init__(self, log_dir: Path, *, view_interval: int = VIEW_INTERVAL, engine_dir: Path | None = None,
                  env: dict | None = None, persist: bool = False) -> None:
         self.engine_dir = Path(engine_dir or ENGINE_DIR)
-        self.extra_env = env or {}
+        self.extra_env = dict(env or {})
+        self.dotnet_root = Path(self.extra_env.pop("FF_DOTNET_ROOT", None) or LOCKSTEP_DOTNET_ROOT)
         self.persist = persist  # a persistent lane: kept running after this run, and found again by the next
         self.view_interval = view_interval
         self.view_phase = VIEW_PHASE % view_interval
@@ -309,7 +319,8 @@ class EngineHost:
         self.games = 0
 
     def _env(self) -> dict:
-        env = {**_engine_env(self.port, self.view_interval, self.view_phase, True), **self.extra_env}
+        env = {**_engine_env(self.port, self.view_interval, self.view_phase, True, dotnet_root=self.dotnet_root),
+               **self.extra_env}
         if self.RAW:
             env["RL_RAW_PORT"] = str(self.raw_port)
         return env
@@ -377,7 +388,7 @@ class EngineHost:
             if self.persist:
                 env["RL_IDLE_EXIT_SECONDS"] = str(LANE_IDLE_EXIT_SECONDS)
             engine_dir = self.engine_dir
-            cmd = [str(DOTNET_ROOT / "dotnet"), str(engine_dir / "bin" / "OpenRA.dll"), f"Engine.EngineDir={engine_dir}",
+            cmd = [str(self.dotnet_root / "dotnet"), str(engine_dir / "bin" / "OpenRA.dll"), f"Engine.EngineDir={engine_dir}",
                    f"Engine.SupportDir={support}", "Game.Mod=ra", "Game.Platform=Null", "Sound.Mute=True",
                    f"Launch.MultiSession={self.port}"]
             self.log = open(self.dir / "engine-host.log", "ab")

@@ -15,6 +15,12 @@ if [ ! -x "$ROOT/dotnet8/dotnet" ]; then
   curl -sSL https://dot.net/v1/dotnet-install.sh -o "$ROOT/dotnet-install.sh"
   bash "$ROOT/dotnet-install.sh" --channel 8.0 --install-dir "$ROOT/dotnet8"
 fi
+# The stepped engines of virtual time run on .NET 10 (the same games, ~10 % faster ticks); real time on 8.
+if [ ! -d "$ROOT/dotnet10/shared/Microsoft.AspNetCore.App" ]; then
+  [ -f "$ROOT/dotnet-install.sh" ] || curl -sSL https://dot.net/v1/dotnet-install.sh -o "$ROOT/dotnet-install.sh"
+  bash "$ROOT/dotnet-install.sh" --runtime dotnet --channel 10.0 --install-dir "$ROOT/dotnet10" --no-path
+  bash "$ROOT/dotnet-install.sh" --runtime aspnetcore --channel 10.0 --install-dir "$ROOT/dotnet10" --no-path
+fi
 
 if [ ! -d "$ROOT/fork/.git" ]; then
   mkdir -p "$ROOT/fork" && cd "$ROOT/fork"
