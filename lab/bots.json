@@ -696,6 +696,37 @@
     "ours",
     "jev"
    ]
+  },
+  {
+   "name": "ff-jev-council",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {}
+   },
+   "think": 0.005,
+   "description": "Jev as three loops (strategist / quartermaster / field commander), each with its own briefing in the state, pace and questions; plan -> greed/defenses; pinned jev-1.13.0",
+   "tags": [
+    "jev",
+    "council"
+   ]
+  },
+  {
+   "name": "ff-jev-council-boom",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240
+    }
+   },
+   "think": 0.005,
+   "description": "ff-jev-council starting greedy (plan boom), kept until 4:00 unless raided or an attack is expected",
+   "tags": [
+    "jev",
+    "council"
+   ]
   }
  ]
 }

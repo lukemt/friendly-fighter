@@ -107,6 +107,26 @@ used).
   - **Say what was never seen:** "never seen their army: size unknown, not zero". Otherwise
     "nothing seen" reads as a passive opponent.
 
+## Jev as several loops (`bots/jev_council.py`, docs/JEV_LOOPS.md)
+
+- **Half the tokens, same strength so far.** Three loops (strategist, quartermaster, field
+  commander), each with its own briefing sent once in the state, played as well as the
+  one-call champion v7.
+  - **Pooled:** 78% against 75% over runs 59–60, within noise.
+  - **Tokens:** about 50k a game against about 100k.
+- **It fixes the eco-tank exploiter.** 5/8 and 4/6 against 1/8 and 2/6, with mean net about −4k
+  against −14k. "An army unseen after 5:00 is massing tanks" makes it fortify and train rocket
+  infantry before the 6:40 wave.
+- **The same rule loses turtle standoffs.** 5–7/8 against 8/8: no greed means no assets edge.
+  - **The cause is timing:** fortify only until 7:00 (the waves came at 6:37–6:44), then boom
+    in a standoff.
+  - **Starting greedy matters:** a council that starts with "hold" lost standoffs 4/8.
+- **One seed fooled us.** Run 59 alone said "better" (+0.11, CI +0.01 to +0.21); the fresh seed
+  of run 60 did not. Confirm a win on a second seed before crowning it.
+- **The economy starves before any decision matters.** Cash sits at 0 from 2:00, because the war
+  factory comes before the second refinery (built at 3:58 in a lost Rush AI game). See
+  `Knobs.early_refineries`.
+
 ## What the exploiter search found (`lab exploit`)
 
 - **Eco attackers beat our defenders.** An opponent with extra refineries and no defenses, attacking

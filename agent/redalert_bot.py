@@ -123,6 +123,7 @@ class Knobs:
     opening: str = "standard"        # "standard" | "guard": a defense and infantry at home through the rush window
     defenses: int = 2                # at most this many defenses (once the economy is up)
     greed: int = 0                   # extra refineries (up to 2 + greed) before the rest, and as many more harvesters
+    early_refineries: int = 0        # refineries before the war factory beyond the first (income sooner, tanks later)
     aim: tuple[int, int] | None = None  # attack here (the commander's pick), unless enemies are in the way
     note: str = ""
 
@@ -450,6 +451,8 @@ class RedAlertBot:
             plan.append("proc")
         if not has_barracks:
             plan.append(barracks)
+        if knobs.early_refineries and not have.get("weap") and have.get("proc", 0) < 1 + knobs.early_refineries:
+            plan.append("proc")
         if not have.get("weap"):
             plan.append("weap")
         if have.get("proc", 0) < 2:

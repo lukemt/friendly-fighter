@@ -70,6 +70,8 @@ def usage(paths: list[Path]) -> str:
     calls = tokens = failed = 0
     silent = 0  # seats without a single answer: Jev switched off (a control) or no key
     latency = []
+    loops: dict[str, list[int]] = {}  # a council's loops: requests, tokens
+    council = 0
     for p in paths:
         rows = read(p)
         answered = sum(1 for r in rows if r.get("answers"))
@@ -77,9 +79,14 @@ def usage(paths: list[Path]) -> str:
             silent += 1
             continue
         failed += len(rows) - answered
+        council += any(r.get("loops") for r in rows)
         for r in rows:
-            calls += 1
+            calls += len(r["loops"]) if r.get("loops") else 1  # (a council row: one request per loop)
             tokens += r.get("tokens") or 0
+            for loop in r.get("loops") or []:
+                row = loops.setdefault(loop, [0, 0])
+                row[0] += 1
+                row[1] += (r["loops"][loop] or 0) if isinstance(r["loops"], dict) else 0
             if r.get("latency"):
                 latency.append(r["latency"])
     seats = len(paths) - silent
@@ -87,11 +94,13 @@ def usage(paths: list[Path]) -> str:
         return "no Jev calls logged" + (f" ({silent} seats played without Jev)" if silent else "")
     latency.sort()
     pct = lambda q: latency[min(len(latency) - 1, int(q * len(latency)))] * 1000  # noqa: E731
-    return (f"{seats} game seats with Jev, {calls} calls ({calls / max(1, seats):.0f} a game), "
+    return (f"{seats} game seats with Jev, {calls} requests ({calls / max(1, seats):.0f} a game), "
             f"{tokens:,} input tokens (${tokens / 1e6 * PRICE_PER_MTOK:.4f}; "
             f"${tokens / max(1, seats) / 1e6 * PRICE_PER_MTOK:.5f} a game); "
             f"latency median {pct(0.5):.0f} ms, p95 {pct(0.95):.0f} ms"
             + (f"; {silent} more seats played without Jev (controls, or no key)" if silent else "")
+            + ("\ncouncil seats, by loop: " + ", ".join(f"{k} {n / max(1, council):.0f} requests a game" + (f" ({t / max(1, n):.0f} tokens each)" if t else "")
+                                                       for k, (n, t) in sorted(loops.items())) if loops else "")
             + (f"\nWARNING: {failed} calls got no answer in games that otherwise had Jev (errors or timeouts)"
                if failed else ""))
 
@@ -147,3 +156,22 @@ def attack_table(db, paths: list[Path]) -> str:
         lines.append(f"{opp:<18}{len(rows):>8}{sum(c > 0 for c in ch):>8}{sum(ch) / len(ch):>+8.0f}{ch[len(ch) // 2]:>+8}   "
                      f"{part(lambda b: -500 <= b < 0)} / {part(lambda b: b < -500)} / {part(lambda b: b >= 0)}")
     return "\n".join(lines)
+
+
+def run_health(db, run_id: int) -> str:
+    """A warning when Jev bots in this run went without answers (out of credits, the service down):
+    those games played on frozen decisions, so they say nothing about the bot."""
+    games = [r["id"] for r in db.q("SELECT id FROM games WHERE run_id = ? ORDER BY rowid", run_id)]
+    hit = []
+    for i, g in enumerate(games):
+        for p in log_files(g):
+            rows = read(p)
+            failed = sum(1 for r in rows if not r.get("answers"))
+            if rows and failed > max(2, len(rows) // 10):
+                hit.append((i + 1, g))
+    if not hit:
+        return ""
+    return (f"WARNING: in {len(hit)} of {len(games)} games a Jev bot went without answers (from game "
+            f"{hit[0][0]} on): those games played on frozen decisions; drop them from conclusions "
+            f"(lab jev {hit[0][1][4:12]} shows the calls)")
+

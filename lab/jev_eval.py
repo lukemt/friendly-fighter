@@ -48,6 +48,11 @@ def questions(variant: dict | None = None, *, opening: bool = False) -> dict:
     return qs
 
 
+def _ask(jev, state, questions) -> tuple[dict | None, int]:
+    counted = getattr(jev, "ask_counted", None)
+    return counted(state, questions) if counted else (jev.ask(state, questions), 0)
+
+
 def evaluate(cases: list[dict], variant: dict | None = None, *, jev=None, workers: int = 8) -> dict:
     """Ask every case; per question: right/asked, and each miss with what Jev said."""
     from bots.jev_bot import Jev
@@ -57,8 +62,11 @@ def evaluate(cases: list[dict], variant: dict | None = None, *, jev=None, worker
     def one(case: dict):
         qs = questions(variant, opening="opening" in case["expect"])
         qs = {k: v for k, v in qs.items() if k in case["expect"]}
-        return case, jev.ask(case["state"], qs)
+        answers, tokens = _ask(jev, case["state"], qs)
+        spent.append(tokens)
+        return case, answers
 
+    spent: list[int] = []
     with ThreadPoolExecutor(workers) as pool:
         results = list(pool.map(one, cases))
     score: dict[str, list[int]] = {}
@@ -76,13 +84,79 @@ def evaluate(cases: list[dict], variant: dict | None = None, *, jev=None, worker
                                "p": {k: round(v, 2) for k, v in sorted(probs.items(), key=lambda kv: -kv[1])[:3]},
                                "why": case.get("why", "")})
     total = sum(s[0] for s in score.values()), sum(s[1] for s in score.values())
-    return {"score": score, "total": total, "misses": misses, "unanswered": sum(1 for _, a in results if not a)}
+    return {"score": score, "total": total, "misses": misses, "unanswered": sum(1 for _, a in results if not a),
+            "tokens": sum(spent) / max(1, len(spent))}
+
+
+def _seconds(case: dict) -> float:
+    clock = str((case.get("state") or {}).get("clock", "0:00")).split()[0]
+    m, _, s = clock.partition(":")
+    return int(m) * 60 + int(s or 0) if m.isdigit() else float(case.get("t") or 0)
+
+
+# A council answer that stands for an old question: the economy is the strategist's plan.
+COUNCIL_ECONOMY = {"greedy": {"boom"}, "safe": {"hold", "fortify", "attack"}}
+
+
+def evaluate_council(cases: list[dict], *, jev=None, workers: int = 8) -> dict:
+    """The same cases asked the way bots/jev_council.py asks: the strategist first, then the
+    quartermaster and the field commander with the strategist's plan in their state (the real
+    dependency between the loops). Scored like ``evaluate``, plus the tokens each case cost."""
+    from bots.jev_bot import Jev
+    from bots.jev_council import loop_request
+
+    jev = jev or Jev()
+    loop_of = {"opponent": "strategy", "opening": "strategy", "economy": "strategy", "production": "supply",
+               "posture": "field"}
+
+    def ask(loop, words, seconds, plan="hold"):
+        state, qs = loop_request(loop, words, seconds=seconds, plan=plan)
+        answers, tokens = _ask(jev, state, qs)
+        return answers or {}, tokens
+
+    def one(case: dict):
+        seconds = _seconds(case)
+        got, tokens = ask("strategy", case["state"], seconds)
+        plan = (got.get("plan") or {}).get("choice") or "hold"
+        answers = {k: v for k, v in got.items()}
+        for loop in sorted({loop_of[q] for q in case["expect"]} - {"strategy"}):
+            more, n = ask(loop, case["state"], seconds, plan)
+            answers.update(more)
+            tokens += n
+        return case, answers, tokens, plan
+
+    with ThreadPoolExecutor(workers) as pool:
+        results = list(pool.map(one, cases))
+    score: dict[str, list[int]] = {}
+    misses = []
+    for case, answers, _, plan in results:
+        for qid, ok in case["expect"].items():
+            if qid == "economy":
+                got = plan
+                right = bool(COUNCIL_ECONOMY.get(ok[0], set()) & {plan}) if len(ok) == 1 else plan in ok
+                probs = (answers.get("plan") or {}).get("probabilities") or {}
+            else:
+                got = (answers.get(qid) or {}).get("choice")
+                right = got in ok
+                probs = (answers.get(qid) or {}).get("probabilities") or {}
+            s = score.setdefault(qid, [0, 0])
+            s[0] += right
+            s[1] += 1
+            if not right:
+                misses.append({"case": case["id"], "question": qid, "expected": ok, "got": f"{got} (plan {plan})",
+                               "p": {k: round(v, 2) for k, v in sorted(probs.items(), key=lambda kv: -kv[1])[:3]},
+                               "why": case.get("why", "")})
+    total = sum(s[0] for s in score.values()), sum(s[1] for s in score.values())
+    tokens = [t for _, _, t, _ in results]
+    return {"score": score, "total": total, "misses": misses, "unanswered": sum(1 for _, a, _, _ in results if not a),
+            "tokens": sum(tokens) / max(1, len(tokens))}
 
 
 def report(result: dict) -> str:
     lines = [f"{q:<12}{r}/{n} right" for q, (r, n) in sorted(result["score"].items())]
     r, n = result["total"]
-    lines.append(f"{'all':<12}{r}/{n} ({100 * r / max(1, n):.0f}%)")
+    lines.append(f"{'all':<12}{r}/{n} ({100 * r / max(1, n):.0f}%)"
+                 + (f", {result['tokens']:.0f} tokens a case" if result.get("tokens") else ""))
     if result["unanswered"]:
         lines.append(f"WARNING: {result['unanswered']} cases got no answer (no key, or Jev failing)")
     for m in result["misses"]:

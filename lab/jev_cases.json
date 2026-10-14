@@ -600,6 +600,37 @@
    },
    "why": "nobody fought for 7 minutes: a standoff, the assets will decide",
    "bot_said": ""
+  },
+  {
+   "id": "48634ae8@394",
+   "game": "lab-48634ae8-3d61-4274-8253-7e2b4308f8de",
+   "t": 394.1,
+   "state": {
+    "clock": "6:34 played, 3:25 left (middle game)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "14 combat units (medium), at home: 12 rifle infantry, 1 flak truck, 1 rocket infantry",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "none standing that we know of",
+    "what_we_know_of_the_enemy": "we have never seen their base: its defenses are unknown; we have never seen their army: its size is unknown, not zero",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "7 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (about 100% sure)"
+   },
+   "expect": {
+    "economy": [
+     "safe"
+    ],
+    "production": [
+     "rockets",
+     "mixed"
+    ]
+   },
+   "why": "6:34, enemy never seen, 7 harvesters already and 14 mostly rifle infantry: an unseen enemy is massing (tanks came at 6:44 and wiped us): no more greed, anti-tank units",
+   "bot_said": "defend(0.92) opp=unknown build=mixed greed=2"
   }
  ]
 }

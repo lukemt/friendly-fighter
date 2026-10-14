@@ -191,10 +191,35 @@ class Jev:
         self.calls = self.errors = self.tokens = self.last_tokens = 0
         self.seconds = 0.0
 
+    def check(self) -> str:
+        """"" when Jev answers; otherwise why not (no key, no credits, the service down). One tiny call."""
+        if not self.key:
+            return "no TYPESAFE_API_KEY (environment or .env)"
+        try:
+            reply = self.http.post(API_URL, headers={"Authorization": f"Bearer {self.key}"},
+                                   json={"model": self.model, "state": "ping",
+                                         "questions": {"ok": {"type": "noul", "instructions": "Is `state` a word?"}}})
+        except Exception as e:  # noqa: BLE001
+            return f"Jev unreachable: {type(e).__name__}"
+        if reply.status_code == 200:
+            return ""
+        try:
+            detail = (reply.json().get("detail") or {})
+            detail = detail.get("message") if isinstance(detail, dict) else str(detail)
+        except ValueError:
+            detail = reply.text[:200]
+        return f"Jev answered {reply.status_code}: {detail}"
+
     def ask(self, state: Any, questions: dict[str, Any]) -> dict[str, Any] | None:
         """The answers by question id, or None (no key, or the call failed)."""
+        answers, tokens = self.ask_counted(state, questions)
+        self.last_tokens = tokens
+        return answers
+
+    def ask_counted(self, state: Any, questions: dict[str, Any]) -> tuple[dict[str, Any] | None, int]:
+        """``ask`` and the request's input tokens (safe to call from several threads at once)."""
         if not self.key:
-            return None
+            return None, 0
         start = time.monotonic()
         self.calls += 1
         try:
@@ -204,12 +229,12 @@ class Jev:
             body = reply.json()
         except Exception:  # noqa: BLE001  (the game goes on with the last decision)
             self.errors += 1
-            return None
+            return None, 0
         finally:
             self.seconds += time.monotonic() - start
-        self.last_tokens = int((body.get("usage") or {}).get("input_tokens") or 0)
-        self.tokens += self.last_tokens
-        return body.get("answers") or None
+        tokens = int((body.get("usage") or {}).get("input_tokens") or 0)
+        self.tokens += tokens
+        return body.get("answers") or None, tokens
 
 
 def _cell(obj: Any) -> tuple[int, int] | None:
@@ -260,7 +285,7 @@ class JevBot:
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = False,
                  commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True,
                  force: str | None = None, economy: str | int = "off", guard_end: float | None = None,
-                 greed_floor: int = 0, defenses: int = 2) -> None:
+                 greed_floor: int = 0, defenses: int = 2, early_refineries: int = 0) -> None:
         """``force``: a posture held whatever Jev says and past every rail (for the coach: what would
         each posture have scored from this moment?)."""
         self.push = push
@@ -272,6 +297,7 @@ class JevBot:
         self.guard_end = guard_end      # the guard opening ends here when no raid has come (else at 6:00)
         self.greed_floor = greed_floor  # Jev's "greedy" only with at least this many combat units
         self.defenses = defenses        # the scripted bot's cap on defenses
+        self.early_refineries = early_refineries  # refineries before the war factory beyond the first
         self.scout = scout
         self.questions = load_questions(questions)
         if economy == "jev":
@@ -279,7 +305,7 @@ class JevBot:
         self.commit_deficit = commit_deficit
         self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60,
                                            greed=economy if isinstance(economy, int) else 2 if economy == "read" else 0,
-                                           defenses=defenses),
+                                           defenses=defenses, early_refineries=early_refineries),
                                log=lambda line: None)
         self.jev = Jev(model=model)
         if not use_jev:  # (the control: the same bot with the decisions frozen at the start)
@@ -698,19 +724,20 @@ class JevBot:
             aim=self._aim(facts) if self.posture == "commit" else None,
             greed=self.greed,
             defenses=self.defenses,
+            early_refineries=self.early_refineries,
             note=self.posture,
         )
         self.bot.set_knobs(knobs)
-        self.note = (f"{self.posture}({p_posture:.2f}) opp={self.opponent} build={self.production}"
+        self.note = (f"{self.posture}" + (f"({p_posture:.2f})" if p_posture else "") + f" opp={self.opponent} build={self.production}"
                      + (f" greed={self.greed}" if self.economy != "off" else "")
                      + (f" open={self.opening}" if now < 240 else "") + (f" rails: {', '.join(rails)}" if rails else ""))
         return extra
 
-    def _log(self, context, now, state, answers, latency) -> None:
+    def _log(self, context, now, state, answers, latency, more: dict | None = None) -> None:
         entry = {"t": round(now, 1), "latency": round(latency, 3), "tokens": self.jev.last_tokens if answers else 0,
                  "state": state, "decision": self.note,
                  "answers": {k: (v.get("probabilities") if v.get("type") != "noul" else v.get("noul"))
-                             for k, v in (answers or {}).items()} if answers else None}
+                             for k, v in (answers or {}).items()} if answers else None, **(more or {})}
         self.calls.append(entry)
         try:
             if self.log_path is None:

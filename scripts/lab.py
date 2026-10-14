@@ -105,6 +105,15 @@ def _check_bots(names: list[str]) -> None:
 def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
     from lab import batch
 
+    jev_bots = sorted({n for j in jobs for n in j["bots"] if _uses_jev(n)})
+    if jev_bots:
+        from bots.jev_bot import Jev
+
+        problem = Jev().check()
+        if problem:
+            print(f"[lab] {', '.join(jev_bots)} need Jev, and {problem}: they would play on frozen decisions. "
+                  f"Not starting.", flush=True)
+            raise SystemExit(2)
     run_id = db.start_run(kind, _command(), params, note=a.note or "", experiment=a.experiment or "")
     workers = min(a.workers or _quota(), len(jobs))
     print(f"[lab] run {run_id}: {len(jobs)} games on {workers} workers (logs: {batch.LOG_DIR}/run-{run_id}-w*.log)",
@@ -132,7 +141,25 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
     wall = time.monotonic() - t0
     n = db.one("SELECT COUNT(*) AS n FROM games WHERE run_id = ?", run_id)["n"]
     print(f"[lab] run {run_id}: {n} games in {wall:.0f} s ({wall / max(n, 1):.1f} s a game)")
+    if jev_bots:
+        from lab import jevlog
+
+        warning = jevlog.run_health(db, run_id)
+        if warning:
+            print(warning)
+            db.add_note(warning, run_id=run_id, author="lab")
     return run_id
+
+
+def _uses_jev(name: str) -> bool:
+    """A bot that asks Jev (a module bot built on bots/jev_bot.py, frozen or not; not a forced one)."""
+    try:
+        bot = registry.get(name)
+    except KeyError:
+        return False
+    factory = str(bot.params.get("factory", "")) if bot.kind == "module" else ""
+    kwargs = bot.params.get("kwargs") or {}
+    return "jev" in factory and not kwargs.get("force") and kwargs.get("use_jev", True)
 
 
 # -- commands ------------------------------------------------------------------------------------
@@ -581,8 +608,9 @@ def cmd_jev(a, db) -> int:
 
         cases = jev_eval.load_cases()
         variant = json.loads(Path(a.questions).read_text()) if a.questions else None
-        print(f"{len(cases)} cases" + (f", variant {a.questions}" if a.questions else ""))
-        print(jev_eval.report(jev_eval.evaluate(cases, variant)))
+        print(f"{len(cases)} cases" + (f", variant {a.questions}" if a.questions else "")
+              + (", asked as the council (bots/jev_council.py)" if a.council else ""))
+        print(jev_eval.report(jev_eval.evaluate_council(cases) if a.council else jev_eval.evaluate(cases, variant)))
         return 0
     if a.game == "case":
         from lab import jev_eval
@@ -962,6 +990,7 @@ def main() -> int:
     s.add_argument("game", nargs="?")
     s.add_argument("rest", nargs="*")
     s.add_argument("--questions", help="eval: a variant (JSON: playbook / criteria / instructions)")
+    s.add_argument("--council", action="store_true", help="eval: ask the cases as bots/jev_council.py's loops")
     s.add_argument("--expect", help="case: question=choice,choice;question=choice")
     s.add_argument("--why", help="case: the reason")
     s.add_argument("--seat", type=int, help="case: which seat's log (when both seats were Jev bots)")

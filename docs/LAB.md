@@ -133,6 +133,20 @@ lab coach last --at 7:34 --repeats 2 --label
 Lessons so far (docs/STRATEGY.md): write numbers literally, keep the options' criteria from
 claiming the same situation, and say what was never seen.
 
+**The council** (`ff-jev-council*`, `bots/jev_council.py`, docs/JEV_LOOPS.md) asks Jev as three
+loops instead of one call:
+- a strategist (opponent, plan, "attack soon?");
+- a quartermaster (what to train);
+- a field commander (posture, only when there is something to command).
+
+Each loop has its own briefing in the state, its own view of the game and its own pace. It uses
+about half the tokens of one call. `lab jev eval --council` asks the labelled cases the same way,
+the strategist first. `lab jev` shows a council's requests and tokens by loop.
+
+**When Jev is unavailable** (no key, out of credits, down), `lab play/compare/gate` refuse to start
+a run with Jev bots and say why. After a run they warn, and leave a note on it, when Jev bots went
+without answers: those games played on frozen decisions, so drop them from conclusions.
+
 Jev answers vary by about 0.02 in probability between identical calls, but the choices (and so the
 seeded games) replay the same. `ff-jev-off` is the same code with Jev switched off (a control);
 `ff-jev-v6-measured` charges its real decision time, Jev calls included, as game time, as the

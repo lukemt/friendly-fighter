@@ -100,6 +100,22 @@ def test_follows_the_build_order_refinery_before_barracks():
     assert {"cmd": "build", "item": "proc"} in orders_of(bot.choose_action(s, CTX))
 
 
+def test_early_refineries_come_before_the_war_factory_only_when_asked():
+    def first_build(**knobs):
+        bot, _ = make_bot(knobs=Knobs(**knobs))
+        s = state(
+            economy={"cash": 5000, "power_provided": 300, "power_drained": 20},
+            buildings=[{"id": 1, "type": "fact", "x": 12, "y": 16}, {"id": 2, "type": "powr", "x": 14, "y": 16},
+                       {"id": 3, "type": "proc", "x": 16, "y": 16}, {"id": 4, "type": "tent", "x": 12, "y": 19}],
+            available_production=["powr", "tent", "proc", "weap", "e1"],
+            units=[],
+        )
+        return [o["item"] for o in cmds(orders_of(bot.choose_action(s, CTX)), "build")]
+
+    assert "weap" in first_build() and "proc" not in first_build()  # (the default: the war factory first)
+    assert "proc" in first_build(early_refineries=1) and "weap" not in first_build(early_refineries=1)
+
+
 def test_launches_a_wave_at_the_threshold_and_respects_limits():
     bot, _ = make_bot(knobs=Knobs(attack_threshold=4))
     units = [{"id": 200 + i, "type": "e1", "x": 14, "y": 17, "hp": 100, "idle": True} for i in range(120)]
