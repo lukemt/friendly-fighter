@@ -19,9 +19,9 @@ def log_files(game_id: str | None = None) -> list[Path]:
     return sorted(root.glob(pattern), key=lambda p: p.stat().st_mtime)
 
 
-def read(path: Path) -> list[dict]:
+def read(path: Path | str) -> list[dict]:
     rows = []
-    for line in path.read_text().splitlines():
+    for line in Path(path).read_text().splitlines():
         try:
             rows.append(json.loads(line))
         except ValueError:

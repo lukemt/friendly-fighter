@@ -287,3 +287,15 @@ def test_the_gate_verdict_weighs_paired_games():
     assert report.gate_verdict(paired([0.0] * 12), [win] * 6)[0] == "BETTER"  # (head to head decides a tie)
     regression = {"x": {"mean": -1.0, "lo": -1.0, "hi": -0.5, "n": 6}}
     assert report.gate_verdict(paired([0.0] * 12, regression), [win] * 6)[0] != "BETTER"
+
+
+def test_compare_pairs_every_candidate_on_the_same_seeds():
+    jobs = league.compare(["a", "b", "c"], ["x", "y"], 3, maps=["m1", "m2"], seed=2)
+    assert len(jobs) == 3 * 2 * 3
+    games: dict = {}
+    for j in jobs:
+        base = next(b for b in j["bots"] if b in ("x", "y"))
+        cand = next(b for b in j["bots"] if b in ("a", "b", "c"))
+        games.setdefault((j["seed"], j["map"], base, j["bots"].index(base)), []).append(cand)
+    # each (seed, map, baseline, seat) is played once by every candidate
+    assert len(games) == 2 * 3 and all(sorted(v) == ["a", "b", "c"] for v in games.values())

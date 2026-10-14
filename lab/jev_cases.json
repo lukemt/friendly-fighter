@@ -1,0 +1,470 @@
+{
+ "cases": [
+  {
+   "id": "ac407695@0",
+   "game": "lab-ac407695-c9c2-435a-8092-5d9053e87061",
+   "t": 0.2,
+   "state": {
+    "clock": "0:00 played, 9:59 left (opening: the rush window)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "0 combat units (none), at home: nothing",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "none seen",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "0 harvesters, money piling up unspent"
+   },
+   "expect": {
+    "posture": [
+     "defend"
+    ],
+    "production": [
+     "infantry"
+    ],
+    "opening": [
+     "guard"
+    ],
+    "opponent": [
+     "unknown"
+    ]
+   },
+   "why": "game start: nothing known; guard opening is safe against everyone",
+   "bot_said": "defend(1.00) opp=unknown build=infantry open=guard"
+  },
+  {
+   "id": "ac407695@547",
+   "game": "lab-ac407695-c9c2-435a-8092-5d9053e87061",
+   "t": 547.9,
+   "state": {
+    "clock": "9:07 played, 0:52 left (final minute)",
+    "score": "kills minus losses: we are ahead by 5250 credits",
+    "recent_trades": "in the last 12 seconds we killed 600 and lost 0 credits worth (we are winning the trades)",
+    "our_army": "56 combat units (huge), 1 of them out of the base: 25 rifle infantry, 16 rocket infantry, 12 medium tank, 3 artillery",
+    "enemy_army": "in the last minute we saw 2 enemy combat units: 1 flak truck, 1 rocket infantry; the biggest enemy group seen at once was 11 units (medium)",
+    "enemy_defenses": "none seen",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "enemies first came to our base at 5:43 with 1 units; 1 raid(s) so far",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "our_attack": "our 1 units out of the base are fighting 1 enemy units: they clearly outnumber us",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (72% sure)"
+   },
+   "expect": {
+    "posture": [
+     "defend"
+    ]
+   },
+   "why": "ahead by 5250 in the final minute: defend the lead",
+   "bot_said": "defend(0.71) opp=unknown build=mixed"
+  },
+  {
+   "id": "2911b11d@482",
+   "game": "lab-2911b11d-a65d-4f2b-bd6e-29f279b2f031",
+   "t": 482.6,
+   "state": {
+    "clock": "8:02 played, 1:57 left (late game)",
+    "score": "kills minus losses: we are behind by 1250 credits",
+    "recent_trades": "in the last 12 seconds we killed 400 and lost 1450 credits worth (we are losing the trades)",
+    "our_army": "35 combat units (huge), 32 of them out of the base: 20 rifle infantry, 10 rocket infantry, 4 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 16 enemy combat units: 10 rifle infantry, 6 rocket infantry; the biggest enemy group seen at once was 15 units (medium)",
+    "enemy_defenses": "AA gun, pillbox, turret",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "attacking",
+    "our_attack": "our 32 units out of the base are fighting 10 enemy units and 3 pillbox, 1 AA gun, 1 turret: about even",
+    "economy": "4 harvesters, money all spent",
+    "our_read_so_far": "the opponent looked like 'passive' (74% sure)"
+   },
+   "expect": {
+    "posture": [
+     "retreat"
+    ]
+   },
+   "why": "attack into pillboxes/turret losing the trades 400:1450: fall back",
+   "bot_said": "retreat(0.99) opp=passive build=mixed"
+  },
+  {
+   "id": "2911b11d@508",
+   "game": "lab-2911b11d-a65d-4f2b-bd6e-29f279b2f031",
+   "t": 508.8,
+   "state": {
+    "clock": "8:28 played, 1:31 left (late game)",
+    "score": "kills minus losses: we are ahead by 50 credits",
+    "recent_trades": "in the last 30 seconds we killed 1400 and lost 1450 credits worth (we are losing the trades)",
+    "our_army": "39 combat units (huge), at home: 21 rifle infantry, 12 rocket infantry, 5 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 23 enemy combat units: 13 rifle infantry, 7 rocket infantry, 2 ranger jeep, 1 light tank; the biggest enemy group seen at once was 18 units (big)",
+    "enemy_defenses": "AA gun, pillbox, turret",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "enemies first came to our base at 8:28 with 1 units; 1 raid(s) so far",
+    "now_at_our_base": "1 enemy units are attacking our base",
+    "our_current_orders": "gathering outside the base",
+    "economy": "4 harvesters, some money",
+    "our_past_attacks": "at 7:34 our attack killed 400 and lost 1450 credits worth against 3 pillbox, 1 AA gun, 1 turret",
+    "our_read_so_far": "the opponent looked like 'turtle' (93% sure)"
+   },
+   "expect": {
+    "posture": [
+     "defend"
+    ],
+    "opponent": [
+     "fortified",
+     "turtle"
+    ]
+   },
+   "why": "ahead by 50, 1:31 left, defenses seen and a reaction army: defend",
+   "bot_said": "defend(0.49) opp=turtle build=mixed"
+  },
+  {
+   "id": "24deeda4@403",
+   "game": "lab-24deeda4-405b-472e-aa34-c27280a871d1",
+   "t": 403.9,
+   "state": {
+    "clock": "6:43 played, 3:16 left (middle game)",
+    "score": "kills minus losses: we are behind by 100 credits",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "28 combat units (huge), at home: 16 rifle infantry, 7 rocket infantry, 4 medium tank, 1 artillery",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "none standing that we know of (some destroyed)",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, money all spent",
+    "our_read_so_far": "the opponent looked like 'unknown' (73% sure)",
+    "what_we_know_of_the_enemy": "buildings seen all game: some defenses (destroyed since); we have never seen their army: its size is unknown, not zero"
+   },
+   "expect": {
+    "posture": [
+     "defend",
+     "gather"
+    ]
+   },
+   "why": "behind by only 100 (a scout) at 6:43, nothing seen: no attack",
+   "bot_said": "defend(0.89) opp=unknown build=mixed rails: not behind enough: defend"
+  },
+  {
+   "id": "5d98078b@506",
+   "game": "lab-5d98078b-ec44-4297-9b5b-35e4067a77db",
+   "t": 506.2,
+   "state": {
+    "clock": "8:26 played, 1:33 left (late game)",
+    "score": "kills minus losses: we are behind by 1800 credits",
+    "recent_trades": "in the last 30 seconds we killed 0 and lost 850 credits worth (we are losing the trades)",
+    "our_army": "41 combat units (huge), at home: 21 rifle infantry, 12 rocket infantry, 7 medium tank, 1 artillery",
+    "enemy_army": "in the last minute we saw 25 enemy combat units: 16 rifle infantry, 7 rocket infantry, 2 heavy tank; the biggest enemy group seen at once was 22 units (big)",
+    "enemy_defenses": "none seen",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "gathering outside the base",
+    "economy": "4 harvesters, some money",
+    "our_past_attacks": "at 7:34 our attack killed 0 and lost 850 credits worth",
+    "our_read_so_far": "the opponent looked like 'unknown' (82% sure)"
+   },
+   "expect": {
+    "posture": [
+     "commit"
+    ]
+   },
+   "why": "behind by 1800 with 1:33 left and 41 units at home, no defenses known: only an attack can win",
+   "bot_said": "gather(0.83) opp=unknown build=mixed rails: last attack failed: wait"
+  },
+  {
+   "id": "70f999c2@454",
+   "game": "lab-70f999c2-16e7-4edb-b25f-66c804494ab4",
+   "t": 454.1,
+   "state": {
+    "clock": "7:34 played, 2:25 left (late game)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (70% sure)",
+    "what_we_know_of_the_enemy": "buildings seen all game: 1 flame tower; we have never seen their army: its size is unknown, not zero"
+   },
+   "expect": {
+    "posture": [
+     "defend",
+     "gather"
+    ]
+   },
+   "why": "even at 7:34, enemy unseen: keep defending (or gather); no blind attack",
+   "bot_said": "defend(0.98) opp=unknown build=mixed"
+  },
+  {
+   "id": "3d6a1b5a@488",
+   "game": "lab-3d6a1b5a-2f0b-458a-b242-4d51318f5563",
+   "t": 488.6,
+   "state": {
+    "clock": "8:08 played, 1:51 left (late game)",
+    "score": "kills minus losses: we are behind by 100 credits",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "41 combat units (huge), 38 of them out of the base: 21 rifle infantry, 11 rocket infantry, 6 medium tank, 2 artillery, 1 light tank",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "5 known (many: a fortified base): 3 flame tower, 2 tesla coil",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "attacking",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'passive' (97% sure)"
+   },
+   "expect": {
+    "posture": [
+     "retreat",
+     "defend"
+    ],
+    "opponent": [
+     "turtle",
+     "fortified"
+    ]
+   },
+   "why": "army walking into 5 known defenses (tesla, flame towers) while behind only 100: pull back; a fortified base is a turtle, not passive",
+   "bot_said": "commit(0.55) opp=passive build=mixed"
+  },
+  {
+   "id": "2911b11d@579",
+   "game": "lab-2911b11d-a65d-4f2b-bd6e-29f279b2f031",
+   "t": 579.4,
+   "state": {
+    "clock": "9:39 played, 0:20 left (final minute)",
+    "score": "kills minus losses: we are ahead by 2050 credits",
+    "recent_trades": "in the last 30 seconds we killed 1500 and lost 500 credits worth (we are winning the trades)",
+    "our_army": "28 combat units (huge), at home: 12 rocket infantry, 10 rifle infantry, 4 heavy tank, 2 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 13 enemy combat units: 8 rifle infantry, 3 rocket infantry, 1 light tank, 1 Black Hawk helicopter; the biggest enemy group seen at once was 22 units (big)",
+    "enemy_defenses": "AA gun, pillbox, turret",
+    "enemy_aircraft": "Black Hawk helicopter",
+    "raids_on_our_base": "enemies first came to our base at 8:28 with 1 units; 1 raid(s) so far",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_past_attacks": "at 7:34 our attack killed 400 and lost 1450 credits worth against 3 pillbox, 1 AA gun, 1 turret",
+    "our_read_so_far": "the opponent looked like 'turtle' (98% sure)"
+   },
+   "expect": {
+    "posture": [
+     "defend"
+    ],
+    "production": [
+     "rockets"
+    ]
+   },
+   "why": "ahead with 20 s left, an enemy helicopter seen: defend, rocket infantry",
+   "bot_said": "defend(0.99) opp=turtle build=rockets"
+  },
+  {
+   "id": "b9b7b7ba@232",
+   "game": "lab-b9b7b7ba-56f6-41f3-8a18-4e13f3d4afb0",
+   "t": 232.3,
+   "state": {
+    "clock": "3:52 played, 6:07 left (opening: the rush window)",
+    "score": "kills minus losses: we are ahead by 1800 credits",
+    "recent_trades": "in the last 30 seconds we killed 2100 and lost 200 credits worth (we are winning the trades)",
+    "our_army": "8 combat units (medium), at home: 8 rifle infantry",
+    "enemy_army": "in the last minute we saw 15 enemy combat units: 9 rifle infantry, 6 rocket infantry; the biggest enemy group seen at once was 5 units (small)",
+    "enemy_defenses": "none standing that we know of",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "enemies first came to our base at 3:43 with 5 units; 7 raid(s) so far",
+    "now_at_our_base": "5 enemy units are attacking our base",
+    "our_current_orders": "defending at home",
+    "economy": "3 harvesters, money all spent",
+    "our_read_so_far": "the opponent looked like 'unknown' (43% sure)"
+   },
+   "expect": {
+    "posture": [
+     "defend"
+    ],
+    "opponent": [
+     "rusher",
+     "aggressive"
+    ],
+    "production": [
+     "infantry"
+    ],
+    "opening": [
+     "guard"
+    ]
+   },
+   "why": "a rush at 3:52 with the base under attack: defend with infantry",
+   "bot_said": "defend(1.00) opp=rusher build=infantry open=guard"
+  },
+  {
+   "id": "syn-passive-base",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "6:10 played, 3:49 left (middle game)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "none standing that we know of",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'passive' (80% sure)",
+    "scouting": "our scout reached the enemy base and saw a construction yard, a refinery and a power plant, no defenses and no army"
+   },
+   "expect": {
+    "posture": [
+     "commit"
+    ],
+    "opponent": [
+     "passive"
+    ]
+   },
+   "why": "an enemy with no army and no defenses: attack and wipe it out",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-behind-big-normal",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "8:05 played, 1:54 left (late game)",
+    "score": "kills minus losses: we are behind by 1600 credits",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "35 combat units (huge), at home: 18 rifle infantry, 10 rocket infantry, 7 medium tank",
+    "enemy_army": "in the last minute we saw 6 enemy combat units: 4 rifle infantry, 2 rocket infantry; the biggest enemy group seen at once was 20 units (big)",
+    "enemy_defenses": "2 known (a few): 1 tesla coil, 1 flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (70% sure)"
+   },
+   "expect": {
+    "posture": [
+     "commit"
+    ]
+   },
+   "why": "behind by 1600 late with 35 units: only an attack can win; a few known defenses can be avoided",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-ahead-small-late",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "8:40 played, 1:19 left (late game)",
+    "score": "kills minus losses: we are ahead by 300 credits",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 0 enemy combat units: nothing; the biggest enemy group seen at once was 0 units (none)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (70% sure)"
+   },
+   "expect": {
+    "posture": [
+     "defend"
+    ]
+   },
+   "why": "a small lead late: defend it, never attack",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-rush-early",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "3:20 played, 6:39 left (opening: the rush window)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "11 combat units (medium), at home: 11 rifle infantry",
+    "enemy_army": "in the last minute we saw 18 enemy combat units: 12 rifle infantry, 4 grenadier, 2 flamethrower; the biggest enemy group seen at once was 18 units (big)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "enemies first came to our base at 3:14 with 18 units; 1 raid(s) so far",
+    "now_at_our_base": "18 enemy units are attacking our base",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (70% sure)"
+   },
+   "expect": {
+    "posture": [
+     "defend"
+    ],
+    "opponent": [
+     "rusher"
+    ],
+    "production": [
+     "infantry"
+    ]
+   },
+   "why": "a rush at 3:14: defend at home, infantry fast",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-tanks-coming",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "6:30 played, 3:29 left (middle game)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 9 enemy combat units: 6 heavy tank, 3 V2 rocket launcher; the biggest enemy group seen at once was 9 units (medium)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, some money",
+    "our_read_so_far": "the opponent looked like 'unknown' (70% sure)"
+   },
+   "expect": {
+    "production": [
+     "rockets"
+    ]
+   },
+   "why": "enemy tanks: rocket infantry",
+   "bot_said": ""
+  },
+  {
+   "id": "syn-money-infantry-enemy",
+   "game": "synthetic",
+   "t": 0,
+   "state": {
+    "clock": "5:30 played, 4:29 left (middle game)",
+    "score": "kills minus losses: even",
+    "recent_trades": "no fighting in the last 30 seconds",
+    "our_army": "33 combat units (huge), at home: 20 rifle infantry, 9 rocket infantry, 3 heavy tank, 1 V2 rocket launcher",
+    "enemy_army": "in the last minute we saw 20 enemy combat units: 14 rifle infantry, 6 grenadier; the biggest enemy group seen at once was 20 units (big)",
+    "enemy_defenses": "flame tower",
+    "enemy_aircraft": "none seen",
+    "raids_on_our_base": "no enemy army has come near our base yet",
+    "now_at_our_base": "our base is quiet",
+    "our_current_orders": "defending at home",
+    "economy": "4 harvesters, money piling up unspent",
+    "our_read_so_far": "the opponent looked like 'unknown' (70% sure)"
+   },
+   "expect": {
+    "production": [
+     "vehicles",
+     "mixed"
+    ]
+   },
+   "why": "money unspent and an infantry enemy: tanks",
+   "bot_said": ""
+  }
+ ]
+}

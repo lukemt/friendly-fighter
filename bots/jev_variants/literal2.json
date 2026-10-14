@@ -1,0 +1,39 @@
+{
+ "playbook": [
+  "The game ends at 10:00 and is decided by kills minus losses in credits; a 0-0 draw is replayed, not lost.",
+  "Attacking into defenses (tesla coils, flame towers, pillboxes, turrets) loses: every unit that dies costs its full price.",
+  "Against a passive opponent: lose nothing and kill what comes; one kill with no losses wins.",
+  "A rusher attacks our base at 3:00-4:10 with about 20 infantry, then sends more waves; beat it with a defense and 10 infantry at home.",
+  "A big army committed all at once breaks an army; units sent in small groups die one by one.",
+  "When the score is even, keep defending: most opponents attack sooner or later and lose units to our defense, and a 0-0 draw is not a loss.",
+  "Attack only when clearly behind on score (by 500 credits or more) with a big army (25 or more units), late in the game, at a part of the enemy base where no defenses stand. Being behind by a few hundred credits is not a reason to attack.",
+  "When ahead on score, never attack: defend the lead.",
+  "An attack that is losing more than it kills, or that runs into defenses, must fall back at once.",
+  "Against a turtle (a base full of defenses, mines or aircraft) attacking almost always loses, even when slightly behind: keep defending.",
+  "Rocket infantry are the answer to aircraft and tanks; rifle infantry cannot hit aircraft.",
+  "Never attack into a fortified base (4 or more known defenses); fall back if the army is heading into one.",
+  "Against a passive opponent (no army and no defenses seen at its base) attack at once with everything: destroying it wins the game outright."
+ ],
+ "criteria": {
+  "posture": {
+   "defend": "Stay at home and kill whatever comes. Right when ahead on score, when even on score against an opponent that has an army or defenses, early in the game, against a rusher or an aggressive opponent, or when the army is small",
+   "gather": "Build one big group at the staging point outside our base without attacking. Right when behind on score but the army is not big enough yet to attack",
+   "commit": "Attack with everything at once where no defenses stand. Right against a passive opponent (no army, no defenses) at any score, or when clearly behind on score (by 500 credits or more) late in the game with a big army; never into a fortified base",
+   "retreat": "Pull the army back home now. Right when our army out of the base is losing more than it kills, is under fire from enemy defenses, or is heading into a fortified base"
+  },
+  "opponent": {
+   "rusher": "Attacks our base early (before about 4:30) with a big wave of infantry, and keeps sending waves",
+   "turtle": "Builds many defenses (pillboxes, turrets, tesla coils, flame towers, mines), maybe aircraft; rarely attacks; a fortified base",
+   "fortified": "Fortifies its ore field, keeps a big reaction army of infantry at home, attacks rarely and late",
+   "aggressive": "Sends attack waves at our base again and again through the middle of the game",
+   "passive": "Has no army and no defenses at all: we have seen its base and nothing there fights",
+   "unknown": "Too early or too little seen to tell"
+  },
+  "production": {
+   "infantry": "Rifle and rocket infantry only: right only in the first 4 minutes, against an early rush",
+   "rockets": "Infantry are all rocket infantry, plus tanks: right when enemy aircraft or many enemy tanks have been seen",
+   "vehicles": "Tanks first: right when money is piling up unspent (tanks spend it fastest) and the enemy army is mostly infantry",
+   "mixed": "Both infantry and tanks: the default once the opening is over"
+  }
+ }
+}

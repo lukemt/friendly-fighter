@@ -69,6 +69,30 @@ used).
 | guard (`opening: guard`) + attack posture (`ff-guard`) | 3/6 | weak | 5/6 vs `ff-default` | gate 25, league 28 |
 | defend posture (`ff-turtle`) | 1/6 | 5.5/6 Normal, 4/6 Turtle | 6/6 vs `ff-default` | gates 12, 29 |
 | guard + defend (`ff-guard-turtle`) | 3/6 | 6/6 Normal, 4/6 Turtle | 4/6 vs `ff-default` | gate 29 |
+| guard + defend + Jev decisions (`ff-jev-push`) | 6/6 | 3/6 + 2 draws Normal, 5/6 + 1 draw Turtle | 6/6 vs `ff-default`, 4/6 vs `ff-turtle`, 5/6 vs `ff-guard-turtle` | runs 34-43 (experiment `jev-v3`) |
+
+## Decisions by Jev (`bots/jev_bot.py`)
+
+- **What it adds.** A scripted bot does what it is told. The Jev bot rereads the game every 10 s
+  (every 3 s in a fight) and changes its posture. It attacks late only when behind, pulls back from
+  a losing attack within 3 s, and holds a lead.
+  - **Evidence:** `lab jev <game>` on runs 34-43.
+- **Rails matter as much as judgment.** Jev followed its playbook literally, and each rail fixed a
+  loss seen in the logs:
+  - **Committed at an even score:** the attack lost.
+  - **Turned around mid-fight when slightly ahead:** the army was cut down while turning back.
+  - **"Behind" after the scout died:** the deficit triggered an attack into a turtle.
+- **Attacks by opponent** (`lab jev --attacks`):
+  - against the Turtle AI they lose (−1056 on average when slightly behind);
+  - against our turtles they gain (+1800 to +2300);
+  - against the Normal AI they gain only from a real deficit (+370 when behind by more than 500,
+    −105 when behind by less).
+- **Writing questions for Jev** (`lab jev eval` on `lab/jev_cases.json`):
+  - **State numbers literally:** "clearly behind (by 500 credits or more)", not "behind".
+  - **Never let two options' criteria claim the same situation:** "defend when even" against
+    "commit against a passive opponent" made it defend against an empty base.
+  - **Say what was never seen:** "never seen their army: size unknown, not zero". Otherwise
+    "nothing seen" reads as a passive opponent.
 
 **Next:** pick the opening by opponent. A rush shows by ~2:30 (scouting) and in an opponent's
 history; the guard costs economy against everyone else.

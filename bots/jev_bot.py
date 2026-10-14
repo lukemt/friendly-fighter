@@ -131,6 +131,27 @@ def _root() -> Path:
     return next((p for p in here.parents if (p / "lab").is_dir() and (p / "bots").is_dir()), here.parents[1])
 
 
+def load_questions(variant: str | None) -> dict[str, dict[str, Any]]:
+    """The questions, with a variant's playbook / criteria / question text swapped in (a JSON file,
+    relative to the repository: see bots/jev_variants/ and ``lab jev eval --questions``)."""
+    import copy
+
+    qs = copy.deepcopy(QUESTIONS)
+    qs["opening"] = copy.deepcopy(OPENING_QUESTION)
+    if not variant:
+        return qs
+    path = Path(variant) if Path(variant).is_absolute() else _root() / variant
+    v = json.loads(path.read_text())
+    for qid, q in qs.items():
+        if "playbook" in v and isinstance(q["instructions"], dict):
+            q["instructions"]["playbook"] = v["playbook"]
+        if qid in (v.get("criteria") or {}):
+            q["criteria"] = v["criteria"][qid]
+        if qid in (v.get("instructions") or {}):
+            q["instructions"]["question"] = v["instructions"][qid]
+    return qs
+
+
 def _key() -> str | None:
     key = os.environ.get("TYPESAFE_API_KEY")
     if key:
@@ -224,8 +245,10 @@ class JevBot:
     (by default Jev's word is enough)."""
 
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = False,
-                 commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True) -> None:
+                 commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True) -> None:
         self.push = push
+        self.scout = scout
+        self.questions = load_questions(questions)
         self.commit_deficit = commit_deficit
         self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60),
                                log=lambda line: None)
@@ -247,6 +270,8 @@ class JevBot:
         self.note = "starting as ff-guard-turtle"
         # What has been seen (for the description).
         self.enemy_seen: dict[int, tuple[str, float]] = {}   # unit id -> (type, last seen)
+        self.building_types: dict[int, str] = {}             # every enemy building ever seen
+        self.last_raid_end = -1e9
         self.enemy_max_army = 0
         self.enemy_defenses: set[str] = set()
         self.defense_cells: dict[int, tuple[str, tuple[int, int]]] = {}  # building id -> (type, cell), while it stands
@@ -261,6 +286,11 @@ class JevBot:
         self.raids = 0
         self.score_marks: list[tuple[float, int, int]] = []  # (seconds, kills, losses)
         self.calls: list[dict[str, Any]] = []
+        self.last_state: dict | None = None
+        self.last_qids: set = set()
+        self.last_answers: dict | None = None
+        self.last_asked = -1e9
+        self.skipped = 0
 
     # -- the runner's hooks ---------------------------------------------------------------------
 
@@ -323,6 +353,7 @@ class JevBot:
                 self.enemy_buildings.pop(b["id"], None)
                 continue
             self.enemy_buildings[b["id"]] = (t, cell)
+            self.building_types[b["id"]] = t
             if t in DEFENSES:
                 self.enemy_defenses.add(t)
                 self.defense_cells[b["id"]] = (t, cell)
@@ -336,7 +367,9 @@ class JevBot:
         self.enemy_max_army = max(self.enemy_max_army, len(army_enemies))
         at_base = [e for e in army_enemies if (c := _cell(e)) and _dist(c, home) <= HOME_RADIUS]
         threat = bool(at_base)
-        if threat and not self.last_threat:
+        if not threat and self.last_threat:
+            self.last_raid_end = now
+        if threat and not self.last_threat and now - self.last_raid_end >= 20:
             self.raids += 1
             if self.first_raid is None:
                 self.first_raid = (now, len(at_base))
@@ -369,7 +402,7 @@ class JevBot:
                 self.scout_home = True
                 self.bot._unit_ordered[self.scout_id] = now + 30
                 return [{"cmd": "move", "units": [self.scout_id], "to": list(facts["home"])}]
-        if self.scouts_sent >= len(SCOUT_SECONDS) or now < SCOUT_SECONDS[self.scouts_sent] or facts["threat"]:
+        if not self.scout or self.scouts_sent >= len(SCOUT_SECONDS) or now < SCOUT_SECONDS[self.scouts_sent] or facts["threat"]:
             return []
         legal = raw.get("legal_actions") or {}
         target = _cell(legal.get("enemy_base")) or self.bot._enemy_spawn(facts["home"])
@@ -394,6 +427,22 @@ class JevBot:
         if not towers:
             return min(targets, key=lambda c: _dist(c, facts["home"]))
         return max(targets, key=lambda c: (min(_dist(c, d) for d in towers), -_dist(c, facts["home"])))
+
+    def _intel_text(self) -> str:
+        """Everything seen of the enemy all game, so 'never seen' reads as unknown, not as nothing."""
+        units: dict[str, int] = {}
+        for t, _ in self.enemy_seen.values():
+            if t not in NONCOMBAT:
+                units[t] = units.get(t, 0) + 1
+        kinds: dict[str, int] = {}
+        for t in self.building_types.values():
+            kinds[t] = kinds.get(t, 0) + 1
+        parts = []
+        parts.append(f"buildings seen all game: {_mix(kinds)}" if kinds else
+                     "we have never seen their base: its defenses are unknown")
+        parts.append(f"different combat units seen all game: {sum(units.values())} ({_mix(units)})" if units else
+                     "we have never seen their army: its size is unknown, not zero")
+        return "; ".join(parts)
 
     def _defenses_text(self) -> str:
         standing: dict[str, int] = {}
@@ -448,6 +497,7 @@ class JevBot:
             "enemy_army": (f"in the last minute we saw {sum(recent_enemy.values())} enemy combat units: {_mix(recent_enemy)}; "
                            f"the biggest enemy group seen at once was {self.enemy_max_army} units ({_size(self.enemy_max_army)})"),
             "enemy_defenses": self._defenses_text(),
+            "what_we_know_of_the_enemy": self._intel_text(),
             "enemy_aircraft": ", ".join(sorted(NAMES.get(t, t) for t in self.enemy_air)) or "none seen",
             "raids_on_our_base": raid,
             "now_at_our_base": (f"{len(facts['at_base'])} enemy units are attacking our base" if facts["threat"]
@@ -469,7 +519,7 @@ class JevBot:
         economy = obs.get("economy") or {}
         cash = int(economy.get("cash") or 0) + int(economy.get("ore") or 0)
         harvesters = sum(1 for u in obs.get("units") or [] if str(u.get("type")).lower() == "harv")
-        state["economy"] = f"{harvesters} harvesters, " + ("money piling up unspent" if cash > 2000 else
+        state["economy"] = f"{harvesters} harvesters, " + ("money piling up unspent" if cash > 2000 and now >= 180 else
                                                            "some money" if cash > 600 else "money all spent")
         if not facts["fight"]:
             self.odds = 0.0
@@ -480,18 +530,24 @@ class JevBot:
                 + (f" against {a['towers']}" if a.get("towers") else "") for a in done[-3:])
         if self.belief:
             best = max(self.belief, key=self.belief.get)
-            state["our_read_so_far"] = f"the opponent looked like '{best}' ({round(self.belief[best] * 100)}% sure)"
+            state["our_read_so_far"] = f"the opponent looked like '{best}' (about {round(self.belief[best] * 10) * 10}% sure)"
         return state
 
     # -- deciding ------------------------------------------------------------------------------------
 
     def _decide(self, raw: dict, facts: dict, now: float, context) -> list[dict[str, Any]]:
         state = self.describe(raw, facts, now)
-        questions = dict(QUESTIONS)
-        if now < 240:
-            questions["opening"] = OPENING_QUESTION
+        questions = {k: v for k, v in self.questions.items() if k != "opening" or now < 240}
+        same = {k: v for k, v in state.items() if k != "clock"} == self.last_state and set(questions) == self.last_qids
+        self.last_state, self.last_qids = {k: v for k, v in state.items() if k != "clock"}, set(questions)
+        if same and self.last_answers and now - self.last_asked < 30:
+            # Nothing changed since the last call: its answers stand (no call, no cost).
+            self.skipped += 1
+            return self._apply(self.last_answers, facts, now, raw)
         start = time.monotonic()
         answers = self.jev.ask(state, questions)
+        if answers:
+            self.last_answers, self.last_asked = answers, now
         latency = time.monotonic() - start
         extra: list[dict[str, Any]] = []
         if answers:

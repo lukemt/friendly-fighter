@@ -26,6 +26,19 @@ def matchup(a: str, b: str, games: int, *, maps: list[str] = MAPS, seed: int = 1
                  label=label or f"{a} vs {b}", swap=bool(i % 2)) for i in range(games)]
 
 
+def compare(candidates: list[str], baselines: list[str], games: int, *, maps: list[str] = MAPS, seed: int = 1,
+            minutes: int = 10) -> list[dict]:
+    """Every candidate against every baseline, ``games`` each, on the same seeds (paired)."""
+    jobs = []
+    for k, base in enumerate(baselines):
+        for i in range(games):
+            s = seed * 10007 + 1000 * (k + 1) + i
+            for who in candidates:
+                jobs.append(_job(who, base, map_id=maps[i % len(maps)], seed=s, minutes=minutes,
+                                 label=f"compare:{base}", swap=bool(i % 2)))
+    return jobs
+
+
 def league(bots: list[str], games: int, *, kinds: dict[str, str], maps: list[str] = MAPS, seed: int = 1,
            minutes: int = 10, played: dict[tuple[str, str], int] | None = None, label: str = "league") -> list[dict]:
     """``kinds``: each bot's kind (two OpenRA AIs can't play each other here: the lab steps the

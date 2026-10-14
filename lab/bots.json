@@ -331,6 +331,78 @@
     "jev",
     "ours"
    ]
+  },
+  {
+   "name": "ff-jev-off",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "use_jev": false
+    }
+   },
+   "think": 0.005,
+   "description": "the control: ff-jev-push's code with Jev switched off (guard opening, defend, scout; no decisions)",
+   "tags": [
+    "ours",
+    "jev",
+    "control"
+   ]
+  },
+  {
+   "name": "ff-jev-v6",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json"
+    }
+   },
+   "think": 0.005,
+   "description": "v6: literal playbook (attack only when clearly behind, never into a fortified base, wipe passive opponents), scouting report, skip unchanged calls",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-v6-noscout",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false
+    }
+   },
+   "think": 0.005,
+   "description": "ff-jev-v6 without the scout",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-off-noscout",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "use_jev": false,
+     "scout": false
+    }
+   },
+   "think": 0.005,
+   "description": "control: guard opening + defend, no Jev, no scout",
+   "tags": [
+    "ours",
+    "jev",
+    "control"
+   ]
   }
  ]
 }

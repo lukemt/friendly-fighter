@@ -609,6 +609,33 @@ def gate_verdict(paired: dict, h2h: list[dict]) -> tuple[str, str]:
     return "UNCLEAR", "no difference to see: play more games, or call them equal"
 
 
+def compare_report(db, run_id: int, candidates: list[str], baselines: list[str]) -> str:
+    """Points per baseline for each candidate, and each one's paired difference from the first."""
+    out = [f"compare, run {run_id}: {', '.join(candidates)} (reference: {candidates[0]})"]
+    rows = []
+    for b in baselines:
+        row = [b]
+        for c in candidates:
+            games = perspective(db, c, {"run": run_id, "vs": b})
+            pts = sum(_points(r["result"]) for r in games)
+            net = round(sum(r["net"] or 0 for r in games) / len(games)) if games else 0
+            row.append(f"{pts:g}/{len(games)} ({net:+d})")
+        rows.append(row)
+    total = ["all"]
+    for c in candidates:
+        games = [r for b in baselines for r in perspective(db, c, {"run": run_id, "vs": b})]
+        pts = sum(_points(r["result"]) for r in games)
+        total.append(f"{pts:g}/{len(games)} ({100 * pts / max(1, len(games)):.0f}%)")
+    rows.append(total)
+    out.append(_table(rows, ["baseline (points, mean net)"] + candidates))
+    for c in candidates[1:]:
+        d = paired_difference(db, run_id, c, candidates[0], baselines)
+        flag = "better" if d["lo"] > 0 else "worse" if d["hi"] < 0 else "no clear difference"
+        out.append(f"{c} - {candidates[0]}: {d['mean']:+.2f} points a game (95% CI {d['lo']:+.2f} to {d['hi']:+.2f}), "
+                   f"net {d['net']:+.0f}: {flag}")
+    return "\n".join(out)
+
+
 def runs_table(db, limit: int = 20) -> str:
     rows = [[r["id"], _when(r["started"]), r["kind"], r["games"], r["status"], r["git_commit"] + ("+" if r["git_dirty"] else ""),
              (r["note"] or "")[:40], r["experiment"] or "", (r["command"] or "")[:60]]

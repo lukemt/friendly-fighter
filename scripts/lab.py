@@ -71,6 +71,20 @@ def _quota() -> int:
     return os.cpu_count() or 1
 
 
+def _expand(names: list[str]) -> list[str]:
+    """Bot names, with ``@suite`` replaced by the suite's bots (lab/suites.json)."""
+    suites = json.loads((ROOT / "lab" / "suites.json").read_text())
+    out: list[str] = []
+    for n in names:
+        if n.startswith("@"):
+            if n[1:] not in suites or n[1:].startswith("_"):
+                raise SystemExit(f"no suite {n}: {', '.join('@' + k for k in suites if not k.startswith('_'))}")
+            out += suites[n[1:]]
+        else:
+            out.append(n)
+    return list(dict.fromkeys(out))
+
+
 def _check_bots(names: list[str]) -> None:
     table = registry.load()
     for n in names:
@@ -170,7 +184,7 @@ def cmd_play(a, db) -> int:
 
 def cmd_league(a, db) -> int:
     table = registry.load()
-    names = list(a.bots)
+    names = _expand(list(a.bots))
     if a.tag:
         names += [n for n, b in table.items() if a.tag in b.tags and n not in names]
     _check_bots(names)
@@ -195,12 +209,23 @@ def cmd_league(a, db) -> int:
 
 
 def cmd_gate(a, db) -> int:
-    baselines = [b for b in a.baselines.split(",") if b]
+    baselines = _expand([b for b in a.baselines.split(",") if b])
     _check_bots([a.candidate, a.champion] + baselines)
     jobs = schedule.gate(a.candidate, a.champion, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes)
     run_id = _play(db, jobs, a, "gate", vars(a))
     print()
     print(report.gate_report(db, run_id, a.candidate, a.champion))
+    return 0
+
+
+def cmd_compare(a, db) -> int:
+    candidates = _expand([c for c in a.candidates.split(",") if c])
+    baselines = _expand([b for b in a.baselines.split(",") if b])
+    _check_bots(candidates + baselines)
+    jobs = schedule.compare(candidates, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes)
+    run_id = _play(db, jobs, a, "compare", vars(a))
+    print()
+    print(report.compare_report(db, run_id, candidates, baselines))
     return 0
 
 
@@ -443,6 +468,36 @@ def cmd_jev(a, db) -> int:
     if a.attacks:
         print(jevlog.attack_table(db, jevlog.log_files()))
         return 0
+    if a.game == "eval":
+        from lab import jev_eval
+
+        cases = jev_eval.load_cases()
+        variant = json.loads(Path(a.questions).read_text()) if a.questions else None
+        print(f"{len(cases)} cases" + (f", variant {a.questions}" if a.questions else ""))
+        print(jev_eval.report(jev_eval.evaluate(cases, variant)))
+        return 0
+    if a.game == "case":
+        from lab import jev_eval
+
+        if not (a.rest and a.at and a.expect):
+            print("lab jev case GAME --at 7:40 --expect posture=defend,gather[;production=mixed] --why '...'")
+            return 1
+        g = db.find_game(a.rest[0])
+        gid = g["id"] if g else a.rest[0]
+        paths = jevlog.log_files(gid)
+        if not paths:
+            print(f"no Jev log for {gid}")
+            return 1
+        expect = {}
+        for part in a.expect.split(";"):
+            q, _, ok = part.partition("=")
+            expect[q.strip()] = [x.strip() for x in ok.split(",") if x.strip()]
+        case = jev_eval.case_from_log(jevlog.read(paths[a.seat or 0] if a.seat is not None else paths[0]),
+                                      parse_time(a.at) / 25, expect, game=gid, why=a.why or "")
+        cases = [c for c in jev_eval.load_cases() if c["id"] != case["id"]] + [case]
+        jev_eval.save_cases(cases)
+        print(f"case {case['id']} saved ({len(cases)} in all); the bot said: {case['bot_said']}")
+        return 0
     if a.game is None:
         print(jevlog.usage(jevlog.log_files()))
         return 0
@@ -455,7 +510,7 @@ def cmd_jev(a, db) -> int:
     for path in paths:
         rows = jevlog.read(path)
         print(f"== {path.name}: {len(rows)} calls")
-        print(jevlog.moment(rows, parse_time(a.at)) if a.at else jevlog.timeline(rows, every=a.all))
+        print(jevlog.moment(rows, parse_time(a.at) / 25) if a.at else jevlog.timeline(rows, every=a.all))
     print(jevlog.usage(paths))
     return 0
 
@@ -637,8 +692,14 @@ def main() -> int:
     s = sub.add_parser("gate", help="is a candidate better than the champion?")
     s.add_argument("candidate")
     s.add_argument("--champion", default="ff-default")
-    s.add_argument("--baselines", default="ai-normal,ai-rush,ai-turtle")
+    s.add_argument("--baselines", default="@ais", help="bots or @suites (lab/suites.json), separated by commas")
     s.add_argument("--games", type=int, default=6, help="per opponent")
+    playing(s)
+
+    s = sub.add_parser("compare", help="several candidates against the same baselines on the same seeds")
+    s.add_argument("candidates", help="bots separated by commas; the first is the reference")
+    s.add_argument("--baselines", default="@standard", help="bots or @suites (lab/suites.json), separated by commas")
+    s.add_argument("--games", type=int, default=6, help="per baseline and candidate")
     playing(s)
 
     s = sub.add_parser("branch", help="play on from a moment of a recorded game, with other bots")
@@ -744,8 +805,14 @@ def main() -> int:
     sub.add_parser("import", help="import the games our runtime played on the platform (recordings/)")
     sub.add_parser("status", help="the database, engine lanes and any human session")
 
-    s = sub.add_parser("jev", help="what a Jev bot thought in a game (no game: calls, cost and latency so far)")
+    s = sub.add_parser("jev", help="what a Jev bot thought in a game (no game: calls, cost and latency so far); "
+                                   "'jev eval': score Jev on labelled cases; 'jev case GAME': add one")
     s.add_argument("game", nargs="?")
+    s.add_argument("rest", nargs="*")
+    s.add_argument("--questions", help="eval: a variant (JSON: playbook / criteria / instructions)")
+    s.add_argument("--expect", help="case: question=choice,choice;question=choice")
+    s.add_argument("--why", help="case: the reason")
+    s.add_argument("--seat", type=int, help="case: which seat's log (when both seats were Jev bots)")
     s.add_argument("--at", help="the full state and answers of the call nearest this game time")
     s.add_argument("--all", action="store_true", help="every call, not only changes of decision")
     s.add_argument("--attacks", action="store_true", help="every logged attack by opponent: did it gain?")
@@ -763,7 +830,7 @@ def main() -> int:
 
     a = p.parse_args()
     db = LabDB()
-    handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "branch": cmd_branch,
+    handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "branch": cmd_branch,
                 "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
                 "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
