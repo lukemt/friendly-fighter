@@ -48,6 +48,21 @@ python -m agent --tournament --match   # leave running; one copy per key
 
 Tests: `python -m pytest -q`.
 
+## Testing locally: the simulator and the lab
+
+- **[docs/SIMULATOR.md](docs/SIMULATOR.md):** a local copy of the platform, on the same engine,
+  in virtual time (a 10-minute game in about 12 s).
+- **[docs/LAB.md](docs/LAB.md):** a laboratory on top of it (`scripts/lab.py`):
+  - it plays any bots against each other, or against you;
+  - it records every game in one database;
+  - it rates the bots, and rebuilds or branches any moment of a game.
+
+```bash
+python scripts/lab.py play ff-default ai-normal --games 12
+python scripts/lab.py human start --vs ai-normal      # then: python scripts/lab.py h go 10 ...
+python scripts/lab.py report --last 40
+```
+
 **Never commit `.env`** (it is gitignored). If the key leaks, press *Rotate
 key* in Agent Configuration, update `.env` and restart.
 

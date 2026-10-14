@@ -470,6 +470,11 @@ def cmd_human(a, db) -> int:
         return 0
     if a.action == "stop":
         print(human.client(["quit"]))
+        try:
+            pid = json.loads(human.SESSION_FILE.read_text())["pid"]
+            os.kill(pid, 0)
+        except (OSError, ValueError, KeyError):
+            human.SESSION_FILE.unlink(missing_ok=True)  # (a session that died without cleaning up)
         return 0
     # start
     if human.SESSION_FILE.exists():

@@ -48,7 +48,7 @@ orders: build ITEM | train ITEM [N] | place ITEM [X Y] | deploy [ID] | harvest [
 units:  all (combat units, the default) | idle | a type (3tnk) | near:X,Y,R | ids (12 13 or 12,13)
 help:   autopilot off|macro|full (macro: our bot runs economy and production, the army is yours)
         knobs posture=defend attack_threshold=12 ... (the autopilot's)
-other:  note TEXT | resign | quit (closes the session)"""
+other:  info ITEM... (cost, time, power, needs, weapon) | note TEXT | resign | quit (closes the session)"""
 MACRO_CMDS = {"deploy", "build", "place", "train", "harvest", "repair", "power_toggle", "rally", "cancel", "sell"}
 MAX_ORDERS = 20
 GO_MAX_SECONDS = 120
@@ -71,6 +71,29 @@ def parse_units(obs: dict, words: list[str]) -> list[int]:
         else:
             out += [u["id"] for u in units if u["type"] == w]
     return list(dict.fromkeys(out))
+
+
+def item_info(names: list[str]) -> str:
+    """Cost, build time, power, prerequisites, health and weapon of units and buildings (the game's rules)."""
+    from ffsim.rules import Rules
+
+    rules = Rules.load().config.get("rules") or {}
+    table = {**(rules.get("buildings") or {}), **(rules.get("units") or {})}
+    if not names:
+        return "info ITEM [ITEM...]: e.g. info 3tnk tsla"
+    lines = []
+    for n in names:
+        r = table.get(n.lower())
+        if not r:
+            lines.append(f"{n}: unknown")
+            continue
+        w = r.get("weapon") or {}
+        lines.append(f"{n}: ${r.get('cost')}, {r.get('build_time_s')} s, queue {r.get('queue')}, power {r.get('power')}, "
+                     f"needs {','.join(r.get('prerequisites') or []) or '-'}, hp {r.get('hp')}"
+                     + (f", speed {r['speed']}" if r.get("speed") else "")
+                     + (f", {w.get('weapon')} range {w.get('range_cells')} damage {w.get('damage')}" if w else "")
+                     + (f", factions {','.join(r.get('factions') or [])}" if r.get("factions") else ""))
+    return "\n".join(lines)
 
 
 class HumanSeat:
@@ -338,6 +361,8 @@ class HumanSeat:
 
                 self.assistant._bot.set_knobs(knobs_from_dict(self.knobs))
             return f"knobs {self.knobs}"
+        if cmd == "info":
+            return item_info(args)
         if cmd == "queue":
             return "\n".join(json.dumps(o) for o in self.queued) or "(nothing queued)"
         if cmd == "clear":
@@ -442,11 +467,12 @@ def serve(args) -> int:
                 stop.set()
             elif "seat" not in seat_box:
                 text = f"starting... {state['result'] or ''}"
-            elif state["result"] is not None and argv[:1] not in (["state"], ["map"], ["events"], ["log"], ["units"], ["enemies"]):
+            elif state["result"] is not None and argv[:1] not in (["state"], ["map"], ["events"], ["log"], ["units"],
+                                                                 ["enemies"], ["note"], ["info"], ["help"]):
                 text = f"the game is over: {json.dumps({k: state['result'].get(k) for k in ('id', 'termination', 'winner', 'outcome')})}\n" \
                        f"('lab show {state['game']}' for the record, 'lab h quit' to close this session)"
             elif state["result"] is not None:
-                text = seat_box["seat"]._command(argv)
+                text = seat_box["seat"]._command(argv)  # (the game's thread has ended: looking and notes only)
             else:
                 text = seat_box["seat"].command(argv)
             raw = json.dumps({"text": text, "game": state["game"]}).encode()

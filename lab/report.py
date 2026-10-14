@@ -136,7 +136,9 @@ def _net_series(db, game_id: str, pos: int, other_pos: int, kind: str) -> list[t
     """(tick, net, row) for a seat; an OpenRA AI's mirrored from the other seat."""
     if kind != "ai":
         rows = db.q("SELECT * FROM timeline WHERE game_id = ? AND position = ? ORDER BY tick", game_id, pos)
-        return [(r["tick"], (r["kills_cost"] or 0) - (r["deaths_cost"] or 0), dict(r)) for r in rows]
+        if rows:
+            return [(r["tick"], (r["kills_cost"] or 0) - (r["deaths_cost"] or 0), dict(r)) for r in rows]
+    # An OpenRA AI (or a platform opponent we didn't record): the other seat's, mirrored.
     rows = db.q("SELECT * FROM timeline WHERE game_id = ? AND position = ? ORDER BY tick", game_id, other_pos)
     return [(r["tick"], (r["deaths_cost"] or 0) - (r["kills_cost"] or 0), {}) for r in rows]
 

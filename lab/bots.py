@@ -67,6 +67,7 @@ class Bot:
         if self.kind == "module":
             module = str(self.params.get("factory", "")).split(":", 1)[0]
             files.append(module.replace(".", "/") + ".py")
+            files += CODE["ff"]  # (module bots usually build on our agent's code)
         if self.kind == "ai":
             return _engine_hash()
         return _files_hash(tuple(files))
