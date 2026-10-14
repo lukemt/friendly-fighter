@@ -600,7 +600,9 @@ def paired_difference(db, run_id: int, candidate: str, champion: str, baselines:
         mean, lo, hi = _mean_ci(d)
         by[b] = {"mean": mean, "lo": lo, "hi": hi, "n": len(d)}
     mean, lo, hi = _mean_ci(diffs)
+    net_mean, net_lo, net_hi = _mean_ci([n / 1000 for n in nets])  # (in thousands: the variance floor is for points)
     return {"n": len(diffs), "mean": mean, "lo": lo, "hi": hi, "net": sum(nets) / len(nets) if nets else 0.0,
+            "net_lo": net_lo * 1000, "net_hi": net_hi * 1000,
             "by_baseline": by, "sd": (math.sqrt(sum((x - mean) ** 2 for x in diffs) / (len(diffs) - 1))
                                       if len(diffs) > 1 else 0.5)}
 
@@ -642,8 +644,9 @@ def compare_report(db, run_id: int, candidates: list[str], baselines: list[str])
     for c in candidates[1:]:
         d = paired_difference(db, run_id, c, candidates[0], baselines)
         flag = "better" if d["lo"] > 0 else "worse" if d["hi"] < 0 else "no clear difference"
+        nflag = " (net better)" if d["net_lo"] > 0 else " (net worse)" if d["net_hi"] < 0 else ""
         out.append(f"{c} - {candidates[0]}: {d['mean']:+.2f} points a game (95% CI {d['lo']:+.2f} to {d['hi']:+.2f}), "
-                   f"net {d['net']:+.0f}: {flag}")
+                   f"net {d['net']:+.0f} (CI {d['net_lo']:+.0f} to {d['net_hi']:+.0f}): {flag}{nflag}")
     return "\n".join(out)
 
 

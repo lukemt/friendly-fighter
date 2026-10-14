@@ -260,7 +260,7 @@ class JevBot:
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = False,
                  commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True,
                  force: str | None = None, economy: str | int = "off", guard_end: float | None = None,
-                 greed_floor: int = 0) -> None:
+                 greed_floor: int = 0, defenses: int = 2) -> None:
         """``force``: a posture held whatever Jev says and past every rail (for the coach: what would
         each posture have scored from this moment?)."""
         self.push = push
@@ -268,15 +268,18 @@ class JevBot:
         # "off": the normal economy; a number: that much greed from the start; "jev": Jev decides
         # (greedy = GREED) whenever it asks.
         self.economy = economy
-        self.greed = economy if isinstance(economy, int) else 0
+        self.greed = economy if isinstance(economy, int) else GREED if economy == "read" else 0
         self.guard_end = guard_end      # the guard opening ends here when no raid has come (else at 6:00)
         self.greed_floor = greed_floor  # Jev's "greedy" only with at least this many combat units
+        self.defenses = defenses        # the scripted bot's cap on defenses
         self.scout = scout
         self.questions = load_questions(questions)
         if economy == "jev":
             self.questions["economy"] = ECONOMY_QUESTION
         self.commit_deficit = commit_deficit
-        self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60),
+        self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60,
+                                           greed=economy if isinstance(economy, int) else 2 if economy == "read" else 0,
+                                           defenses=defenses),
                                log=lambda line: None)
         self.jev = Jev(model=model)
         if not use_jev:  # (the control: the same bot with the decisions frozen at the start)
@@ -673,6 +676,10 @@ class JevBot:
         if production in ("infantry", "rockets", "vehicles", "mixed"):
             self.production = production
         economy, _ = choice("economy")
+        if self.economy == "read":
+            # Greedy until the opponent shows itself as one that attacks (Jev's read), or attacks now.
+            dangerous = self.opponent in ("rusher", "aggressive") or facts["threat"] or self.raids >= 2
+            self.greed = 0 if dangerous else GREED
         if self.economy == "jev" and economy in ("greedy", "safe"):
             self.greed = GREED if (economy == "greedy" and not facts["threat"]
                                    and len(facts["combat"]) >= self.greed_floor) else 0
@@ -690,6 +697,7 @@ class JevBot:
             opening=self.opening,
             aim=self._aim(facts) if self.posture == "commit" else None,
             greed=self.greed,
+            defenses=self.defenses,
             note=self.posture,
         )
         self.bot.set_knobs(knobs)

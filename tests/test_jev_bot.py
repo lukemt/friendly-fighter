@@ -15,7 +15,10 @@ class FakeJev:
 
     def ask(self, state, questions):
         self.asked.append((state, questions))
-        pick = lambda q, v: {"type": "choice", "choice": v, "probabilities": {v: self.p}}  # noqa: E731
+        def pick(q, v):  # (like Jev: a probability for every option)
+            options = list((questions.get(q) or {}).get("criteria") or {v: None})
+            rest = (1 - self.p) / max(1, len(options) - 1)
+            return {"type": "choice", "choice": v, "probabilities": {o: self.p if o == v else rest for o in options}}
         return {"opponent": pick("opponent", self.opponent), "posture": pick("posture", self.posture),
                 "production": pick("production", self.production)}
 
@@ -158,3 +161,16 @@ def test_jev_decides_the_economy_but_not_under_attack(tmp_path):
     assert bot.bot.knobs.greed == 0
     plain = JevBot(log_dir=str(tmp_path))
     assert "economy" not in plain.questions and plain.bot.knobs.greed == 0
+
+
+def test_the_read_economy_is_greedy_until_the_opponent_attacks(tmp_path):
+    bot = JevBot(log_dir=str(tmp_path), economy="read")
+    bot.jev = FakeJev(opponent="turtle")
+    assert bot.bot.knobs.greed == 2  # (from the very start, before any call)
+    bot.choose_action(state(time=at(300), units=army(12)), CTX)
+    assert bot.bot.knobs.greed == 2
+    bot.jev = FakeJev(opponent="rusher")
+    for t in (310, 330, 350, 370):  # (the read is a running belief: a few calls to turn)
+        bot.last_call = -1e9
+        bot.choose_action(state(time=at(t), units=army(12)), CTX)
+    assert bot.opponent == "rusher" and bot.bot.knobs.greed == 0

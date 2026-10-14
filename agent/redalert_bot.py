@@ -121,6 +121,7 @@ class Knobs:
     unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only)
     target: str = "nearest"          # "nearest" | "enemy_base" | "harvesters"
     opening: str = "standard"        # "standard" | "guard": a defense and infantry at home through the rush window
+    defenses: int = 2                # at most this many defenses (once the economy is up)
     greed: int = 0                   # extra refineries (up to 2 + greed) before the rest, and as many more harvesters
     aim: tuple[int, int] | None = None  # attack here (the commander's pick), unless enemies are in the way
     note: str = ""
@@ -486,7 +487,7 @@ class RedAlertBot:
         have = sum(types.count(d) for d in DEFENSES)
         if knobs is not None and knobs.opening == "guard" and have < 1 and any(b in types for b in BARRACKS):
             return next((d for d in GUARD_DEFENSES if d in available and self._costs.get(d, 600) <= free), None)
-        if have >= 2 or "weap" not in types or types.count("proc") < 2:
+        if have >= (knobs.defenses if knobs is not None else 2) or "weap" not in types or types.count("proc") < 2:
             return None
         return next((d for d in DEFENSES if d in available and self._costs.get(d, 600) + 500 <= free), None)
 
