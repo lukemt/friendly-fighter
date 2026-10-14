@@ -15,7 +15,10 @@ and returns a fresh ``FriendlyFighter``:
 
 from __future__ import annotations
 
+import json
 import os
+import time
+from dataclasses import fields
 from typing import Any
 
 from dotenv import load_dotenv
@@ -28,9 +31,26 @@ from .recorder import Recorder
 from .console import ConsoleSeat, read_console_control
 from .probe import Probe, read_probe_control
 from .remote import RemoteSeat, read_control
-from .redalert_bot import RedAlertBot
+from .redalert_bot import Knobs, RedAlertBot
 
 RED_ALERT = "red_alert"
+# remote/control.json is looked at once a second at most, not on every view: on the shared
+# workspace filesystem each look costs about a millisecond (a fifth of a worker's CPU).
+CONTROL_EVERY_SECONDS = 1.0
+
+
+def knobs_from_env() -> Knobs:
+    """``FF_KNOBS='{"posture": "eco", "attack_threshold": 14}'``: the bot starts with these knobs
+    instead of the defaults (for local test games of other strategies; unknown keys are ignored)."""
+    knobs = Knobs()
+    try:
+        wanted = json.loads(os.environ.get("FF_KNOBS") or "{}")
+    except ValueError:
+        return knobs
+    for f in fields(Knobs):
+        if f.name in wanted:
+            setattr(knobs, f.name, type(getattr(knobs, f.name))(wanted[f.name]))
+    return knobs
 
 
 def _is_realtime(state: GameState) -> bool:
@@ -49,6 +69,8 @@ class FriendlyFighter:
         self._probe: Probe | None = None
         self._probe_checked = False
         self._console: ConsoleSeat | None = None
+        self._control: dict = {}
+        self._control_read = float("-inf")
 
     # -- moves ----------------------------------------------------------------------
 
@@ -75,7 +97,10 @@ class FriendlyFighter:
                 return self._probe.choose_action(state, context)
             if self._console is not None:
                 return self._console.choose_action(state, context)
-            control = read_control()
+            now = time.monotonic()
+            if now - self._control_read >= CONTROL_EVERY_SECONDS:
+                self._control, self._control_read = read_control(), now
+            control = self._control
             if control.get("enabled") and str(control.get("seat")) == str(context.seat_position):
                 if self._remote is None:
                     self._remote = RemoteSeat(bot, context.seat_position)
@@ -111,7 +136,7 @@ class FriendlyFighter:
 
     def _red_alert(self) -> RedAlertBot:
         if self._bot is None:
-            self._bot = RedAlertBot()
+            self._bot = RedAlertBot(knobs=knobs_from_env())
             self._commander = commander_from_env(self._bot)
             if self._commander is not None:
                 self._commander.start()

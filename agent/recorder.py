@@ -62,7 +62,7 @@ class Recorder:
             folder = self._root / _safe(context.session_id)
             folder.mkdir(parents=True, exist_ok=True)
             path = folder / f"seat{_safe(context.seat_position)}.jsonl.gz"
-            self._file = gzip.open(path, "ab")
+            self._file = gzip.open(path, "ab", compresslevel=1)  # ~4x less CPU than the default 9
             # Close (flush + gzip trailer) at exit: left to the garbage collector,
             # the underlying file can be finalized first and the tail is lost.
             atexit.register(self.close)

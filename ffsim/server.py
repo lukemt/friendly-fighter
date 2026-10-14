@@ -28,6 +28,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .gameapi import PLATFORM_TIMING, Match, SeatConfig, ToolError
+
+try:  # orjson (pip install .[sim]) encodes a state ~10x faster; the JSON means the same either way
+    import orjson
+
+    def dumps(data) -> bytes:
+        return orjson.dumps(data, default=str, option=orjson.OPT_NON_STR_KEYS)
+
+    loads = orjson.loads
+except ImportError:  # pragma: no cover
+    def dumps(data) -> bytes:
+        return json.dumps(data, separators=(",", ":"), default=str).encode()
+
+    loads = json.loads
 from .vclock import platform_rtts
 from .rules import Rules, list_games, tools_list
 
@@ -324,7 +337,7 @@ def make_handler(platform: Platform):
             pass
 
         def _send(self, code: int, data=None, content_type: str = "application/json") -> None:
-            raw = b"" if data is None else json.dumps(data, separators=(",", ":"), default=str).encode()
+            raw = b"" if data is None else dumps(data)
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(raw)))
@@ -335,7 +348,7 @@ def make_handler(platform: Platform):
             length = int(self.headers.get("Content-Length") or 0)
             raw = self.rfile.read(length) if length else b""
             try:
-                return json.loads(raw or b"{}")
+                return loads(raw or b"{}")
             except ValueError:
                 return {"__invalid__": True}
 
@@ -465,7 +478,7 @@ def make_handler(platform: Platform):
                 payload = platform.call_tool(token, name, arguments)
             except Exception as exc:  # noqa: BLE001
                 return {"content": [{"type": "text", "text": f"Error executing tool {name}: {exc!r}"}], "isError": True}
-            return {"content": [{"type": "text", "text": json.dumps(payload, separators=(",", ":"), default=str)}],
+            return {"content": [{"type": "text", "text": dumps(payload).decode()}],
                     "structuredContent": payload, "isError": False}
 
     return Handler

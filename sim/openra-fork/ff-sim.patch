@@ -1,8 +1,8 @@
 diff --git a/OpenRA.Game/Game.cs b/OpenRA.Game/Game.cs
-index 18413ce..9ec6de4 100644
+index 18413ce..269f34b 100644
 --- a/OpenRA.Game/Game.cs
 +++ b/OpenRA.Game/Game.cs
-@@ -47,6 +47,11 @@ public static class Game
+@@ -47,6 +47,17 @@ public static class Game
  		/// <summary>True when running with the Null platform (no GPU/rendering).</summary>
  		public static bool IsHeadless => Settings?.Game?.Platform == "Null";
  
@@ -11,10 +11,16 @@ index 18413ce..9ec6de4 100644
 +		/// ticks as it wants by calling the given action (one logic tick each) and returns.</summary>
 +		public static Action<Action> LockstepDriver;
 +
++		// friendly-fighter sim: a headless game stepped for agents (RL_LOCKSTEP=1). Nothing is ever
++		// drawn, heard or clicked, so what is kept only for that (the screen map, sprites' screen
++		// bounds, decorations, production bars, advice notifications) is skipped; the game itself
++		// (animations included: some actions wait for one to end) runs exactly the same.
++		public static bool Unrendered;
++
  		static WorldRenderer worldRenderer;
  		static string modLaunchWrapper;
  
-@@ -835,6 +840,21 @@ static void Loop()
+@@ -835,6 +846,21 @@ static void Loop()
  
  			while (state == RunStatus.Running)
  			{
@@ -36,7 +42,7 @@ index 18413ce..9ec6de4 100644
  				// Headless fast-forward: bypass timing/render system entirely.
  				// Runs logic ticks in a tight loop with no sleep or render interleave.
  				// ExternalBotBridge sets tickScale < 1.0 during advance(), which makes
-@@ -1077,6 +1097,11 @@ public static void LoadMap(string launchMap, string launchBots = null)
+@@ -1077,6 +1103,11 @@ public static void LoadMap(string launchMap, string launchBots = null)
  			}
  
  			orders.Add(Order.Command("option gamespeed default"));
@@ -79,6 +85,72 @@ index 3a68e04..55b0657 100644
  			}
  			else
  				Connection.SendSync(NetFrameNumber, 0, 0);
+diff --git a/OpenRA.Game/Support/Log.cs b/OpenRA.Game/Support/Log.cs
+index ec56ecc..7c372a5 100644
+--- a/OpenRA.Game/Support/Log.cs
++++ b/OpenRA.Game/Support/Log.cs
+@@ -81,7 +81,18 @@ static void DoWork(object obj)
+ 				while (reader.TryRead(out var item))
+ 					WriteValue(item);
+ 
+-				Thread.Sleep(1);
++				// friendly-fighter sim: wait for the next message (polling every 1 ms kept a core
++				// busy ~6 % of the time in an idle engine)
++				try
++				{
++					reader.WaitToReadAsync(token).AsTask().Wait(token);
++				}
++				catch (OperationCanceledException)
++				{
++				}
++				catch (AggregateException)
++				{
++				}
+ 			}
+ 
+ 			while (reader.TryRead(out var item))
+diff --git a/OpenRA.Game/Traits/World/ScreenMap.cs b/OpenRA.Game/Traits/World/ScreenMap.cs
+index 079f811..a5a6de8 100644
+--- a/OpenRA.Game/Traits/World/ScreenMap.cs
++++ b/OpenRA.Game/Traits/World/ScreenMap.cs
+@@ -83,6 +83,9 @@ public ScreenMap(World world, ScreenMapInfo info)
+ 
+ 		public void AddOrUpdate(Player viewer, FrozenActor fa)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			removeFrozenActors[viewer].Remove(fa);
+ 
+ 			addOrUpdateFrozenActors[viewer].Add(fa);
+@@ -90,11 +93,17 @@ public void AddOrUpdate(Player viewer, FrozenActor fa)
+ 
+ 		public void Remove(Player viewer, FrozenActor fa)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			removeFrozenActors[viewer].Add(fa);
+ 		}
+ 
+ 		public void AddOrUpdate(Actor a)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			removeActors.Remove(a);
+ 
+ 			addOrUpdateActors.Add(a);
+@@ -102,6 +111,9 @@ public void AddOrUpdate(Actor a)
+ 
+ 		public void Remove(Actor a)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			removeActors.Add(a);
+ 		}
+ 
 diff --git a/OpenRA.Game/World.cs b/OpenRA.Game/World.cs
 index 9bdaea6..f2c2662 100644
 --- a/OpenRA.Game/World.cs
@@ -97,6 +169,34 @@ index 9bdaea6..f2c2662 100644
  
  			var worldActorType = type == WorldType.Editor ? SystemActors.EditorWorld : SystemActors.World;
  			WorldActor = CreateActor(worldActorType.ToString(), []);
+diff --git a/OpenRA.Mods.Common/Traits/AffectsShroud.cs b/OpenRA.Mods.Common/Traits/AffectsShroud.cs
+index 6b68de3..bb2ff5c 100644
+--- a/OpenRA.Mods.Common/Traits/AffectsShroud.cs
++++ b/OpenRA.Mods.Common/Traits/AffectsShroud.cs
+@@ -39,6 +39,9 @@ public abstract class AffectsShroud : ConditionalTrait<AffectsShroudInfo>, ISync
+ 
+ 		readonly HashSet<PPos> footprint;
+ 
++		// friendly-fighter sim (PERF): the cells in range are collected here, then copied once
++		readonly List<PPos> cellsInRange = [];
++
+ 		[VerifySync]
+ 		CPos cachedLocation;
+ 
+@@ -82,8 +85,11 @@ PPos[] ProjectedCells(Actor self)
+ 			if (Info.Type == VisibilityType.GroundPosition)
+ 				pos -= new WVec(WDist.Zero, WDist.Zero, self.World.Map.DistanceAboveTerrain(pos));
+ 
+-			return Shroud.ProjectedCellsInRange(map, pos, minRange, maxRange, Info.MaxHeightDelta)
+-				.ToArray();
++			cellsInRange.Clear();
++			foreach (var puv in Shroud.ProjectedCellsInRange(map, pos, minRange, maxRange, Info.MaxHeightDelta))
++				cellsInRange.Add(puv);
++
++			return cellsInRange.ToArray();
+ 		}
+ 
+ 		void INotifyCenterPositionChanged.CenterPositionChanged(Actor self, byte oldLayer, byte newLayer)
 diff --git a/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs b/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs
 index 93c4c96..365ca0a 100644
 --- a/OpenRA.Mods.Common/Traits/Conditions/ToggleConditionOnOrder.cs
@@ -953,10 +1053,18 @@ index 3643dec..34c4a3c 100644
  		{
  			if (!IsEnabled || self.World.IsLoadingGameSave)
 diff --git a/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs b/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
-index 69cea95..1af47b7 100644
+index 69cea95..e9e9d56 100644
 --- a/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
-@@ -34,6 +34,10 @@ public sealed class ObservationSerializer
+@@ -10,6 +10,7 @@
+ #endregion
+ 
+ using System;
++using System.Collections.Generic;
+ using System.Linq;
+ using OpenRA.Mods.Common.Pathfinder;
+ using OpenRA.Traits;
+@@ -34,6 +35,14 @@ public sealed class ObservationSerializer
  		Locomotor locomotor;
  		bool traitsCached;
  
@@ -964,10 +1072,14 @@ index 69cea95..1af47b7 100644
 +		static readonly bool SpatialEnabled = Environment.GetEnvironmentVariable("RL_SPATIAL") == "1";
 +		PowerManager powerManager;
 +
++		// friendly-fighter sim (PERF): the cells the explored share counts, each with the projected
++		// cells covering it, worked out once (Shroud.IsExplored(CPos) works them out on every call)
++		PPos[][] exploredShareCells;
++
  		public ObservationSerializer(World world, Player player, string episodeId)
  		{
  			this.world = world;
-@@ -76,7 +80,36 @@ public RLProto.GameObservation Serialize(int tick)
+@@ -76,7 +85,55 @@ public RLProto.GameObservation Serialize(int tick)
  			SerializeOwnedActors(obs);
  			SerializeVisibleEnemies(obs);
  			SerializeProduction(obs);
@@ -989,15 +1101,34 @@ index 69cea95..1af47b7 100644
 +			var shroud = player.Shroud;
 +			if (shroud != null)
 +			{
-+				var total = 0;
-+				var explored = 0;
-+				foreach (var c in world.Map.AllCells)
++				var map = world.Map;
++				if (exploredShareCells == null)
 +				{
-+					if (!world.Map.Contains(c))
-+						continue;
-+					total++;
-+					if (shroud.IsExplored(c))
-+						explored++;
++					var cells = new List<PPos[]>();
++					foreach (var c in map.AllCells)
++					{
++						if (!map.Contains(c))
++							continue;
++
++						var uv = c.ToMPos(map);
++						cells.Add(map.Contains(uv) ? map.ProjectedCellsCovering(uv) : []);
++					}
++
++					exploredShareCells = cells.ToArray();
++				}
++
++				var total = exploredShareCells.Length;
++				var explored = 0;
++				foreach (var covering in exploredShareCells)
++				{
++					foreach (var puv in covering)
++					{
++						if (shroud.IsExplored(puv))
++						{
++							explored++;
++							break;
++						}
++					}
 +				}
 +
 +				obs.ExploredPercent = total > 0 ? 100f * explored / total : 0f;
@@ -1005,7 +1136,19 @@ index 69cea95..1af47b7 100644
  
  			return obs;
  		}
-@@ -254,6 +287,16 @@ RLProto.RlBuildingInfo SerializeBuilding(Actor actor, float hpPercent, string ow
+@@ -207,6 +264,11 @@ void SerializeVisibleEnemies(RLProto.GameObservation obs)
+ 				{
+ 					var isBuilding = actor.Info.HasTraitInfo<BuildingInfo>();
+ 					if (isBuilding) buildingCount++;
++
++					// friendly-fighter sim (PERF): an actor without a position (another player's
++					// PlayerActor) would only throw below
++					if (actor.OccupiesSpace == null)
++						continue;
+ 					// Check if visible through shroud/fog
+ 					if (player.Shroud.IsVisible(actor.CenterPosition))
+ 					{
+@@ -254,6 +316,16 @@ RLProto.RlBuildingInfo SerializeBuilding(Actor actor, float hpPercent, string ow
  			// Power
  			var powerTrait = actor.TraitOrDefault<Power>();
  			bldg.IsPowered = powerTrait == null || !powerTrait.IsTraitDisabled;
@@ -1022,7 +1165,7 @@ index 69cea95..1af47b7 100644
  			if (powerTrait != null)
  				bldg.PowerAmount = powerTrait.GetEnabledPower();
  
-@@ -365,6 +408,9 @@ RLProto.RlUnitInfo SerializeUnit(Actor actor, float hpPercent, string owner)
+@@ -365,6 +437,9 @@ RLProto.RlUnitInfo SerializeUnit(Actor actor, float hpPercent, string owner)
  			// Building flag (for distinguishing in mixed lists)
  			unit.IsBuilding = actor.Info.HasTraitInfo<BuildingInfo>();
  
@@ -1202,10 +1345,10 @@ index 582a0b7..54cb8b4 100644
  			{
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
 new file mode 100644
-index 0000000..7f6b6ce
+index 0000000..3a3d09f
 --- /dev/null
 +++ b/OpenRA.Mods.Common/Traits/Player/RLLockstep.cs
-@@ -0,0 +1,308 @@
+@@ -0,0 +1,365 @@
 +#region Copyright & License Information
 +/*
 + * Copyright (c) The OpenRA Developers and Contributors
@@ -1246,6 +1389,12 @@ index 0000000..7f6b6ce
 +	{
 +		public static readonly bool Enabled = Environment.GetEnvironmentVariable("RL_LOCKSTEP") == "1";
 +
++		/// <summary>Stepped and headless: skip what is kept only for drawing (Game.Unrendered); RL_UNRENDERED=0 keeps it.</summary>
++		internal static void SkipRendering()
++		{
++			Game.Unrendered = Enabled && Game.IsHeadless && Environment.GetEnvironmentVariable("RL_UNRENDERED") != "0";
++		}
++
 +		sealed class Job
 +		{
 +			public int Until;
@@ -1271,6 +1420,7 @@ index 0000000..7f6b6ce
 +
 +			world = w;
 +			Game.LockstepDriver = Drive;
++			SkipRendering();
 +		}
 +
 +		/// <summary>Game thread: run the next job, if one comes within a moment.</summary>
@@ -1345,12 +1495,12 @@ index 0000000..7f6b6ce
 +		static RLProto.StepReply StepSession(RLProto.StepRequest request, CancellationToken ct)
 +		{
 +			RLSessionManager.SessionState state = null;
-+			for (var i = 0; i < 1200 && !ct.IsCancellationRequested; i++)
++			for (var i = 0; i < 30000 && !ct.IsCancellationRequested; i++)
 +			{
 +				if (RLSessionManager.SessionStates.TryGetValue(request.SessionId, out state))
 +					break;
 +
-+				Thread.Sleep(50);
++				Thread.Sleep(2);
 +			}
 +
 +			if (state == null)
@@ -1424,10 +1574,34 @@ index 0000000..7f6b6ce
 +		/// 4-byte little-endian length, a type byte (1 Step, 2 CreateSession, 3 DestroySession)
 +		/// and the request's protobuf; the answer has a status byte (0 ok, 1 error text) instead.
 +		/// </summary>
++		static int rawConnections;
++		static long rawLastActivity = Environment.TickCount64;
++
 +		internal static void StartRawServer(int port)
 +		{
 +			var listener = new TcpListener(IPAddress.Loopback, port);
 +			listener.Start();
++
++			// friendly-fighter sim: an engine kept between runs (ffsim's persistent lanes) exits after
++			// RL_IDLE_EXIT_SECONDS without a connection
++			if (int.TryParse(Environment.GetEnvironmentVariable("RL_IDLE_EXIT_SECONDS"), out var idleExit) && idleExit > 0)
++			{
++				new Thread(() =>
++				{
++					while (true)
++					{
++						Thread.Sleep(5000);
++						if (Volatile.Read(ref rawConnections) == 0
++							&& Environment.TickCount64 - Interlocked.Read(ref rawLastActivity) > idleExit * 1000L)
++						{
++							Log.Write("rl-bridge", $"No connection for {idleExit} s: exiting");
++							Environment.Exit(0);
++						}
++					}
++				})
++				{ IsBackground = true, Name = "RL-Idle-Exit" }.Start();
++			}
++
 +			new Thread(() =>
 +			{
 +				while (true)
@@ -1460,6 +1634,8 @@ index 0000000..7f6b6ce
 +		{
 +			using var stream = client.GetStream();
 +			var header = new byte[5];
++			var created = new HashSet<string>();
++			Interlocked.Increment(ref rawConnections);
 +			try
 +			{
 +				while (ReadExact(stream, header, 5))
@@ -1482,14 +1658,20 @@ index 0000000..7f6b6ce
 +							{
 +								var r = RLProto.CreateSessionRequest.Parser.ParseFrom(body);
 +								var id = RLSessionManager.CreateSession(r.MapName, r.Bots, r.Seed, r.LobbyOptions);
++								created.Add(id);
 +								reply = new RLProto.CreateSessionResponse { SessionId = id }.ToByteArray();
 +								break;
 +							}
 +
 +							case 3:
-+								RLSessionManager.DestroySession(RLProto.DestroySessionRequest.Parser.ParseFrom(body).SessionId);
++							{
++								var id = RLProto.DestroySessionRequest.Parser.ParseFrom(body).SessionId;
++								created.Remove(id);
++								RLSessionManager.DestroySession(id);
 +								reply = new RLProto.DestroySessionResponse().ToByteArray();
 +								break;
++							}
++
 +							default:
 +								throw new InvalidOperationException($"unknown message type {header[4]}");
 +						}
@@ -1511,14 +1693,40 @@ index 0000000..7f6b6ce
 +			{
 +				Log.Write("rl-bridge", $"Raw connection closed: {e.Message}");
 +			}
++			finally
++			{
++				// The client is gone: so are the games it left behind (a runner that was stopped)
++				foreach (var id in created)
++				{
++					try
++					{
++						RLSessionManager.DestroySession(id);
++					}
++					catch (Exception e)
++					{
++						Log.Write("rl-bridge", $"Destroying {id}: {e.Message}");
++					}
++				}
++
++				Interlocked.Exchange(ref rawLastActivity, Environment.TickCount64);
++				Interlocked.Decrement(ref rawConnections);
++			}
 +		}
 +	}
 +}
 diff --git a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
-index 3163740..cffbb2c 100644
+index 3163740..f08444e 100644
 --- a/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/RLSessionManager.cs
-@@ -107,6 +107,10 @@ public static void Initialize(ModData md)
+@@ -90,6 +90,7 @@ public static void Initialize(ModData md)
+ 		{
+ 			modData = md;
+ 			ExternalBotBridge.MultiSessionMode = true;
++			RLLockstep.SkipRendering();
+ 			Support.PerfHistory.Disabled = true;
+ 
+ 			var workerCount = Environment.ProcessorCount;
+@@ -107,6 +108,10 @@ public static void Initialize(ModData md)
  			}
  
  			Log.Write("rl-bridge", $"RLSessionManager initialized: {workerCount} workers, queue capacity {workerCount * 4}");
@@ -1529,7 +1737,7 @@ index 3163740..cffbb2c 100644
  		}
  
  		/// <summary>
-@@ -175,7 +179,7 @@ public static void StartGrpcServer(int port)
+@@ -175,7 +180,7 @@ public static void StartGrpcServer(int port)
  		/// the game world is created asynchronously on a background thread.
  		/// FastAdvance will wait for the bridge to activate before proceeding.
  		/// </summary>
@@ -1538,7 +1746,7 @@ index 3163740..cffbb2c 100644
  		{
  			var sessionId = Guid.NewGuid().ToString("N")[..12];
  			Log.Write("rl-bridge", $"Creating session {sessionId}: map={mapName}, bots={bots}, seed={seed}");
-@@ -184,7 +188,7 @@ public static string CreateSession(string mapName, string bots, int seed)
+@@ -184,7 +189,7 @@ public static string CreateSession(string mapName, string bots, int seed)
  			{
  				try
  				{
@@ -1547,7 +1755,7 @@ index 3163740..cffbb2c 100644
  				}
  				catch (Exception e)
  				{
-@@ -285,7 +289,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
+@@ -285,7 +290,7 @@ static void TickSession(SessionState state, ExternalBotBridge bridge)
  		/// Initialize a game session: create World, find bridge, register state.
  		/// The calling thread exits after this returns — no persistent tick loop.
  		/// </summary>
@@ -1556,7 +1764,7 @@ index 3163740..cffbb2c 100644
  		{
  			// 1. Resolve map (cached — only first request per map name hits MapCache).
  			//    MapCache.GetEnumerator() calls UpdateMaps() which mutates collections,
-@@ -366,6 +370,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
+@@ -366,6 +371,17 @@ static void InitSession(string sessionId, string mapName, string bots, int seed)
  			// 5. Build LobbyInfo with map slots and bot assignments
  			SetupLobbyInfo(orderManager, mapPreview, map, bots, seed);
  
@@ -1574,3 +1782,114 @@ index 3163740..cffbb2c 100644
  			// 6. World creation + LoadComplete (serialized — traits access shared state).
  			//    With PrepareMap cached and map lookup cached, the lock only covers
  			//    World construction (~300ms per session). 64 sessions ≈ 19s total.
+diff --git a/OpenRA.Mods.Common/Traits/Player/ResourceStorageWarning.cs b/OpenRA.Mods.Common/Traits/Player/ResourceStorageWarning.cs
+index eb3fc06..7a58ec0 100644
+--- a/OpenRA.Mods.Common/Traits/Player/ResourceStorageWarning.cs
++++ b/OpenRA.Mods.Common/Traits/Player/ResourceStorageWarning.cs
+@@ -49,6 +49,9 @@ public ResourceStorageWarning(Actor self, ResourceStorageWarningInfo info)
+ 
+ 		void ITick.Tick(Actor self)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			if (Game.RunTime > lastSiloAdviceTime + info.AdviceInterval)
+ 			{
+ 				var owner = self.Owner;
+diff --git a/OpenRA.Mods.Common/Traits/Render/ProductionBar.cs b/OpenRA.Mods.Common/Traits/Render/ProductionBar.cs
+index 9b5165e..d17131e 100644
+--- a/OpenRA.Mods.Common/Traits/Render/ProductionBar.cs
++++ b/OpenRA.Mods.Common/Traits/Render/ProductionBar.cs
+@@ -73,7 +73,7 @@ void FindQueue()
+ 
+ 		void ITick.Tick(Actor self)
+ 		{
+-			if (IsTraitDisabled)
++			if (IsTraitDisabled || Game.Unrendered)
+ 				return;
+ 
+ 			var current = queue.AllQueued().Where(i => i.Started).MinByOrDefault(i => i.RemainingTime);
+diff --git a/OpenRA.Mods.Common/Traits/Render/RenderSprites.cs b/OpenRA.Mods.Common/Traits/Render/RenderSprites.cs
+index d454730..9b84a4d 100644
+--- a/OpenRA.Mods.Common/Traits/Render/RenderSprites.cs
++++ b/OpenRA.Mods.Common/Traits/Render/RenderSprites.cs
+@@ -225,6 +225,16 @@ void ITick.Tick(Actor self)
+ 
+ 		protected virtual void Tick(Actor self)
+ 		{
++			// friendly-fighter sim: unrendered, only the animations themselves move on (their ends
++			// may start or finish actions); where they would be drawn is never needed
++			if (Game.Unrendered)
++			{
++				foreach (var a in anims)
++					a.Animation.Animation.Tick();
++
++				return;
++			}
++
+ 			var updated = false;
+ 			foreach (var a in anims)
+ 				updated |= a.Tick();
+diff --git a/OpenRA.Mods.Common/Traits/Render/WithDecoration.cs b/OpenRA.Mods.Common/Traits/Render/WithDecoration.cs
+index aa3227a..9ba02bb 100644
+--- a/OpenRA.Mods.Common/Traits/Render/WithDecoration.cs
++++ b/OpenRA.Mods.Common/Traits/Render/WithDecoration.cs
+@@ -65,6 +65,10 @@ protected override IEnumerable<IRenderable> RenderDecoration(Actor self, WorldRe
+ 			];
+ 		}
+ 
+-		void ITick.Tick(Actor self) { anim.Tick(); }
++		void ITick.Tick(Actor self)
++		{
++			if (!Game.Unrendered)
++				anim.Tick();
++		}
+ 	}
+ }
+diff --git a/OpenRA.Mods.Common/Traits/World/ActorMap.cs b/OpenRA.Mods.Common/Traits/World/ActorMap.cs
+index b3c2b07..1260c15 100644
+--- a/OpenRA.Mods.Common/Traits/World/ActorMap.cs
++++ b/OpenRA.Mods.Common/Traits/World/ActorMap.cs
+@@ -185,6 +185,13 @@ public void Dispose()
+ 		readonly HashSet<Actor> removeActorPosition = [];
+ 		readonly Predicate<Actor> actorShouldBeRemoved;
+ 
++		// friendly-fighter sim (PERF): the bin each actor went into, so that a tick's removals look
++		// only at the bins holding those actors (in any other bin RemoveAll would change nothing);
++		// an actor added again before it was removed switches back to looking at every bin
++		readonly Dictionary<Actor, Bin> actorBin = [];
++		readonly HashSet<Bin> binsToClean = [];
++		bool scanAllBins;
++
+ 		public WDist LargestActorRadius { get; }
+ 		public WDist LargestBlockingActorRadius { get; }
+ 
+@@ -476,7 +483,18 @@ void ITick.Tick(Actor self)
+ 			// to ensure consistency during a tick
+ 			if (removeActorPosition.Count > 0)
+ 			{
+-				foreach (var bin in bins)
++				IEnumerable<Bin> toClean = bins;
++				if (!scanAllBins)
++				{
++					binsToClean.Clear();
++					foreach (var a in removeActorPosition)
++						if (actorBin.Remove(a, out var b))
++							binsToClean.Add(b);
++
++					toClean = binsToClean;
++				}
++
++				foreach (var bin in toClean)
+ 				{
+ 					var removed = bin.Actors.RemoveAll(actorShouldBeRemoved);
+ 					if (removed > 0)
+@@ -495,6 +513,8 @@ void ITick.Tick(Actor self)
+ 				var bin = BinAt(row, col);
+ 
+ 				bin.Actors.Add(a);
++				if (!scanAllBins && !actorBin.TryAdd(a, bin))
++					scanAllBins = true;
+ 				foreach (var t in bin.ProximityTriggers)
+ 					t.Dirty = true;
+ 			}

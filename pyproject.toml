@@ -21,6 +21,7 @@ dev = [
 sim = [
     "grpcio>=1.60",
     "protobuf>=5.26",
+    "orjson>=3.9",
 ]
 
 [build-system]

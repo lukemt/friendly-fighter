@@ -68,10 +68,11 @@ def local_key(label: str) -> str:
     return "eak_live_" + hashlib.sha256(f"ffsim:{label}".encode()).hexdigest()
 
 
-def engine_factory(out: Path, engine: str = "host", parallel: int = 1):
+def engine_factory(out: Path, engine: str = "host", parallel: int = 1, persist: bool = True):
     """Real time: one engine process per game (``Launch.Map``). Virtual time: by default each game
-    is the only session of an engine process loaded in advance (``HostPool``); ``engine="single"``
-    starts a ``Launch.Map`` engine per game instead (stepped too)."""
+    is the only session of an engine process loaded in advance (``HostPool``), kept running for the
+    next run (``persist``); ``engine="single"`` starts a ``Launch.Map`` engine per game instead
+    (stepped too)."""
     pools: list[HostPool] = []
     lock = threading.Lock()
 
@@ -81,7 +82,7 @@ def engine_factory(out: Path, engine: str = "host", parallel: int = 1):
         if virtual and engine == "host":
             with lock:
                 if not pools:
-                    pools.append(HostPool(out / "engine", parallel))
+                    pools.append(HostPool(out / "engine", parallel, persist=persist))
             host = pools[0].take()
         return OpenRAEngine(match.session_id, match.map_id, kinds, lobby=lobby, log_dir=out / "engine" / match.session_id,
                             lockstep=virtual, host=host, seed=match.rng.randrange(1, 2 ** 31))
@@ -142,7 +143,7 @@ def cmd_run(a) -> int:
         a.parallel = default_parallel(a.games) if a.time == "virtual" else a.games
     out = Path(a.out or ROOT / "sim" / "results" / datetime.now().strftime("%Y%m%d-%H%M%S"))
     out.mkdir(parents=True, exist_ok=True)
-    factory = engine_factory(out, a.engine, getattr(a, "parallel", 1))
+    factory = engine_factory(out, a.engine, getattr(a, "parallel", 1), persist=not a.fresh_engines)
     # Prefetching ticks hides engine time behind the agents' when one game runs alone; with
     # several, the cores are busy anyway and the extra step per view only costs CPU.
     prefetch = getattr(a, "parallel", 1) <= 1
@@ -251,7 +252,7 @@ def cmd_serve(a) -> int:
     if a.parallel is None:
         a.parallel = default_parallel(64)
     out = Path(a.out or ROOT / "sim" / "results" / ("serve-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
-    factory = engine_factory(out, a.engine, getattr(a, "parallel", 1))
+    factory = engine_factory(out, a.engine, getattr(a, "parallel", 1), persist=not a.fresh_engines)
     # Prefetching ticks hides engine time behind the agents' when one game runs alone; with
     # several, the cores are busy anyway and the extra step per view only costs CPU.
     prefetch = getattr(a, "parallel", 1) <= 1
@@ -266,6 +267,25 @@ def cmd_serve(a) -> int:
             time.sleep(3600)
     except KeyboardInterrupt:
         return 0
+
+
+def cmd_lanes(a) -> int:
+    """The persistent lanes: list them, or stop their engines."""
+    from ffsim.engine_openra import LANES_DIR, _engine_alive
+
+    for lane in sorted(LANES_DIR.glob("lane-*"), key=lambda d: int(d.name.split("-")[1])):
+        try:
+            info = json.loads((lane / "host.json").read_text())
+        except (OSError, ValueError):
+            continue
+        alive = _engine_alive(info["pid"], info["port"])
+        print(f"{lane.name}: engine pid {info['pid']} {'running' if alive else 'gone'}, {info.get('games', 0)} games, "
+              f"{info.get('engine_dir')}")
+        if a.stop and alive:
+            os.killpg(info["pid"], signal.SIGKILL)
+            (lane / "host.json").unlink(missing_ok=True)
+            print("  stopped")
+    return 0
 
 
 def main() -> int:
@@ -293,6 +313,9 @@ def main() -> int:
     r.add_argument("--engine", choices=["host", "single"], default="host",
                    help="virtual time: games as sessions of one engine process (host) or one engine each (single)")
     r.add_argument("--think", default="measured", help="virtual time: 'measured' or a fixed think time in ms")
+    r.add_argument("--fresh-engines", action="store_true",
+                   help="virtual time: start new engines and stop them at the end (default: take over the "
+                        "engines an earlier run left running, and leave them running; see 'lanes')")
     r.add_argument("--port", type=int, default=0)
     r.add_argument("--out")
     s = sub.add_parser("serve", help="run the platform only")
@@ -302,9 +325,12 @@ def main() -> int:
     s.add_argument("--engine", choices=["host", "single"], default="host")
     s.add_argument("--parallel", type=int, default=None, help="engine lanes: games at once in virtual time")
     s.add_argument("--think", default="measured")
+    s.add_argument("--fresh-engines", action="store_true")
     s.add_argument("--out")
+    ln = sub.add_parser("lanes", help="list the engines kept running between runs (--stop: stop them)")
+    ln.add_argument("--stop", action="store_true")
     a = p.parse_args()
-    return cmd_run(a) if a.command == "run" else cmd_serve(a)
+    return {"run": cmd_run, "serve": cmd_serve, "lanes": cmd_lanes}[a.command](a)
 
 
 if __name__ == "__main__":

@@ -20,8 +20,12 @@ Two ways to run it:
 
 from __future__ import annotations
 
+import base64
 import concurrent.futures
 import ctypes
+import fcntl
+import hashlib
+import json
 import os
 import queue
 import shutil
@@ -44,6 +48,11 @@ ENGINE_DIR = Path(os.environ.get("FF_ENGINE_DIR", SIM_HOME / "fork"))
 DOTNET_ROOT = Path(os.environ.get("FF_DOTNET_ROOT", SIM_HOME / "dotnet8"))
 CONTENT_DIR = Path(os.environ.get("FF_RA_CONTENT", SIM_HOME / "src" / "Support" / "Content"))
 RUNS_DIR = Path(os.environ.get("FF_SIM_RUNS", SIM_HOME / "runs"))
+# Persistent lanes (HostPool(persist=True)): engines kept running between runs, so a run needn't
+# load the game data and compile the engine's code again; one exits after FF_LANE_IDLE_EXIT seconds
+# without a run.
+LANES_DIR = Path(os.environ.get("FF_LANES_DIR", SIM_HOME / "lanes"))
+LANE_IDLE_EXIT_SECONDS = int(os.environ.get("FF_LANE_IDLE_EXIT", "1800"))
 
 VIEW_INTERVAL = 6
 VIEW_PHASE = 5  # the platform's views fall on ticks 5, 11, 17... (state_version % 6 == 5 in every recording)
@@ -56,6 +65,23 @@ ORDER_LATENCY_TICKS = int(os.environ.get("FF_ENGINE_ORDER_LATENCY", "4"))
 # The same in virtual time (RL_LOCKSTEP=1), with Launch.Map or as an EngineHost session: 6 (an order
 # the bridge issues at tick 4 shows its Move activity at tick 10; scripts/ffsim.py latency).
 LOCKSTEP_ORDER_LATENCY_TICKS = int(os.environ.get("FF_LOCKSTEP_ORDER_LATENCY", "6"))
+# FF_ENGINE_TRACE=<dir>: each virtual-time game on an EngineHost writes <dir>/<session>.trace, every
+# engine call it made (the session it created, each step's actions) and a digest of each step's
+# views; scripts/ffbench.py replays it on any engine build to time the engine alone and to check
+# that the build plays the game exactly the same.
+TRACE_DIR = os.environ.get("FF_ENGINE_TRACE")
+
+
+def views_digest(observations) -> str:
+    """A digest of a step's views, without the session's random episode id."""
+    h = hashlib.sha1()
+    for o in observations:
+        episode, o.observation.episode_id = o.observation.episode_id, ""
+        h.update(o.SerializeToString(deterministic=True))
+        o.observation.episode_id = episode
+    return h.hexdigest()
+
+
 DEFAULT_LOBBY = {"startingcash": "5000", "startingunits": "none", "explored": "False", "crates": "True",
                  "bounty": "False", "shortgame": "True"}
 
@@ -188,6 +214,51 @@ def _engine_env(port: int, view_interval: int, view_phase: int, lockstep: bool, 
     return env
 
 
+def _detach() -> None:
+    """Popen preexec_fn for a persistent lane's engine: its own session, outliving this process."""
+    os.setsid()
+
+
+def engine_build_id(engine_dir: Path) -> str:
+    """The engine build in a folder: where it is and its assemblies' sizes and times."""
+    h = hashlib.sha1(str(Path(engine_dir).resolve()).encode())
+    for dll in sorted((Path(engine_dir) / "bin").glob("OpenRA*.dll")):
+        st = dll.stat()
+        h.update(f"{dll.name}:{st.st_size}:{st.st_mtime_ns};".encode())
+    return h.hexdigest()[:16]
+
+
+def _engine_alive(pid: int, port: int) -> bool:
+    """Is ``pid`` still the engine that serves ``port`` (and not a zombie or a reused pid)?"""
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
+        cmdline = Path(f"/proc/{pid}/cmdline").read_bytes()
+    except (OSError, IndexError):
+        return False
+    return state != "Z" and f"Launch.MultiSession={port}".encode() in cmdline
+
+
+class _Detached:
+    """A persistent lane's engine started by an earlier run: as much of Popen as EngineHost uses."""
+
+    def __init__(self, pid: int, port: int) -> None:
+        self.pid, self.port = pid, port
+        self.returncode = None
+
+    def poll(self):
+        if self.returncode is None and not _engine_alive(self.pid, self.port):
+            self.returncode = 0
+        return self.returncode
+
+    def wait(self, timeout=None):
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while self.poll() is None:
+            if deadline is not None and time.monotonic() > deadline:
+                raise subprocess.TimeoutExpired("engine", timeout)
+            time.sleep(0.05)
+        return self.returncode
+
+
 def _wait_port(port: int, proc: subprocess.Popen, seconds: float = 120) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
@@ -213,7 +284,11 @@ class EngineHost:
     RAW = os.environ.get("FF_ENGINE_GRPC") != "1"
     STEP, CREATE, DESTROY = 1, 2, 3
 
-    def __init__(self, log_dir: Path, *, view_interval: int = VIEW_INTERVAL) -> None:
+    def __init__(self, log_dir: Path, *, view_interval: int = VIEW_INTERVAL, engine_dir: Path | None = None,
+                 env: dict | None = None, persist: bool = False) -> None:
+        self.engine_dir = Path(engine_dir or ENGINE_DIR)
+        self.extra_env = env or {}
+        self.persist = persist  # a persistent lane: kept running after this run, and found again by the next
         self.view_interval = view_interval
         self.view_phase = VIEW_PHASE % view_interval
         self.dir = Path(log_dir).resolve()
@@ -228,29 +303,87 @@ class EngineHost:
         self.busy = False
         self.games = 0
 
+    def _env(self) -> dict:
+        env = {**_engine_env(self.port, self.view_interval, self.view_phase, True), **self.extra_env}
+        if self.RAW:
+            env["RL_RAW_PORT"] = str(self.raw_port)
+        return env
+
+    def _env_key(self) -> str:
+        """What a persistent lane's engine must have been started with to be used again."""
+        env = self._env()
+        keep = sorted((k, v) for k, v in env.items() if k.startswith(("RL_", "DOTNET_", "OPENRA_"))
+                      and k not in ("RL_GRPC_PORT", "RL_RAW_PORT", "RL_IDLE_EXIT_SECONDS"))
+        return hashlib.sha1(json.dumps([engine_build_id(self.engine_dir), keep]).encode()).hexdigest()[:16]
+
+    def _attach(self) -> bool:
+        """A persistent lane: use the engine an earlier run left in this lane, if it is the same build."""
+        try:
+            info = json.loads((self.dir / "host.json").read_text())
+        except (OSError, ValueError):
+            return False
+        if not _engine_alive(info.get("pid", 0), info.get("port", 0)):
+            return False
+        if info.get("key") != self._env_key() or not self.RAW:
+            self._kill(info["pid"])
+            return False
+        try:
+            sock = socket.create_connection(("127.0.0.1", info["raw_port"]), timeout=5)
+        except OSError:
+            self._kill(info["pid"])
+            return False
+        sock.settimeout(None)
+        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.port, self.raw_port = info["port"], info["raw_port"]
+        self.games += info.get("games", 0)  # (plus any this run counted already)
+        self.proc = _Detached(info["pid"], info["port"])
+        self.sock = self.stub = sock
+        return True
+
+    @staticmethod
+    def _kill(pid: int) -> None:
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+    def save(self) -> None:
+        """A persistent lane: write down its engine for the next run."""
+        if self.persist and self.proc is not None:
+            info = {"pid": self.proc.pid, "port": self.port, "raw_port": self.raw_port, "key": self._env_key(),
+                    "games": self.games, "engine_dir": str(self.engine_dir)}
+            tmp = self.dir / "host.json.tmp"
+            tmp.write_text(json.dumps(info))
+            os.replace(tmp, self.dir / "host.json")
+
     def _ensure(self):
         with self.lock:
             if self.proc is not None and self.proc.poll() is None and self.stub is not None:
+                return self.stub
+            self.dir.mkdir(parents=True, exist_ok=True)
+            if self.persist and self.proc is None and self._attach():
                 return self.stub
             support = self.dir / "support"
             support.mkdir(parents=True, exist_ok=True)
             content = support / "Content"
             if not content.exists():
                 content.symlink_to(CONTENT_DIR)
-            env = _engine_env(self.port, self.view_interval, self.view_phase, True)
-            if self.RAW:
-                env["RL_RAW_PORT"] = str(self.raw_port)
-            cmd = [str(DOTNET_ROOT / "dotnet"), str(ENGINE_DIR / "bin" / "OpenRA.dll"), f"Engine.EngineDir={ENGINE_DIR}",
+            env = self._env()
+            if self.persist:
+                env["RL_IDLE_EXIT_SECONDS"] = str(LANE_IDLE_EXIT_SECONDS)
+            engine_dir = self.engine_dir
+            cmd = [str(DOTNET_ROOT / "dotnet"), str(engine_dir / "bin" / "OpenRA.dll"), f"Engine.EngineDir={engine_dir}",
                    f"Engine.SupportDir={support}", "Game.Mod=ra", "Game.Platform=Null", "Sound.Mute=True",
                    f"Launch.MultiSession={self.port}"]
             self.log = open(self.dir / "engine-host.log", "ab")
-            self.proc = _popen(cmd, cwd=ENGINE_DIR, env=env, stdout=self.log, stderr=subprocess.STDOUT,
-                               preexec_fn=_die_with_parent)
+            self.proc = _popen(cmd, cwd=engine_dir, env=env, stdout=self.log, stderr=subprocess.STDOUT,
+                               preexec_fn=_detach if self.persist else _die_with_parent)
             if self.RAW:
                 _wait_port(self.raw_port, self.proc)
                 self.sock = socket.create_connection(("127.0.0.1", self.raw_port))
                 self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                 self.stub = self.sock
+                self.save()
                 return self.stub
             _wait_port(self.port, self.proc)
             opts = [("grpc.max_receive_message_length", 64 << 20)]
@@ -311,9 +444,25 @@ class EngineHost:
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
-    def stop(self) -> None:
+    def cpu_seconds(self) -> float:
+        """CPU time the engine process has used so far (all its threads)."""
+        try:
+            fields = Path(f"/proc/{self.proc.pid}/stat").read_text().rsplit(")", 1)[1].split()
+            return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+        except (OSError, AttributeError, IndexError, ValueError):
+            return 0.0
+
+    def stop(self, kill: bool | None = None) -> None:
+        """Stop the engine; a persistent lane's only lets go of it (unless ``kill``)."""
+        if kill is None:
+            kill = not self.persist
         with self.lock:
-            if self.proc and self.proc.poll() is None:
+            if kill and self.persist:
+                try:
+                    (self.dir / "host.json").unlink()
+                except OSError:
+                    pass
+            if kill and self.proc and self.proc.poll() is None:
                 try:
                     os.killpg(self.proc.pid, signal.SIGTERM)
                     self.proc.wait(timeout=1)
@@ -339,21 +488,47 @@ class HostPool:
     concurrent sessions slow each other's economies (measured: half of six parallel sessions
     harvested their first 1000 ore ~1500 ticks late). One after the other they are fine, so
     each lane plays its games in turn, without reloading the game data (~5 s) each time,
-    and is restarted every ``recycle`` games. A lane is loaded as soon as the pool is made."""
+    and is restarted every ``recycle`` games. A lane is loaded as soon as the pool is made.
 
-    def __init__(self, log_dir: Path, size: int = 1, recycle: int = 20) -> None:
+    ``persist``: the lanes live in ``LANES_DIR`` and their engines keep running after the run (each
+    exits after ``LANE_IDLE_EXIT_SECONDS`` unused), already loaded and with their code compiled, for
+    the next run to take over; a lane is one run's at a time (a lock file), and an engine of another
+    build or configuration is replaced."""
+
+    def __init__(self, log_dir: Path, size: int = 1, recycle: int = 20, persist: bool = False) -> None:
         self.dir = Path(log_dir)
         self.recycle = recycle
+        self.persist = persist
         self.cond = threading.Condition()
         self.lanes: list[EngineHost] = []
+        self.claims: list[int] = []  # persistent lanes: the lock files held
         self.n = 0
         self.closed = False
         for _ in range(max(1, size)):
             self.lanes.append(self._new())
 
-    def _new(self) -> EngineHost:
+    def _claim(self) -> Path:
+        """A persistent lane no other run is using (its lock file, held until this pool stops)."""
+        LANES_DIR.mkdir(parents=True, exist_ok=True)
+        for i in range(1, 65):
+            lane = LANES_DIR / f"lane-{i}"
+            lane.mkdir(exist_ok=True)
+            fd = os.open(lane / "lock", os.O_CREAT | os.O_RDWR, 0o644)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                os.close(fd)
+                continue
+            self.claims.append(fd)
+            return lane
+        raise RuntimeError(f"no free lane in {LANES_DIR}")
+
+    def _new(self, lane: Path | None = None) -> EngineHost:
         self.n += 1
-        host = EngineHost(self.dir / f"lane-{self.n}")
+        if self.persist:
+            host = EngineHost(lane or self._claim(), persist=True)
+        else:
+            host = EngineHost(self.dir / f"lane-{self.n}")
         host.pool = self
         threading.Thread(target=self._warm, args=(host,), name="engine-warm", daemon=True).start()
         return host
@@ -371,8 +546,11 @@ class HostPool:
                 for i, host in enumerate(self.lanes):
                     if not host.busy:
                         if host.games >= self.recycle or (host.proc is not None and not host.alive()):
-                            threading.Thread(target=host.stop, daemon=True).start()
-                            host = self.lanes[i] = self._new()
+                            if self.persist:
+                                host.stop(kill=True)
+                            else:
+                                threading.Thread(target=host.stop, daemon=True).start()
+                            host = self.lanes[i] = self._new(host.dir if self.persist else None)
                         host.busy = True
                         host.games += 1
                         return host
@@ -388,7 +566,11 @@ class HostPool:
             self.closed = True
             lanes = list(self.lanes)
         for h in lanes:
+            h.save()
             h.stop()
+        for fd in self.claims:
+            os.close(fd)  # (the lock goes with it)
+        self.claims = []
 
 
 class OpenRAEngine:
@@ -428,6 +610,7 @@ class OpenRAEngine:
         self.engine_us = 0  # lockstep: microseconds the engine itself spent ticking
         self.steps = 0
         self.step_lock = threading.Lock()  # one step at a time; stop() waits for the last one
+        self.trace = None  # FF_ENGINE_TRACE
 
     # -- lifecycle ----------------------------------------------------------------------
 
@@ -441,6 +624,11 @@ class OpenRAEngine:
         self.on_view, self.on_exit = on_view, on_exit
         if self.host is not None:
             self.host_session = self.host.create(self.map_file, self._bots(), self.seed, self.lobby)
+            if TRACE_DIR:
+                Path(TRACE_DIR).mkdir(parents=True, exist_ok=True)
+                self.trace = open(Path(TRACE_DIR) / f"{self.session_id}.trace", "w")
+                self.trace.write(json.dumps({"map_file": self.map_file, "bots": self._bots(), "seed": self.seed,
+                                             "lobby": self.lobby}) + "\n")
             return
         support = self.run_dir / "support"
         support.mkdir(parents=True, exist_ok=True)
@@ -506,6 +694,10 @@ class OpenRAEngine:
                                                       session_id=self.host_session))
             else:
                 reply = self._lockstep_stub().Step(pb.StepRequest(until_tick=until_tick, actions=actions), timeout=600)
+            if self.trace is not None:
+                request = pb.StepRequest(until_tick=until_tick, actions=actions)
+                self.trace.write(json.dumps([base64.b64encode(request.SerializeToString()).decode(), reply.tick,
+                                             views_digest(reply.observations)]) + "\n")
         self.step_wall += time.perf_counter() - t0
         self.engine_us += reply.elapsed_us
         self.steps += 1
@@ -568,6 +760,8 @@ class OpenRAEngine:
                     self.step_lock.release()
             if self.host.pool is not None:
                 self.host.pool.release(self.host)
+            if self.trace is not None:
+                self.trace.close()
             return
         for s in self.streams.values():
             s.close()

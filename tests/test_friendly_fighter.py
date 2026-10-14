@@ -246,6 +246,7 @@ def test_remote_control_sends_queued_orders_first_and_logs_them(tmp_path, monkey
     monkeypatch.setattr(remote, "ROOT", tmp_path)
     monkeypatch.setattr(agent_module, "read_control", lambda: remote.read_control(tmp_path))
     monkeypatch.setattr(agent_module, "RemoteSeat", lambda bot, seat: remote.RemoteSeat(bot, seat, root=tmp_path))
+    monkeypatch.setattr(agent_module, "CONTROL_EVERY_SECONDS", 0.0)  # (normally looked at once a second)
     (tmp_path / "control.json").write_text(_json.dumps({"enabled": True, "seat": 0, "autopilot": True}))
     inbox = tmp_path / "seat0" / "inbox"
     inbox.mkdir(parents=True)
@@ -272,6 +273,19 @@ def test_remote_control_sends_queued_orders_first_and_logs_them(tmp_path, monkey
 
     (tmp_path / "control.json").write_text(_json.dumps({"enabled": True, "seat": 0, "autopilot": False}))
     assert ff.choose_action(state(), ctx) is WAIT           # manual and nothing queued: send nothing
+
+
+def test_the_control_file_is_read_at_most_once_a_second(monkeypatch):
+    from agent import agent as agent_module
+
+    reads = []
+    monkeypatch.setattr(agent_module, "read_control", lambda: reads.append(1) or {})
+    ctx = DecisionContext(session_id="ra", tournament_id=None, game_type="red_alert", agent_id="a",
+                          seat_position=0, game_config=CONFIG)
+    ff = create_agent()
+    for _ in range(5):
+        ff.choose_action(state(), ctx)
+    assert len(reads) == 1
 
 
 # -- spending, reinforcements, focus fire --------------------------------------------------

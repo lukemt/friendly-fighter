@@ -38,3 +38,4 @@ remote/
 
 # local simulator (ffsim) output
 sim/results/
+sim/traces/
