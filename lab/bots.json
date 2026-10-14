@@ -403,6 +403,109 @@
     "jev",
     "control"
    ]
+  },
+  {
+   "name": "ff-jev-v6-measured",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json"
+    }
+   },
+   "think": "measured",
+   "description": "ff-jev-v6 with its real decision time (Jev calls included) charged as game time, as on the platform",
+   "tags": [
+    "ours",
+    "jev",
+    "latency"
+   ]
+  },
+  {
+   "name": "chaotic",
+   "kind": "module",
+   "params": {
+    "factory": "lab.simple_bots:create_chaotic"
+   },
+   "think": 0.005,
+   "description": "erratic: our economy, the army sent to random places every 15-40 s (a confused LLM-like player)",
+   "tags": [
+    "baseline",
+    "weak"
+   ]
+  },
+  {
+   "name": "ff-jev-force-defend",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "scout": false,
+     "force": "defend"
+    }
+   },
+   "think": 0.005,
+   "description": "coach variant: the Jev bot with its posture forced to defend (no Jev calls)",
+   "tags": [
+    "jev",
+    "coach"
+   ]
+  },
+  {
+   "name": "ff-jev-force-gather",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "scout": false,
+     "force": "gather"
+    }
+   },
+   "think": 0.005,
+   "description": "coach variant: the Jev bot with its posture forced to gather (no Jev calls)",
+   "tags": [
+    "jev",
+    "coach"
+   ]
+  },
+  {
+   "name": "ff-jev-force-commit",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "scout": false,
+     "force": "commit"
+    }
+   },
+   "think": 0.005,
+   "description": "coach variant: the Jev bot with its posture forced to commit (no Jev calls)",
+   "tags": [
+    "jev",
+    "coach"
+   ]
+  },
+  {
+   "name": "ff-jev-force-retreat",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "scout": false,
+     "force": "retreat"
+    }
+   },
+   "think": 0.005,
+   "description": "coach variant: the Jev bot with its posture forced to retreat (no Jev calls)",
+   "tags": [
+    "jev",
+    "coach"
+   ]
   }
  ]
 }

@@ -121,6 +121,7 @@ class Knobs:
     unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only)
     target: str = "nearest"          # "nearest" | "enemy_base" | "harvesters"
     opening: str = "standard"        # "standard" | "guard": a defense and infantry at home through the rush window
+    greed: int = 0                   # extra refineries (up to 2 + greed) before the rest, and as many more harvesters
     aim: tuple[int, int] | None = None  # attack here (the commander's pick), unless enemies are in the way
     note: str = ""
 
@@ -365,7 +366,8 @@ class RedAlertBot:
         # 5. Harvesters: enough of them, and all of them working.
         refineries = types.count("proc")
         harvesters = [u for u in units if str(u.get("type")).lower() == "harv"]
-        target_harv = min(MAX_HARVESTERS, refineries * HARVESTERS_PER_REFINERY + (1 if knobs.posture == "eco" else 0))
+        target_harv = min(MAX_HARVESTERS + knobs.greed * HARVESTERS_PER_REFINERY,
+                          refineries * HARVESTERS_PER_REFINERY + (1 if knobs.posture == "eco" else 0) + knobs.greed)
         want_harv = refineries > 0 and len(harvesters) + self._count_queued(production, "harv", now) < target_harv
         idle_harv = [u["id"] for u in harvesters
                      if u.get("idle") and now - self._unit_ordered.get(u["id"], -1e9) >= REORDER_SECONDS]
@@ -450,6 +452,8 @@ class RedAlertBot:
         if not have.get("weap"):
             plan.append("weap")
         if have.get("proc", 0) < 2:
+            plan.append("proc")
+        if knobs.greed and have.get("proc", 0) < 2 + knobs.greed:
             plan.append("proc")
         if not have.get("fix"):
             plan.append("fix")

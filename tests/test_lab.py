@@ -299,3 +299,20 @@ def test_compare_pairs_every_candidate_on_the_same_seeds():
         games.setdefault((j["seed"], j["map"], base, j["bots"].index(base)), []).append(cand)
     # each (seed, map, baseline, seat) is played once by every candidate
     assert len(games) == 2 * 3 and all(sorted(v) == ["a", "b", "c"] for v in games.values())
+
+
+def test_knobs_names_play_without_an_entry_and_exploit_samples_them():
+    from lab import exploit
+
+    b = registry.get("knobs:posture=attack,attack_threshold=12,unit_focus=vehicles")
+    assert b.kind == "ff" and b.params["knobs"] == {"posture": "attack", "attack_threshold": 12, "unit_focus": "vehicles"}
+    assert registry.knobs_name(b.params["knobs"]) == "knobs:attack_threshold=12,posture=attack,unit_focus=vehicles"
+    with pytest.raises(KeyError):
+        registry.get("knobs:speed=fast")
+    names = exploit.sample(12, seed=3)
+    assert len(names) == len(set(names)) == 12
+    for n in names:
+        knobs = registry.get(n).params["knobs"]
+        assert all(v in exploit.SPACE[k] for k, v in knobs.items())
+        assert knobs["posture"] != "defend" or "attack_threshold" not in knobs
+    assert exploit.sample(12, seed=3) == names  # (the same seed, the same tries)

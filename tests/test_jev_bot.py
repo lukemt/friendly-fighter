@@ -127,3 +127,14 @@ def test_the_scout_goes_and_comes_back(tmp_path):
     orders = bot.choose_action(s, CTX).action["orders"]
     assert any(o["units"] == [bot.scout_id] and o["to"] == [12, 16] for o in cmds(orders, "move"))
     assert "tsla" in bot.enemy_defenses
+
+
+def test_a_forced_posture_holds_without_calls(tmp_path):
+    bot = JevBot(log_dir=str(tmp_path), force="commit")
+    bot.jev = FakeJev(posture="defend")
+    bot.choose_action(state(time=at(200), units=army(5)), CTX)  # (small, early, even: every rail says no)
+    assert bot.posture == "commit" and bot.bot.knobs.posture == "attack" and not bot.jev.asked
+    retreat = JevBot(log_dir=str(tmp_path), force="retreat")
+    retreat.jev = FakeJev()
+    retreat.choose_action(state(time=at(200), units=army(5)), CTX)
+    assert retreat.posture == "defend"  # (nobody out to pull back)

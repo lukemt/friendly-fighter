@@ -44,7 +44,8 @@ lab status                                        # the database, engine lanes, 
 - **Slow versions:** `ff-slow` and `ff-sluggish` are `ff-default` deciding in 0.8 and 2.5 s, like LLM agents.
 - **The starter's LLM player:** `starter-llm`. It needs `OPENAI_API_KEY` and `FF_SIM_OPENAI=1`
   (lab processes blank the key otherwise). Its think time is `measured`, so its real latency is game time.
-- **Weak baselines:** `builder` builds a base and never an army; `idle` never acts.
+- **Weak baselines:** `builder` builds a base and never an army; `idle` never acts; `chaotic` has our
+  economy, but sends its army to random places every 15-40 s (an erratic, LLM-like player).
 - **OpenRA's AIs:** `ai-normal`, `ai-rush`, `ai-turtle` and `ai-naval`.
 
 Each bot has a `think` value: the game time each of its decisions costs, which is 5 ms for our agent.
@@ -83,7 +84,7 @@ Its version hashes only its own files. Commit `bots/frozen/` with the registry.
 
 `ff-jev` and `ff-jev-push` (`bots/jev_bot.py`) are the scripted bot with the strategy Claude used
 when playing by hand as a few decision loops answered by Jev, TypeSafe's typed decision model
-(about 0.3 s a call, about $0.007 a game). Code counts and compares, and Jev judges:
+(about 0.3 s a call, about $0.004 a game). Code counts and compares, and Jev judges:
 
 - **Every 10 s of game time**, and every 3 s during a fight or an attack, the bot describes the game
   in words. The description covers the clock, the score, the recent trades, both armies, known
@@ -106,9 +107,54 @@ It needs `TYPESAFE_API_KEY` (in the environment or `.env`); without it, it plays
 lab jev last              # what it decided over the game, and why (changes only; --all for every call)
 lab jev last --at 7:40    # everything Jev was shown at that moment, and every probability it answered
 lab jev                   # calls, tokens, cost and latency over every logged game
+lab jev --attacks         # every logged attack by opponent: did it gain?
 ```
 
+**Working on the questions without playing.** `lab/jev_cases.json` holds moments from real games,
+plus a few written ones, each with the answer Claude would give and why. `lab jev eval` asks Jev
+the bot's questions on every case in a few seconds and lists the misses. A variant of the playbook
+or the criteria is a JSON file (`bots/jev_variants/`); try it there first, then play it as a bot
+(`kwargs: {"questions": "bots/jev_variants/x.json"}`):
+
+```bash
+lab jev eval [--questions bots/jev_variants/literal2.json]
+lab jev case GAME --at 7:40 --expect "posture=defend,gather;opponent=turtle" --why "ahead late: hold"
+```
+
+**Labels from outcomes.** `lab coach GAME --at 7:40` branches the game at that moment four ways,
+with the Jev bot's posture forced to defend, gather, commit or retreat (`ff-jev-force-*`, which make
+no calls). It prints what each scored from there. With `--label`, it saves the moment as an eval
+case whose right answers are the postures that scored within `--margin` (300) of the best:
+
+```bash
+lab coach last --at 7:34 --repeats 2 --label
+```
+
+Lessons so far (docs/STRATEGY.md): write numbers literally, keep the options' criteria from
+claiming the same situation, and say what was never seen.
+
+Jev answers vary by about 0.02 in probability between identical calls, but the choices (and so the
+seeded games) replay the same. `ff-jev-off` is the same code with Jev switched off (a control);
+`ff-jev-v6-measured` charges its real decision time, Jev calls included, as game time, as the
+platform would. Jev games take about 2.5 times the wall time of the others (the calls), but the
+CPU is free meanwhile: run them with `--workers 7`.
+
 ## Playing games
+
+Opponent sets have names (`lab/suites.json`): `@ais`, `@standard` (the AIs and our two turtles),
+`@weak` (builder, idle), `@scripted` and `@wide`. Use them wherever bots are listed.
+
+```bash
+lab compare REF,B,C --baselines @standard --games 8     # several candidates on the same seeds, paired against REF
+lab exploit TARGET --tries 16 --games 2 --finalists 4   # which settings of the scripted bot beat TARGET?
+```
+
+`compare` is `gate` for several candidates. Each one plays each baseline on the same seeds, and
+each one's difference from the reference (the first) comes with a 95% interval. The gate's verdict
+also pools the paired games: BETTER, WORSE, or UNCLEAR with the number of games a difference that
+size would need. `exploit` samples settings of the scripted bot (`knobs:posture=attack,...`; any
+`knobs:` name plays without a registry entry). It plays each against the target, then plays the
+best again, and prints the command to keep the winner as a sparring partner.
 
 ```bash
 lab play A B --games 12 [--map all|trapped|sidestep,trapped] [--minutes 10] [--seed 1] [--workers 4]

@@ -1,8 +1,39 @@
 {
  "_doc": "Named sets of opponents: '--baselines @standard' or 'lab league @ais ff-jev-push'. Keep a suite fixed once results depend on it; add a new one instead.",
- "ais": ["ai-normal", "ai-rush", "ai-turtle"],
- "standard": ["ai-normal", "ai-rush", "ai-turtle", "ff-turtle", "ff-guard-turtle"],
- "weak": ["builder", "idle"],
- "scripted": ["ff-default", "ff-turtle", "ff-guard-turtle", "counter", "ff-rush", "ff-eco"],
- "wide": ["ai-normal", "ai-rush", "ai-turtle", "ff-turtle", "ff-guard-turtle", "ff-default", "counter", "builder"]
+ "ais": [
+  "ai-normal",
+  "ai-rush",
+  "ai-turtle"
+ ],
+ "standard": [
+  "ai-normal",
+  "ai-rush",
+  "ai-turtle",
+  "ff-turtle",
+  "ff-guard-turtle"
+ ],
+ "weak": [
+  "builder",
+  "idle",
+  "chaotic"
+ ],
+ "scripted": [
+  "ff-default",
+  "ff-turtle",
+  "ff-guard-turtle",
+  "counter",
+  "ff-rush",
+  "ff-eco"
+ ],
+ "wide": [
+  "ai-normal",
+  "ai-rush",
+  "ai-turtle",
+  "ff-turtle",
+  "ff-guard-turtle",
+  "ff-default",
+  "counter",
+  "builder",
+  "chaotic"
+ ]
 }

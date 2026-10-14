@@ -67,26 +67,33 @@ def moment(rows: list[dict], seconds: float) -> str:
 
 
 def usage(paths: list[Path]) -> str:
-    calls = tokens = unanswered = 0
+    calls = tokens = failed = 0
+    silent = 0  # seats without a single answer: Jev switched off (a control) or no key
     latency = []
     for p in paths:
-        for r in read(p):
+        rows = read(p)
+        answered = sum(1 for r in rows if r.get("answers"))
+        if rows and not answered:
+            silent += 1
+            continue
+        failed += len(rows) - answered
+        for r in rows:
             calls += 1
-            unanswered += not r.get("answers")
             tokens += r.get("tokens") or 0
             if r.get("latency"):
                 latency.append(r["latency"])
+    seats = len(paths) - silent
     if not calls:
-        return "no Jev calls logged"
+        return "no Jev calls logged" + (f" ({silent} seats played without Jev)" if silent else "")
     latency.sort()
     pct = lambda q: latency[min(len(latency) - 1, int(q * len(latency)))] * 1000  # noqa: E731
-    return (f"{len(paths)} game seats, {calls} calls ({calls / max(1, len(paths)):.0f} a game), "
+    return (f"{seats} game seats with Jev, {calls} calls ({calls / max(1, seats):.0f} a game), "
             f"{tokens:,} input tokens (${tokens / 1e6 * PRICE_PER_MTOK:.4f}; "
-            f"${tokens / max(1, len(paths)) / 1e6 * PRICE_PER_MTOK:.5f} a game); "
+            f"${tokens / max(1, seats) / 1e6 * PRICE_PER_MTOK:.5f} a game); "
             f"latency median {pct(0.5):.0f} ms, p95 {pct(0.95):.0f} ms"
-            + (f"\nWARNING: {unanswered} calls got no answer (no TYPESAFE_API_KEY, or Jev failing): "
-               f"those games played without Jev" if unanswered else ""))
-
+            + (f"; {silent} more seats played without Jev (controls, or no key)" if silent else "")
+            + (f"\nWARNING: {failed} calls got no answer in games that otherwise had Jev (errors or timeouts)"
+               if failed else ""))
 
 def _net(call: dict) -> int:
     score = (call.get("state") or {}).get("score", "")

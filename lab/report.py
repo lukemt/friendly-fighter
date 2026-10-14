@@ -480,6 +480,17 @@ def _swing(db, s: dict) -> str:
     return text
 
 
+def branch_outcomes(db, origin_id: str, tick: int) -> dict[str, list[int]]:
+    """Each branch label from this tick: the branched seat's final net in each repeat."""
+    out: dict[str, list[int]] = defaultdict(list)
+    for g in db.q("SELECT * FROM games WHERE branch_of = ? AND branch_tick = ?", origin_id, tick):
+        seat = json.loads(g["info"] or "{}").get("branch_seat", 0)
+        s = db.one("SELECT net FROM seats WHERE game_id = ? AND position = ?", g["id"], seat)
+        if s is not None and s["net"] is not None:
+            out[g["branch_label"]].append(s["net"])
+    return dict(out)
+
+
 def branch_report(db, ref: str, horizons: tuple[int, ...] = (30, 60, 120)) -> str:
     g = db.find_game(ref)
     if g is None:

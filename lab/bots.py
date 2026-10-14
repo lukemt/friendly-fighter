@@ -156,6 +156,23 @@ def save(bots: dict[str, Bot], path: Path = REGISTRY) -> None:
     path.write_text(json.dumps({"bots": rows}, indent=1) + "\n")
 
 
+def parse_knobs(text: str) -> dict:
+    from agent.redalert_bot import Knobs
+
+    fields = Knobs.__dataclass_fields__
+    knobs = {}
+    for part in filter(None, text.split(",")):
+        key, _, value = part.partition("=")
+        if key not in fields or key in ("note", "aim"):
+            raise KeyError(f"unknown knob {key!r} in {text!r}")
+        knobs[key] = int(value) if value.lstrip("-").isdigit() else value
+    return knobs
+
+
+def knobs_name(knobs: dict) -> str:
+    return "knobs:" + ",".join(f"{k}={v}" for k, v in sorted(knobs.items()))
+
+
 def get(name: str, bots: dict[str, Bot] | None = None) -> Bot:
     """A bot by name; ``ai:<type>`` and ``human[:who]`` work without an entry."""
     bots = bots if bots is not None else load()
@@ -165,4 +182,6 @@ def get(name: str, bots: dict[str, Bot] | None = None) -> Bot:
         return Bot(name=f"ai-{name[3:]}", kind="ai", params={"type": name[3:]})
     if name == "human" or name.startswith("human:"):
         return Bot(name=name.replace(":", "-"), kind="human", think="paused")
+    if name.startswith("knobs:"):  # (our scripted bot with these knobs: knobs:posture=attack,attack_threshold=12)
+        return Bot(name=name, kind="ff", params={"knobs": parse_knobs(name[6:])}, tags=["generated"])
     raise KeyError(f"no bot {name!r}: see 'lab bots' (or add one with 'lab bots add')")

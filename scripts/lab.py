@@ -71,6 +71,17 @@ def _quota() -> int:
     return os.cpu_count() or 1
 
 
+def _split(text: str) -> list[str]:
+    """Bot names separated by commas; a ``knobs:a=1,b=2`` name keeps its own commas."""
+    out: list[str] = []
+    for part in filter(None, (p.strip() for p in text.split(","))):
+        if out and out[-1].startswith("knobs:") and "=" in part and ":" not in part:
+            out[-1] += "," + part
+        else:
+            out.append(part)
+    return out
+
+
 def _expand(names: list[str]) -> list[str]:
     """Bot names, with ``@suite`` replaced by the suite's bots (lab/suites.json)."""
     suites = json.loads((ROOT / "lab" / "suites.json").read_text())
@@ -209,7 +220,7 @@ def cmd_league(a, db) -> int:
 
 
 def cmd_gate(a, db) -> int:
-    baselines = _expand([b for b in a.baselines.split(",") if b])
+    baselines = _expand(_split(a.baselines))
     _check_bots([a.candidate, a.champion] + baselines)
     jobs = schedule.gate(a.candidate, a.champion, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes)
     run_id = _play(db, jobs, a, "gate", vars(a))
@@ -219,8 +230,8 @@ def cmd_gate(a, db) -> int:
 
 
 def cmd_compare(a, db) -> int:
-    candidates = _expand([c for c in a.candidates.split(",") if c])
-    baselines = _expand([b for b in a.baselines.split(",") if b])
+    candidates = _expand(_split(a.candidates))
+    baselines = _expand(_split(a.baselines))
     _check_bots(candidates + baselines)
     jobs = schedule.compare(candidates, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes)
     run_id = _play(db, jobs, a, "compare", vars(a))
@@ -229,17 +240,84 @@ def cmd_compare(a, db) -> int:
     return 0
 
 
+def cmd_exploit(a, db) -> int:
+    from lab import exploit
+
+    _check_bots([a.target])
+    tries = exploit.sample(a.tries, seed=a.seed)
+    print(f"stage 1: {len(tries)} settings x {a.games} games against {a.target}")
+    run1 = _play(db, exploit.jobs(a.target, tries, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes,
+                                  stage="1"), a, "exploit", vars(a))
+    ranked = exploit.ranking(db, [run1], a.target, tries)
+    print(exploit.ranking_text(ranked))
+    finalists = [r["bot"] for r in ranked[:a.finalists]]
+    if not finalists or a.final_games <= 0:
+        return 0
+    print(f"\nstage 2: the best {len(finalists)} x {a.final_games} more games")
+    run2 = _play(db, exploit.jobs(a.target, finalists, a.final_games, maps=_maps(a.map), seed=a.seed + 101,
+                                  minutes=a.minutes, stage="2"), a, "exploit", vars(a))
+    final = exploit.ranking(db, [run1, run2], a.target, finalists)
+    print(exploit.ranking_text(final))
+    best = final[0]
+    print(f"\nbest: {best['bot']} scored {100 * best['score']:.0f}% against {a.target} over {best['games']} games")
+    print(f"keep it: lab bots add exploit-NAME --kind ff --knobs '{json.dumps(registry.parse_knobs(best['bot'][6:]))}' "
+          f"--tags exploiter --desc 'beats {a.target} {100 * best['score']:.0f}%'")
+    return 0
+
+
 def cmd_branch(a, db) -> int:
     from lab.branch import branch_jobs, parse_time
 
     seconds = parse_time(a.at) / 25
-    variants = [v for v in a.variants.split(",") if v]
+    variants = _split(a.variants)
     _check_bots(variants + ([a.opponent] if a.opponent else []))
     jobs = branch_jobs(db, a.game, seconds, variants, seat=a.seat, opponent=a.opponent, repeats=a.repeats,
                        seed=a.seed, stop_after=a.stop_after, control=not a.no_control)
     _play(db, jobs, a, "branch", vars(a))
     print()
     print(report.branch_report(db, a.game))
+    return 0
+
+
+POSTURES = ("defend", "gather", "commit", "retreat")
+
+
+def cmd_coach(a, db) -> int:
+    """What would each posture have scored from this moment? Branches with the posture forced."""
+    from lab.branch import branch_jobs, game_tick, parse_time
+
+    seconds = parse_time(a.at) / 25
+    variants = [f"ff-jev-force-{p}" for p in POSTURES]
+    _check_bots(variants)
+    jobs = branch_jobs(db, a.game, seconds, variants, seat=a.seat, repeats=a.repeats, seed=a.seed,
+                       stop_after=a.stop_after, control=True)
+    _play(db, jobs, a, "coach", vars(a))
+    g = db.find_game(a.game)
+    origin = g["branch_of"] or g["id"]
+    outcomes = report.branch_outcomes(db, origin, game_tick(db.find_game(origin), seconds))
+    print()
+    print(report.branch_report(db, a.game))
+    forced = {lab.split("ff-jev-force-")[1]: sum(v) / len(v) for lab, v in outcomes.items() if "ff-jev-force-" in lab and v}
+    if not forced:
+        return 1
+    best = max(forced.values())
+    good = [p for p, v in sorted(forced.items(), key=lambda kv: -kv[1]) if v >= best - a.margin]
+    print("\nforced postures, mean final net: " + ", ".join(f"{p} {v:+.0f}" for p, v in sorted(forced.items(), key=lambda kv: -kv[1])))
+    print(f"best: {', '.join(good)} (within {a.margin} of the best)")
+    if a.label:
+        from lab import jev_eval, jevlog
+
+        paths = jevlog.log_files(origin)
+        if not paths:
+            print(f"no Jev log for {origin}: no case")
+            return 0
+        rows = jevlog.read(paths[0] if len(paths) == 1 else next(p for p in paths if p.name.endswith(f"-{a.seat}.jsonl")))
+        case = jev_eval.case_from_log(rows, seconds, {"posture": good}, game=origin,
+                                      why="coach: " + ", ".join(f"{p} {v:+.0f}" for p, v in forced.items()))
+        case["id"] = "coach-" + case["id"]
+        cases = [c for c in jev_eval.load_cases() if c["id"] != case["id"]] + [case]
+        jev_eval.save_cases(cases)
+        print(f"case {case['id']} saved: posture {'/'.join(good)} (the bot said: {case['bot_said']})")
     return 0
 
 
@@ -702,6 +780,24 @@ def main() -> int:
     s.add_argument("--games", type=int, default=6, help="per baseline and candidate")
     playing(s)
 
+    s = sub.add_parser("exploit", help="search settings of our scripted bot that beat a target bot")
+    s.add_argument("target")
+    s.add_argument("--tries", type=int, default=16, help="settings sampled in stage 1")
+    s.add_argument("--games", type=int, default=2, help="games per setting in stage 1")
+    s.add_argument("--finalists", type=int, default=4)
+    s.add_argument("--final-games", type=int, default=6, help="more games per finalist in stage 2")
+    playing(s)
+
+    s = sub.add_parser("coach", help="from a moment of a Jev bot's game: what each posture, forced, would have scored")
+    s.add_argument("game")
+    s.add_argument("--at", required=True)
+    s.add_argument("--seat", type=int, default=0)
+    s.add_argument("--repeats", type=int, default=2)
+    s.add_argument("--stop-after", type=float, default=None, help="end each branch this many seconds later")
+    s.add_argument("--margin", type=int, default=300, help="postures this close to the best count as right")
+    s.add_argument("--label", action="store_true", help="save the moment as a jev eval case labelled by the outcome")
+    playing(s)
+
     s = sub.add_parser("branch", help="play on from a moment of a recorded game, with other bots")
     s.add_argument("game")
     s.add_argument("--at", required=True, help="game time: 4:30, 270 (s) or t6750 (tick)")
@@ -830,7 +926,7 @@ def main() -> int:
 
     a = p.parse_args()
     db = LabDB()
-    handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "branch": cmd_branch,
+    handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch,
                 "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
                 "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,

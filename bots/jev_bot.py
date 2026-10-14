@@ -245,8 +245,12 @@ class JevBot:
     (by default Jev's word is enough)."""
 
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = False,
-                 commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True) -> None:
+                 commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True,
+                 force: str | None = None) -> None:
+        """``force``: a posture held whatever Jev says and past every rail (for the coach: what would
+        each posture have scored from this moment?)."""
         self.push = push
+        self.force = force
         self.scout = scout
         self.questions = load_questions(questions)
         self.commit_deficit = commit_deficit
@@ -537,6 +541,10 @@ class JevBot:
 
     def _decide(self, raw: dict, facts: dict, now: float, context) -> list[dict[str, Any]]:
         state = self.describe(raw, facts, now)
+        if self.force:  # (no question to ask: the posture is fixed)
+            extra = self._apply({}, facts, now, raw)
+            self._log(context, now, state, None, 0.0)
+            return extra
         questions = {k: v for k, v in self.questions.items() if k != "opening" or now < 240}
         same = {k: v for k, v in state.items() if k != "clock"} == self.last_state and set(questions) == self.last_qids
         self.last_state, self.last_qids = {k: v for k, v in state.items() if k != "clock"}, set(questions)
@@ -613,6 +621,9 @@ class JevBot:
             posture = "commit"
             rails.append(f"push on (odds {self.odds:.1f})")
 
+        if self.force:
+            posture = self.force if (self.force != "retreat" or facts["away"]) else "defend"
+            rails = [f"forced {self.force}"]
         extra: list[dict[str, Any]] = []
         if posture and posture != self.posture:
             if self.posture == "commit":  # the wave ends: everyone out there comes back
