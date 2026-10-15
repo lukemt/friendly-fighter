@@ -727,6 +727,58 @@
     "jev",
     "council"
    ]
+  },
+  {
+   "name": "ff-council-rules",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240
+    }
+   },
+   "think": 0.005,
+   "description": "the council's loops answered by code rules (the briefings as written), no Jev: the control for ff-jev-council-boom, and a council with no API",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-rules-eco",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "ff-council-rules with a second refinery before the war factory",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-greedy-turtle-eco",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "opening": "guard",
+     "posture": "defend",
+     "attack_threshold": 20,
+     "greed": 2,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "ff-greedy-turtle with a second refinery before the war factory (run 61: 88% vs 80%)"
   }
  ]
 }

@@ -144,11 +144,14 @@ def loop_request(loop: str, words: dict[str, str], *, seconds: float, plan: str 
 class CouncilBot(JevBot):
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = True, scout: bool = False,
                  plan: str = "hold", gate: float = 0.55, attack_gate: float = 0.6, use_jev: bool = True,
-                 boom_until: float = 600.0, keep_first: float = 0.0, **kwargs) -> None:
+                 boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev", **kwargs) -> None:
         """``gate``: the probability a new plan needs; ``attack_gate``: the same for attack and boom.
         ``boom_until``: no boom from this time; ``keep_first``: the first plan stands until then unless
-        the base is raided or an attack is expected (for experiments)."""
+        the base is raided or an attack is expected (for experiments). ``oracle="rules"``: code answers
+        the loops' questions (``Rules``), no Jev at all."""
         super().__init__(log_dir=log_dir, model=model, push=push, scout=scout, use_jev=use_jev, **kwargs)
+        if oracle == "rules":
+            self.jev = Rules(self)
         self.plan = plan
         self.plan_since = 0.0
         self.gate, self.attack_gate = gate, attack_gate
@@ -210,6 +213,7 @@ class CouncilBot(JevBot):
         return f"'{best}' (about {round(self.belief[best] * 10) * 10}% sure)"
 
     def _decide(self, raw: dict, facts: dict, now: float, context) -> list[dict[str, Any]]:
+        self._now = (facts, now, raw)
         words = self.describe(raw, facts, now)
         wake = self._remember(facts, now)
         busy = facts["fight"] or self.posture == "commit"
@@ -296,6 +300,106 @@ class CouncilBot(JevBot):
     def _log_council(self, context, now, words, answers, latency, spent: dict[str, int]) -> None:
         self.jev.last_tokens = sum(spent.values())  # (the row's tokens: every loop's request together)
         self._log(context, now, words, answers or None, latency, {"loops": spent, "plan": self.plan})
+
+
+VEHICLES = {"1tnk", "2tnk", "3tnk", "4tnk", "ttnk", "v2rl", "arty", "apc", "jeep", "ftrk", "mnly"}
+
+
+class Rules:
+    """The council's questions answered by code from the counted facts, following the briefings'
+    rules as written: the control that shows what Jev adds, and a council that needs no API."""
+
+    key = "rules"
+    last_tokens = 0
+    calls = errors = tokens = 0
+
+    def __init__(self, bot: CouncilBot) -> None:
+        self.bot = bot
+
+    def ask(self, state, questions):
+        return self.ask_counted(state, questions)[0]
+
+    def ask_counted(self, state, questions) -> tuple[dict, int]:
+        facts, now, raw = self.bot._now
+        out: dict[str, Any] = {}
+        for qid, q in questions.items():
+            pick = getattr(self, qid)(facts, now, raw)
+            if q["type"] == "noul":
+                out[qid] = {"type": "noul", "noul": pick}
+                continue
+            options = list(q["criteria"])
+            pick = pick if pick in options else options[-1]
+            rest = 0.1 / max(1, len(options) - 1)
+            out[qid] = {"type": "choice", "choice": pick, "probabilities": {o: 0.9 if o == pick else rest for o in options}}
+        return out, 0
+
+    # -- what the briefings say, in code ----------------------------------------------------
+
+    def _seen(self) -> set[str]:
+        return {t for t, _ in self.bot.enemy_seen.values()} - NONCOMBAT
+
+    def _raid_just_beaten(self, now: float) -> bool:
+        b = self.bot
+        return b.raids >= 1 and now - b.last_raid_end < 60
+
+    def opponent(self, facts, now, raw) -> str:
+        b = self.bot
+        if b.first_raid and b.first_raid[0] < 270 and b.first_raid[1] >= 6:
+            return "rusher"
+        if b.raids >= 2:
+            return "aggressive"
+        if len(b.defense_cells) >= 4:
+            return "turtle"
+        if b.enemy_buildings and not self._seen() and not b.defense_cells:
+            return "passive"
+        if now >= 420 and b.raids == 0:
+            return "turtle"  # (not come by 7:00: staying home)
+        return "unknown"
+
+    def plan(self, facts, now, raw) -> str:
+        b = self.bot
+        net = facts["kills"] - facts["losses"]
+        left = (raw.get("time") or {}).get("remaining_seconds")
+        left = left if isinstance(left, (int, float)) else 600 - now
+        opp = self.opponent(facts, now, raw)
+        if opp == "passive" or (net <= -500 and left < 180 and len(facts["combat"]) >= 25):
+            return "attack"
+        if facts["threat"] or (self._raid_just_beaten(now) and opp in ("rusher", "aggressive")):
+            return "fortify"
+        if 300 <= now < 420 and b.enemy_max_army == 0:
+            return "fortify"
+        if opp in ("turtle", "fortified") or (now >= 420 and b.raids == 0) or (now < 240 and b.raids == 0):
+            return "boom"
+        return "hold"
+
+    def attack_soon(self, facts, now, raw) -> float:
+        b = self.bot
+        expected = (300 <= now < 420 and b.enemy_max_army == 0) or facts["threat"] or (
+            self._raid_just_beaten(now) and self.opponent(facts, now, raw) in ("rusher", "aggressive"))
+        return 0.8 if expected else 0.2
+
+    def opening(self, facts, now, raw) -> str:
+        return "guard"
+
+    def production(self, facts, now, raw) -> str:
+        b = self.bot
+        seen = self._seen()
+        if now < 240:
+            return "infantry" if b.raids else "mixed"
+        if seen & VEHICLES or b.enemy_air or (now >= 300 and b.enemy_max_army == 0):
+            return "rockets"
+        cash = int(((raw.get("observation") or {}).get("economy") or {}).get("cash") or 0)
+        if cash > 2000 and seen and not seen & VEHICLES:
+            return "vehicles"
+        return "mixed"
+
+    def posture(self, facts, now, raw) -> str:
+        b = self.bot
+        if facts["away"] and (facts["near_defenses"] or (facts["fight"] and 0 < b.odds < 0.8)):
+            return "retreat"
+        if b.plan == "attack":
+            return "commit" if len(facts["combat"]) >= 15 else "gather"
+        return "defend"
 
 
 def create_agent(**kwargs) -> CouncilBot:

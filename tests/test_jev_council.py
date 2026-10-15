@@ -103,3 +103,16 @@ def test_raids_are_remembered_and_wake_the_strategist(tmp_path):
     assert any("the raid ended" in e for e in bot.events)
     strategy_states = [st for st, q in bot.jev.asked if "plan" in q]
     assert any("came to our base" in " ".join(st["what_happened"]) for st in strategy_states)
+
+
+def test_the_rules_council_needs_no_jev(tmp_path):
+    bot = CouncilBot(log_dir=str(tmp_path), oracle="rules", plan="boom", keep_first=240)
+    assert bot.jev.key == "rules"
+    bot.choose_action(state(time=at(100), units=army(10)), CTX)
+    assert bot.plan == "boom" and bot.bot.knobs.greed == 2
+    bot.last_call = -1e9
+    bot.choose_action(state(time=at(330), units=army(14)), CTX)  # (5:30, no enemy army ever seen)
+    assert bot.plan == "fortify" and bot.production == "rockets" and bot.bot.knobs.greed == 0
+    bot.last_call = -1e9
+    bot.choose_action(state(time=at(450), units=army(20)), CTX)  # (7:30, nobody came: a standoff)
+    assert bot.plan == "boom"  # (the read turns over a few calls: a running belief)

@@ -159,7 +159,8 @@ def _uses_jev(name: str) -> bool:
         return False
     factory = str(bot.params.get("factory", "")) if bot.kind == "module" else ""
     kwargs = bot.params.get("kwargs") or {}
-    return "jev" in factory and not kwargs.get("force") and kwargs.get("use_jev", True)
+    return ("jev" in factory and not kwargs.get("force") and kwargs.get("use_jev", True)
+            and kwargs.get("oracle", "jev") == "jev")
 
 
 # -- commands ------------------------------------------------------------------------------------
