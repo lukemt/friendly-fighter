@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -108,8 +109,16 @@ def freeze(table: dict, name: str, new_name: str, *, commit: str = "") -> "Bot":
     for init in (ROOT / "bots" / "frozen" / "__init__.py", package / "__init__.py"):
         if not init.exists():
             init.write_text('"""Frozen bots: copies that never change (lab bots freeze)."""\n' if init.parent.name == "frozen" else "")
-    source = (ROOT / (module.replace(".", "/") + ".py")).read_text()
-    source = source.replace("from agent.redalert_bot import", "from .redalert_bot import")
+    def localize(text: str) -> str:
+        """Imports of the scripted bot and of other bots/ modules point into the package (copied too)."""
+        text = text.replace("from agent.redalert_bot import", "from .redalert_bot import")
+        for dep in sorted(set(re.findall(r"^from bots\.(\w+) import", text, re.M)) - {"frozen"}):
+            if not (package / f"{dep}.py").exists():
+                (package / f"{dep}.py").write_text(localize((ROOT / "bots" / f"{dep}.py").read_text()))
+            text = re.sub(rf"^from bots\.{dep} import", f"from .{dep} import", text, flags=re.M)
+        return text
+
+    source = localize((ROOT / (module.replace(".", "/") + ".py")).read_text())
     (package / "bot.py").write_text(f"# Frozen from {module} ({name} {bot.version()}) at {commit or 'the working tree'}.\n" + source)
     (package / "redalert_bot.py").write_text((ROOT / "agent" / "redalert_bot.py").read_text())
     params = {**bot.params, "factory": f"bots.frozen.{safe}.bot:{func or 'create_agent'}"}

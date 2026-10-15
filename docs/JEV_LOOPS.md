@@ -96,6 +96,33 @@ the strategist almost never plans an attack.
   (built at 3:58). That is the opt-in knob `Knobs.early_refineries`, tested on the scripted bots
   (experiment `early-refineries`).
 
+## The rules council: the same loops, answered by code
+
+- **What it is.** `ff-council-rules` (`CouncilBot(oracle="rules")`, class `Rules`) asks its loops
+  the same questions, but code answers them from the counted facts, following the briefings as
+  written:
+  - **fortify** between 5:00 and 7:00 while the enemy army is unseen, or under a raid;
+  - **boom** before 4:00, against a turtle, and after 7:00 when nobody has come;
+  - **rockets** once tanks or aircraft are seen, or the army is still unseen at 5:00;
+  - **retreat** from a losing fight away from home.
+- **Why.** It is the control that shows what Jev adds over the rules, and a council with no API
+  cost and nothing to break.
+- **Result (run 63, fresh seed).** With a second refinery before the war factory
+  (`ff-council-rules-eco`), it is the best bot so far:
+  - 86% against 72% for `ff-greedy-turtle` (+0.15 points a game, CI +0.00 to +0.29);
+  - net +5,721 a game (CI +2,244 to +9,198);
+  - 16/16 against both exploiters.
+- **Run 64 (third seed, wider suite) confirmed it:**
+  - 95% (76/80) against 76% (+0.19, CI +0.09 to +0.29), net +4,802;
+  - 16/16 against the exploiters again;
+  - 8/8 against `ff-default`.
+  - It is the champion: the frozen `ff-council-champ-v10` (`lab champion`).
+- **Most of that gain is the economy fix.** `ff-greedy-turtle-eco` alone scored 84% (run 63) and
+  88% (run 61). Without the fix the rules council scored 70%, though with net +3,242.
+- **What Jev adds over these rules is not measured yet** (credits ran out). The next experiment
+  is the Jev council with early refineries against `ff-council-rules-eco`, both with the same
+  loops.
+
 ## Operations
 
 - **Credits.** The TypeSafe account ran out of credits during run 60, after about $5.16 in all

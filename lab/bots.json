@@ -779,6 +779,26 @@
    },
    "think": 0.005,
    "description": "ff-greedy-turtle with a second refinery before the war factory (run 61: 88% vs 80%)"
+  },
+  {
+   "name": "ff-council-champ-v10",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_council_champ_v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-council-rules-eco ff-council-rules-eco@4023a564 at 7036a80+changes: ff-council-rules with a second refinery before the war factory",
+   "tags": [
+    "council",
+    "frozen",
+    "rules"
+   ]
   }
  ]
 }

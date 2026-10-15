@@ -124,8 +124,15 @@ used).
 - **One seed fooled us.** Run 59 alone said "better" (+0.11, CI +0.01 to +0.21); the fresh seed
   of run 60 did not. Confirm a win on a second seed before crowning it.
 - **The economy starves before any decision matters.** Cash sits at 0 from 2:00, because the war
-  factory comes before the second refinery (built at 3:58 in a lost Rush AI game). See
-  `Knobs.early_refineries`.
+  factory comes before the second refinery (built at 3:58 in a lost Rush AI game).
+  - **The fix:** `Knobs.early_refineries=1`, a second refinery before the war factory.
+  - **It won on two seeds:** the greedy turtle went from 80% to 88% (run 61) and from 72% to 84%
+    (run 63), with net +2.5k and +3.7k a game.
+  - **It helps most against the eco exploiters** (eco-waves 4/8 to 8/8) and the Rush AI.
+  - **The guard still stands:** its pillbox and infantry come first.
+- **The best bot so far needs no API.** `ff-council-rules-eco` is the council's loops answered by
+  code rules, plus the economy fix: 86% (run 63) and 16/16 against the exploiters. See
+  docs/JEV_LOOPS.md.
 
 ## What the exploiter search found (`lab exploit`)
 

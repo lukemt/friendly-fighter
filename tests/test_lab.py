@@ -278,6 +278,20 @@ def test_a_frozen_bot_keeps_its_code(tmp_path, monkeypatch):
         registry.freeze(table, "mine", "mine-v1")
 
 
+def test_a_frozen_bot_takes_the_bots_it_builds_on(tmp_path, monkeypatch):
+    (tmp_path / "agent").mkdir()
+    (tmp_path / "bots").mkdir()
+    (tmp_path / "agent" / "redalert_bot.py").write_text("VERSION = 1\n")
+    (tmp_path / "bots" / "base.py").write_text("from agent.redalert_bot import VERSION\n\nclass Base:\n    v = VERSION\n")
+    (tmp_path / "bots" / "top.py").write_text("from bots.base import Base\n\ndef create_agent():\n    return Base()\n")
+    monkeypatch.setattr(registry, "ROOT", tmp_path)
+    table = {"top": registry.Bot(name="top", kind="module", params={"factory": "bots.top:create_agent"})}
+    registry.freeze(table, "top", "top-v1")
+    package = tmp_path / "bots" / "frozen" / "top_v1"
+    assert "from .base import Base" in (package / "bot.py").read_text()
+    assert "from .redalert_bot import VERSION" in (package / "base.py").read_text()
+
+
 def test_the_gate_verdict_weighs_paired_games():
     def paired(diffs, by=None):
         mean, lo, hi = report._mean_ci(diffs)
