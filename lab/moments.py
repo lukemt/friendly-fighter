@@ -223,6 +223,21 @@ def probe_jobs(db, name: str, variants: list[str], *, stop_after: float = 300.0,
     return jobs, reused
 
 
+def human_job(db, moment_id: int, who: str, *, stop_after: float = 300.0, stop_quiet: float | None = None,
+              seed: int = 1) -> tuple[dict, dict]:
+    """A moment played by hand (``lab human start --moment``): the branch a probe would play there,
+    with the person (``human-<who>``) as the variant, the same seat, opponent, seed and stop rule, so
+    the probe report pairs it with the control. Returns that job and the control's."""
+    m = db.one("SELECT * FROM moments WHERE id = ?", moment_id)
+    if m is None:
+        raise ValueError(f"no moment {moment_id} (lab moments show SET)")
+    jobs, _ = probe_jobs(db, m["set_name"], [f"human-{who}"], stop_after=stop_after, stop_quiet=stop_quiet,
+                         seed=seed, moment_ids=[moment_id], reuse=False)
+    control = next(j for j in jobs if j["branch"]["label"].startswith("control:"))
+    mine = next(j for j in jobs if j is not control)
+    return mine, control
+
+
 def halving_order(db, name: str, seed: int = 1) -> list[int]:
     """The set's moments in a fixed shuffled order (so the first rounds are not one map or one bot)."""
     import random
@@ -301,7 +316,7 @@ def outcomes(db, name: str, runs: list[int] | None = None, *, stop_after: float 
         series = _net(db, g["id"], seat)
         if s is None or not series:
             continue
-        if version is not None and any(r["version"] != version(r["bot"]) for r in seats.values()):
+        if version is not None and any(r["version"] != version(r["bot"]) for r in seats.values() if r["kind"] != "human"):
             stale += 1
             continue
         label = g["branch_label"] or ""

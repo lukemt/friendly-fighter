@@ -27,10 +27,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import LAB_DIR
+from . import FAMILY, LAB_DIR
 
 ADVISE_DIR = LAB_DIR / "advise"
-SESSION_FILE = ADVISE_DIR / "session.json"
+SESSION_FILE = ADVISE_DIR / (FAMILY or "main") / "session.json"  # (one per session: AGENTS.md)
 # The layer a question comes from, by a field only that layer's schema has (contestants' advisors).
 LAYERS = (("posture", "strategy"), ("main_action", "tactical"), ("focus_target_id", "fast"))
 
@@ -415,7 +415,7 @@ def serve(args) -> int:
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
-    ADVISE_DIR.mkdir(parents=True, exist_ok=True)
+    SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
     SESSION_FILE.write_text(json.dumps({"port": server.server_address[1], "pid": os.getpid(), "started": time.time(),
                                         "bot": args.bot, "vs": args.vs, "seat": args.seat, "map": args.map}))
     threading.Thread(target=server.serve_forever, daemon=True).start()

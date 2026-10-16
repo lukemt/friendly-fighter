@@ -119,11 +119,19 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
 | Stage | Command (examples) | About |
 |---|---|---|
 | 0. Idea card | `lab experiment new <family>-<topic> --hypothesis "..."` | nothing |
+| 1a. Play it by hand | `lab human start --moment ID --stop-after 180 --stop-quiet 45`, then `lab h ...` (the game waits between commands) | your time, almost no CPU |
 | 1. Probe the situation | `lab probe @rush-wave --variants <family>-a,<family>-b --halving --stop-after 180 --stop-quiet 45` | 5-15 min |
 | 2. Targeted screen | `lab compare ff-council-champ-v10,<family>-a --baselines ai-rush --games 8 --seed N` | 5-15 min |
 | 3. Fast suite | `lab compare ff-council-champ-v10,<family>-a --baselines @ais,@exploiters --games 8 --seed N` | 15-25 min |
 | 4. Gate | ask the coordinator (`lab note "<family>-a: ready for a gate, runs ..."`) | about an hour |
 
+- **Manual play (stage 1a)** tries a tactic before anyone codes it, or finds out why a bot loses.
+  - `--moment` plays a moment of a set as the probe would: same seat, opponent and stop rule, you
+    as the variant. `lab probe SET --report` pairs it with the control (play that with
+    `lab probe SET --moments ID --control-only ...`).
+  - Autopilot `macro` runs the economy and leaves the army to you. `lab h note` records what you did.
+  - A manual result is 1-3 games: it shows something *can* work, never that it's better. Write
+    down the tactic as an idea card, code it as a setting, and probe it as a bot.
 - Put the champion first in `lab compare`: the first bot is the reference.
 - Pass `--experiment <family>-<topic> --note "..."` on every run.
 - Freeze a candidate before you report its numbers: `lab bots freeze <family>-a --as <family>-a-v1`.

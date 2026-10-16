@@ -487,6 +487,19 @@ lab probe NAME --report [--stop-after 300] [--stop-quiet 45] [--runs 119,120]
   situations an idea is for, reuse, halving and early stops; engine snapshots would change the rest
   (LAB_PLAN L14).
 
+## Playing a moment by hand (the funnel's stage 1a)
+
+```bash
+lab human start --moment 17 --stop-after 180 --stop-quiet 45   # moment 17 of its set (lab moments show)
+lab h units | enemies | move X Y all | target ID UNITS | go 4 | note TEXT
+lab probe @rush-wave --moments 17 --control-only --stop-after 180 --stop-quiet 45
+lab probe @rush-wave --report --stop-after 180 --stop-quiet 45   # the human-<name> row, paired with the control
+```
+
+The game is the probe's branch at that moment, with you as the variant. Human and advisor
+sessions are one per lab session (`sim/lab/human/<family or main>/`). They take no game slot,
+since a paused game uses no CPU.
+
 ## The board: every family against the champion
 
 ```bash

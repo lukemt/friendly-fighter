@@ -225,3 +225,27 @@ def test_a_quiet_branch_ends_on_the_score():
     match.seconds = 41
     quiet.on_view(match, Seat(), {"military": {"kills_cost": 200, "deaths_cost": 0}})
     assert match.ended == "quiet"
+
+
+def test_a_moment_played_by_hand_is_the_probe_branch_with_a_person(db):
+    _game(db, "g1", result="loss", termination="victory", seconds=1000.0)
+    moments.save(db, "late", moments.find(db, "wiped", {}))
+    mid = moments.moments(db, "late")[0]["id"]
+    mine, control = moments.human_job(db, mid, "claude", stop_after=180, stop_quiet=45)
+    assert mine["bots"][0] == "human-claude" and mine["bots"][1] == control["bots"][1] == "ai-rush"
+    assert mine["branch"]["tick"] == control["branch"]["tick"] and mine["seed"] == control["seed"]
+    assert mine["extra"]["moment"] == mid and mine["extra"]["stop_quiet"] == 45 and control["branch"]["label"] == "control:ff-a"
+    with pytest.raises(ValueError):
+        moments.human_job(db, 999, "claude")
+
+
+def test_a_person_has_no_version_to_be_stale(db):
+    _game(db, "g1", result="loss", termination="victory", seconds=1000.0)
+    moments.save(db, "late", moments.find(db, "wiped", {}))
+    mid = moments.moments(db, "late")[0]["id"]
+    _branch(db, "c", mid, "control:ff-a", 0, -2000)
+    _branch(db, "h", mid, "human-claude", 0, 1500)
+    db.conn.execute("UPDATE seats SET kind = 'human', version = 'human-claude@zzz' WHERE game_id = 'h' AND position = 0")
+    counts: dict = {}
+    data = moments.outcomes(db, "late", counts=counts)
+    assert counts["stale"] == 0 and data[(mid, 0.0)]["human-claude"]["delta"] == 1500

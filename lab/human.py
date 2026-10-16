@@ -34,12 +34,13 @@ from altruagent import WithReasoning
 from altruagent.models import DecisionContext
 from altruagent.mcp_transport import MCPToolError
 
-from . import LAB_DIR
+from . import FAMILY, LAB_DIR
 from .driver import LocalGame
 from .capture import summarize_orders
 from .views import clock, enemies_table, is_combat, minimap, summary, units_table
 
-SESSION_FILE = LAB_DIR / "human" / "session.json"
+# One human game per session at a time (each family's own: AGENTS.md), in the shared lab.
+SESSION_FILE = LAB_DIR / "human" / (FAMILY or "main") / "session.json"
 HELP = """look:   state [json] | map [X Y [R]] | units [TYPE|combat] | enemies | events [N] | log [N] | queue
 play:   go [SECONDS] [nostop]  (runs the game; default 5, at most 120; stops early when enemies reach the
         base or our units come under fire after a quiet spell, unless nostop; the game waits between
@@ -738,10 +739,13 @@ def serve(args) -> int:
     me = registry.get(f"human:{args.name}")
     table = registry.load()
     table[me.name] = me
-    names = [args.vs, me.name] if args.seat == 1 else [me.name, args.vs]
-    branch = {"of": args.from_game, "tick": args.at_tick, "label": "human"} if args.from_game else None
-    job = GameJob(bots=names, map=args.map, minutes=args.minutes, seed=args.seed, label="human", branch=branch,
-                  run_id=args.run_id)
+    if getattr(args, "job_json", None):  # (a moment of a set, built like a probe's branch: lab human start --moment)
+        job = GameJob(**{**json.loads(args.job_json), "run_id": args.run_id})
+    else:
+        names = [args.vs, me.name] if args.seat == 1 else [me.name, args.vs]
+        branch = {"of": args.from_game, "tick": args.at_tick, "label": "human"} if args.from_game else None
+        job = GameJob(bots=names, map=args.map, minutes=args.minutes, seed=args.seed, label="human", branch=branch,
+                      run_id=args.run_id)
     arena = Arena(record=False)
     seat_box: dict = {}
 
