@@ -90,3 +90,12 @@ def test_a_frozen_council_with_the_jev_oracle_counts_as_paid_jev(monkeypatch):
 def test_the_registered_v10_jev_entry_asks_jev():
     cli = _lab_cli()
     assert cli._uses_jev("ff-council-champ-v10-jev") and not cli._uses_jev("ff-council-champ-v10")
+
+
+def test_profiling_is_off_unless_asked_and_writes_a_file_when_on(tmp_path, monkeypatch):
+    monkeypatch.setattr(batch, "LOG_DIR", tmp_path)
+    monkeypatch.delenv(batch.PROFILE, raising=False)
+    assert batch._profiled(lambda job: job * 2, 21, 7, 0) == 42 and not list(tmp_path.iterdir())
+    monkeypatch.setenv(batch.PROFILE, "1")
+    assert batch._profiled(lambda job: job * 2, 21, 7, 0) == 42
+    assert [p.name for p in tmp_path.iterdir()][0].startswith("run-7-w0-")

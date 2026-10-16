@@ -97,3 +97,11 @@ def test_a_candidate_stops_when_clear_and_the_reference_with_the_last(db):
     test.verdict["even"] = "not better"
     assert not any(test.keep(i) for i in later)  # (all decided: the reference's games aren't needed)
     assert "BETTER" in test.summary() and "after 20 pairs" in test.summary()
+
+
+def test_a_sequential_gate_plays_the_same_games_round_by_round():
+    plain = league.gate("c", "v10", ["x", "y"], 3, seed=4)
+    rounds = league.gate("c", "v10", ["x", "y"], 3, seed=4, interleaved=True)
+    assert sorted(map(json.dumps, plain)) == sorted(map(json.dumps, rounds))
+    assert [j["label"] for j in rounds[:5]] == ["gate:c:h2h", "gate:c:x", "gate:c:x", "gate:c:y", "gate:c:y"]
+    assert {j["seed"] for j in rounds[:5]} == {league.game_seed(4, 0)}

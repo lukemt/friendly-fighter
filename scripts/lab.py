@@ -322,13 +322,38 @@ def cmd_league(a, db) -> int:
     return 0
 
 
+def sprt_args(s) -> None:
+    s.add_argument("--sprt", action="store_true",
+                   help="stop when clear: a sequential test of each candidate's paired points against the reference "
+                        "(the champion) after every game (lab/sprt.py); --games is then the cap")
+    s.add_argument("--bounds", default="0,0.1", help="--sprt: H0,H1 in points a game over the reference (default 0,0.1; "
+                                                     "'no worse': -0.1,0)")
+    s.add_argument("--alpha", type=float, default=0.05, help="--sprt: false 'better' rate")
+    s.add_argument("--beta", type=float, default=0.05, help="--sprt: missed 'better' rate (at H1)")
+
+
+def _sequential(a, db, candidates: list[str]):
+    """``--sprt``: the test _play runs after every game (None without it)."""
+    if not a.sprt:
+        return None
+    from lab import sprt
+
+    t0, t1 = sprt.parse_bounds(a.bounds)
+    return lambda run_id, jobs: sprt.Sequential(db, run_id, jobs, candidates, t0, t1, a.alpha, a.beta)
+
+
 def cmd_gate(a, db) -> int:
     baselines = _expand(_split(a.baselines))
     _check_bots([a.candidate, a.champion] + baselines)
-    jobs = schedule.gate(a.candidate, a.champion, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes)
-    run_id = _play(db, jobs, a, "gate", vars(a))
+    jobs = schedule.gate(a.candidate, a.champion, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes,
+                         interleaved=bool(a.sprt))
+    run_id = _play(db, jobs, a, "gate", vars(a), sequential=_sequential(a, db, [a.champion, a.candidate]))
     print()
     print(report.gate_report(db, run_id, a.candidate, a.champion))
+    if a.sprt:
+        print(_play.last_sequential.summary())
+        print("(with --sprt the gate's answer is the test's, on the pairs against the baselines; the head-to-head "
+              "games and each baseline's own interval above must not say worse)")
     return 0
 
 
@@ -336,16 +361,9 @@ def cmd_compare(a, db) -> int:
     candidates = _expand(_split(a.candidates))
     baselines = _expand(_split(a.baselines))
     _check_bots(candidates + baselines)
-    sequential = None
-    if a.sprt:
-        from lab import sprt
-
-        if len(candidates) < 2:
-            raise SystemExit("--sprt tests candidates against the first (the reference): name two or more")
-        t0, t1 = sprt.parse_bounds(a.bounds)
-
-        def sequential(run_id, jobs):
-            return sprt.Sequential(db, run_id, jobs, candidates, t0, t1, a.alpha, a.beta)
+    if a.sprt and len(candidates) < 2:
+        raise SystemExit("--sprt tests candidates against the first (the reference): name two or more")
+    sequential = _sequential(a, db, candidates)
     jobs = schedule.compare(candidates, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes,
                             interleaved=bool(a.sprt))
     run_id = _play(db, jobs, a, "compare", vars(a), sequential=sequential)
@@ -1279,19 +1297,15 @@ def main() -> int:
     s.add_argument("candidate")
     s.add_argument("--champion", default="ff-default")
     s.add_argument("--baselines", default="@ais", help="bots or @suites (lab/suites.json), separated by commas")
-    s.add_argument("--games", type=int, default=6, help="per opponent")
+    s.add_argument("--games", type=int, default=6, help="per opponent (with --sprt: at most)")
+    sprt_args(s)
     playing(s)
 
     s = sub.add_parser("compare", help="several candidates against the same baselines on the same seeds")
     s.add_argument("candidates", help="bots separated by commas; the first is the reference")
     s.add_argument("--baselines", default="@standard", help="bots or @suites (lab/suites.json), separated by commas")
     s.add_argument("--games", type=int, default=6, help="per baseline and candidate (with --sprt: at most)")
-    s.add_argument("--sprt", action="store_true",
-                   help="stop each candidate when clear: a sequential test of its paired points against the reference "
-                        "after every game (lab/sprt.py); --games is then the cap")
-    s.add_argument("--bounds", default="0,0.1", help="--sprt: H0,H1 in points a game over the reference (default 0,0.1)")
-    s.add_argument("--alpha", type=float, default=0.05, help="--sprt: false 'better' rate")
-    s.add_argument("--beta", type=float, default=0.05, help="--sprt: missed 'better' rate (at H1)")
+    sprt_args(s)
     playing(s)
 
     s = sub.add_parser("exploit", help="search settings of our scripted bot that beat a target bot")
