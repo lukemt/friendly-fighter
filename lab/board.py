@@ -69,15 +69,10 @@ def entries(table: dict, cfg: dict, family: str | None = FAMILY) -> list[str]:
 
 
 def existing_game(db, job: dict, version, engine: str) -> str | None:
-    """A whole game already played the same way: the same bots (versions) in the same seats, map,
-    seed, length and engine build."""
-    rows = db.q("SELECT id FROM games WHERE branch_of IS NULL AND map = ? AND seed = ? AND minutes = ? AND engine = ? "
-                "AND outcome != 'no_result' ORDER BY finished DESC", job["map"], job["seed"], job["minutes"], engine)
-    for r in rows:
-        seats = {s["position"]: s["version"] for s in db.q("SELECT position, version FROM seats WHERE game_id = ?", r["id"])}
-        if all(seats.get(pos) == version(name) for pos, name in enumerate(job["bots"])):
-            return r["id"]
-    return None
+    """A whole game already played the same way (lab/reuse.py)."""
+    from .reuse import existing_game as found
+
+    return found(db, job, version, engine)
 
 
 def plan(db, bots: list[str], cfg: dict) -> tuple[list[dict], int]:

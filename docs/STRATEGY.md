@@ -113,6 +113,28 @@ test before relying on them.
   for something else to hit. **This can be baited.** One fast unit hits a harvester and runs back
   to our army, standing out of reach of their defenses, and the whole reaction group follows into
   it. This is untested (an idea for anyone).
+- **v10's late wipes are mostly the AI's nuke, not a siege** (found by the jev family, lab note 48;
+  the rules checked in `ai.yaml` and `structures.yaml`). In 34 of v10's 20-minute games against
+  the AIs, 6-17 buildings and the army bunched near them died within 1-5 s, at 14.3-19.8 min. Before
+  the first building fell, v10 was ahead in 12 of 18 of these wipes (`38de5f1a`: +45,100 at 17:36).
+  - **Every AI builds one missile silo** (`mslo`, after a tech center). It charges for 9 min
+    (13,500 ticks) and fires at any spot with 3,000+ of our structure value within 5 cells, but
+    not where its own units stand. Ukraine adds parabombs; every AI sends a spy plane
+    every ~2.5 min.
+  - **The spy plane can't be shot down** (`-Targetable@AIRBORNE`), so AA can't deny the nuke
+    its vision.
+  - **The charge pauses while the AI is low on power** (`PauseOnCondition: disabled`, which is
+    `lowpower || powerdown`; the silo draws 150). So killing its power plants stops the clock, and
+    killing the silo (2,500) ends it. Both are within V2 range (10) of the outside of its
+    defenses (tesla 7).
+  - **Against the Rush AI the nuke is a minor cause** (rush-wave family, 75 games of v10 vs Rush =
+    56 distinct games): 4 of v10's 40 losses show a nuke-like burst, all at 18.8-19.8 min. 17 end
+    before 12:00, mostly on trapped at 8.4-9.1 min, after a lost first fight at 4:55-5:10.
+  - **We have no support powers through the platform** (no such order), so we can't nuke back.
+  - **Selling books no loss:** a sold building isn't counted in losses, pays 50% of its value
+    (times its health) and gives infantry worth 40%. A player is out only with no building and no
+    MCV (jev runs 148-149). The jev family is testing "bank the lead": sell before the nuke while
+    ahead, with an MCV kept safe.
 - **No capturing through the platform.** The action set has no capture order, so the oil derricks
   on trapped (5), sidestep (2) and shadowfiend-II (5) can't be taken. Each would pay 100 every
   15 s, but the AIs don't use them either.
