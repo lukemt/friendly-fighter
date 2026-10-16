@@ -54,6 +54,7 @@ By map: shadowfiend-ii 88%, trapped 91%, sidestep 96%. By faction: France 80%, t
 | Stage | What | Cost | Moves up when |
 |---|---|---|---|
 | 0. Idea card | one line: the situation, the change, how we would know (`lab experiment`) | nothing | it targets a weakness we have seen |
+| 1a. Manual play | try the tactic by hand from the set's moments (`lab human start --moment`), paired with the control in the probe report | almost no CPU (the game waits) | it beats the control by hand: write it as a setting and probe it |
 | 1. Moment probe | the variants branch from a set of saved moments for 3-5 minutes (`lab probe`) | a branch costs a game played to its moment (~10 s from 5:00, ~45 s from 17:00, until L14); minutes a probe | it beats the unchanged bot (the control) from the same moments |
 | 2. Targeted screen | full games against the opponent that shows the weakness, paired seeds, stop when clear | 5-15 min | better than the champion there |
 | 3. Fast suite | the 3 AIs and the 2 exploiters | ~10 min | no regressions |

@@ -103,8 +103,19 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
 
     jev_bots = sorted({n for j in jobs for n in j["bots"] if _uses_jev(n)})
     if jev_bots:
-        from bots.jev_bot import Jev
+        from bots.jev_bot import API_URL, Jev
 
+        if Jev().url == API_URL:  # (paid: TypeSafe's credits; a local server, JEV_URL, is free)
+            paid = sum(1 for j in jobs if any(_uses_jev(n) for n in j["bots"]))
+            allowed = batch.paid_jev_allowed()
+            if paid > allowed:
+                print(f"[lab] {paid} game(s) would ask paid Jev ({', '.join(jev_bots)}; ~250 calls a seat in a 20-minute "
+                      f"game), and this run may play {allowed}. Paid credits are for experiments that need Jev's "
+                      f"answers: probe a moment or play a few games, not a suite. To go ahead: "
+                      f"{batch.PAID_JEV}={paid} lab ... (or point JEV_URL at a local server). Not starting.", flush=True)
+                raise SystemExit(2)
+            params = {**params, "paid_jev_games": paid}
+            print(f"[lab] paid Jev: {paid} game(s) (allowed {allowed})", flush=True)
         problem = Jev().check()
         if problem:
             print(f"[lab] {', '.join(jev_bots)} need Jev, and {problem}: they would play on frozen decisions. "
@@ -395,8 +406,8 @@ def cmd_probe(a, db) -> int:
         print(moments.probe_report(db, name, [int(x) for x in _split(a.runs)] if a.runs else None, **rule))
         return 0
     variants = _split(a.variants or "")
-    if not variants:
-        raise SystemExit("name the variants: lab probe SET --variants A,B")
+    if not variants and not a.control_only:
+        raise SystemExit("name the variants: lab probe SET --variants A,B (or --control-only)")
     _check_bots(variants)
     controls = {db.one("SELECT bot FROM seats WHERE game_id = ? AND position = ?", m["game_id"], m["seat"])["bot"]
                 for m in moments.moments(db, name)}
@@ -806,7 +817,15 @@ def cmd_jev(a, db) -> int:
     if a.game == "eval":
         from lab import jev_eval
 
+        from bots.jev_bot import API_URL, Jev
+        from lab import batch
+
         cases = jev_eval.load_cases()
+        if Jev().url == API_URL and not batch.paid_jev_allowed():
+            print(f"lab jev eval asks paid Jev once a case ({len(cases)} cases"
+                  f"{', x3 loops' if a.council else ''}): run it as {batch.PAID_JEV}=1 lab jev eval ... "
+                  f"(or point JEV_URL at a local server)")
+            return 2
         variant = json.loads(Path(a.questions).read_text()) if a.questions else None
         print(f"{len(cases)} cases" + (f", variant {a.questions}" if a.questions else "")
               + (", asked as the council (bots/jev_council.py)" if a.council else ""))
@@ -981,7 +1000,26 @@ def cmd_human(a, db) -> int:
     if human.SESSION_FILE.exists():
         print("a human session is running ('lab human stop' first, or 'lab h state')")
         return 1
-    _check_bots([a.vs])
+    job_json = None
+    if a.moment is not None:  # (a moment of a set: the probe's branch there, played by hand)
+        from lab import moments
+
+        try:
+            job, control = moments.human_job(db, a.moment, a.name, stop_after=a.stop_after, stop_quiet=a.stop_quiet)
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        job_json = json.dumps(job)
+        pos = job["extra"]["branch_seat"]
+        played = moments.existing(db, control, moments._versions(), moments._engine())
+        print(f"moment {a.moment} of @{job['extra']['probe']}: you play seat {pos} of {report.short(job['branch']['of'])} "
+              f"from {clock(job['extra']['stop_at_seconds'] - a.stop_after)} against {job['bots'][1 - pos]}, "
+              f"for {a.stop_after:g} s" + (f" (or {a.stop_quiet:g} s quiet)" if a.stop_quiet else ""))
+        cmd_opts = f"--stop-after {a.stop_after:g}" + (f" --stop-quiet {a.stop_quiet:g}" if a.stop_quiet else "")
+        print("  the control there: " + ("played already" if played else
+              f"not played yet (lab probe @{job['extra']['probe']} --moments {a.moment} --control-only {cmd_opts})"))
+        print(f"  afterwards: lab probe @{job['extra']['probe']} --report {cmd_opts}")
+    else:
+        _check_bots([a.vs])
     run_id = db.start_run("human", _command(), vars(a), note=a.note or "", experiment=a.experiment or "")
     log = LAB_DIR / "human" / f"session-{run_id}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
@@ -990,7 +1028,9 @@ def cmd_human(a, db) -> int:
            "--run-id", str(run_id)]
     if a.seed is not None:
         cmd += ["--seed", str(a.seed)]
-    if a.from_game:
+    if job_json:
+        cmd += ["--job-json", job_json]
+    elif a.from_game:
         from lab.branch import game_tick, parse_time
 
         g = db.find_game(a.from_game)
@@ -1222,6 +1262,7 @@ def main() -> int:
                    help="successive halving: all variants on --start moments, the better half on twice as many, ...")
     s.add_argument("--start", type=int, default=3, help="--halving: moments in the first round")
     s.add_argument("--no-reuse", action="store_true", help="play branches again even if played the same way before")
+    s.add_argument("--control-only", action="store_true", help="play only the controls (e.g. for moments played by hand)")
     s.add_argument("--report", action="store_true", help="print the report of what was played, play nothing")
     s.add_argument("--runs", help="--report: only these probe runs")
     playing(s)
@@ -1321,6 +1362,10 @@ def main() -> int:
     s.add_argument("--from-game", dest="from_game")
     s.add_argument("--at-tick", type=int)
     s.add_argument("--run-id", type=int)
+    s.add_argument("--moment", type=int, help="play this moment of a set by hand (lab moments show), like a probe branch")
+    s.add_argument("--stop-after", type=float, default=300.0, help="--moment: the probe's stop rule")
+    s.add_argument("--stop-quiet", type=float, default=None, help="--moment: the probe's stop rule")
+    s.add_argument("--job-json", help=argparse.SUPPRESS)
     s.add_argument("--note", default="")
     s.add_argument("--experiment", default="")
 

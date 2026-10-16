@@ -176,18 +176,36 @@ def load_questions(variant: str | None) -> dict[str, dict[str, Any]]:
     return qs
 
 
-def _key() -> str | None:
-    key = os.environ.get("TYPESAFE_API_KEY")
-    if key:
-        return key
-    env = _root() / ".env"
+def _setting(name: str) -> str | None:
+    """An environment variable, else a line ``NAME=...`` in this checkout's ``.env``, else in the main
+    checkout's (a family session can point its own worktree elsewhere: AGENTS.md)."""
+    if os.environ.get(name):
+        return os.environ[name]
+    roots = [_root()]
     try:
-        for line in env.read_text().splitlines():
-            if line.startswith("TYPESAFE_API_KEY="):
-                return line.split("=", 1)[1].strip() or None
-    except OSError:
+        from lab import MAIN_ROOT
+
+        roots.append(MAIN_ROOT)
+    except ImportError:
         pass
+    for root in roots:
+        try:
+            for line in (root / ".env").read_text().splitlines():
+                if line.startswith(name + "="):
+                    return line.split("=", 1)[1].strip() or None
+        except OSError:
+            pass
     return None
+
+
+def _key() -> str | None:
+    key = _setting("TYPESAFE_API_KEY")
+    return None if key == "off" else key  # ("off": paid Jev switched off, e.g. in lab runs that didn't ask for it)
+
+
+def _url() -> str:
+    """``JEV_URL``: another System One server (e.g. a local one, no key needed); default TypeSafe's."""
+    return _setting("JEV_URL") or API_URL
 
 
 class Jev:
@@ -196,18 +214,23 @@ class Jev:
     def __init__(self, key: str | None = None, *, model: str = MODEL) -> None:
         import httpx
 
-        self.key = key or _key()
+        self.url = _url()
+        # A server of our own needs no key ("local" stands in for one, and isn't sent).
+        self.key = key or _key() or ("local" if self.url != API_URL else None)
         self.model = model
         self.http = httpx.Client(timeout=TIMEOUT_SECONDS)
         self.calls = self.errors = self.tokens = self.last_tokens = 0
         self.seconds = 0.0
+
+    def _headers(self) -> dict:
+        return {} if self.key == "local" else {"Authorization": f"Bearer {self.key}"}
 
     def check(self) -> str:
         """"" when Jev answers; otherwise why not (no key, no credits, the service down). One tiny call."""
         if not self.key:
             return "no TYPESAFE_API_KEY (environment or .env)"
         try:
-            reply = self.http.post(API_URL, headers={"Authorization": f"Bearer {self.key}"},
+            reply = self.http.post(self.url, headers=self._headers(),
                                    json={"model": self.model, "state": "ping",
                                          "questions": {"ok": {"type": "noul", "instructions": "Is `state` a word?"}}})
         except Exception as e:  # noqa: BLE001
@@ -234,7 +257,7 @@ class Jev:
         start = time.monotonic()
         self.calls += 1
         try:
-            reply = self.http.post(API_URL, headers={"Authorization": f"Bearer {self.key}"},
+            reply = self.http.post(self.url, headers=self._headers(),
                                    json={"model": self.model, "state": state, "questions": questions})
             reply.raise_for_status()
             body = reply.json()

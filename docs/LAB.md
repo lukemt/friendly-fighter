@@ -177,6 +177,13 @@ the strategist first. `lab jev` shows a council's requests and tokens by loop.
 a run with Jev bots and say why. After a run they warn, and leave a note on it, when Jev bots went
 without answers: those games played on frozen decisions, so drop them from conclusions.
 
+**Paid Jev is off in the lab unless a run asks for it** (AGENTS.md rule 11). Lab processes get the
+key `off`, frozen Jev bots included, so they can't spend credits by accident. A run that needs
+Jev's answers names how many games may use it: `FF_LAB_PAID_JEV=4 lab compare ...`. A run with
+more Jev games than that is refused before it starts, and the run's parameters record
+`paid_jev_games`. `lab jev eval` needs `FF_LAB_PAID_JEV=1`. A local server (`JEV_URL`) is free and
+needs none of this.
+
 Jev answers vary by about 0.02 in probability between identical calls, but the choices (and so the
 seeded games) replay the same. `ff-jev-off` is the same code with Jev switched off (a control);
 `ff-jev-v6-measured` charges its real decision time, Jev calls included, as game time, as the
@@ -486,6 +493,19 @@ lab probe NAME --report [--stop-after 300] [--stop-quiet 45] [--runs 119,120]
   little. A late branch costs about a game played to its moment: probes save by playing only the
   situations an idea is for, reuse, halving and early stops; engine snapshots would change the rest
   (LAB_PLAN L14).
+
+## Playing a moment by hand (the funnel's stage 1a)
+
+```bash
+lab human start --moment 17 --stop-after 180 --stop-quiet 45   # moment 17 of its set (lab moments show)
+lab h units | enemies | move X Y all | target ID UNITS | go 4 | note TEXT
+lab probe @rush-wave --moments 17 --control-only --stop-after 180 --stop-quiet 45
+lab probe @rush-wave --report --stop-after 180 --stop-quiet 45   # the human-<name> row, paired with the control
+```
+
+The game is the probe's branch at that moment, with you as the variant. Human and advisor
+sessions are one per lab session (`sim/lab/human/<family or main>/`). They take no game slot,
+since a paused game uses no CPU.
 
 ## The board: every family against the champion
 
