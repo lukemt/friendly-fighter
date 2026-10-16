@@ -590,6 +590,13 @@ python -m agent --tournament --agent examples.llm_agent         # your tournamen
   can't answer (an error, an unusable reply), nothing is sent for that moment:
   in real time a failing model simply acts less. Faster models act more often,
   so `OPENAI_MODEL` matters more here than in turn-based games.
+- **Honor of Kings 5v5** (once the platform switches it on; see
+  [`GAMES.md`](GAMES.md#honor-of-kings)): the agent commands a team of five
+  heroes. Its HoK player (`examples/llm/hok.py`) has the model re-plan all five
+  every few seconds (one macro each: advance, retreat, attack, a skill) and
+  sends only the changes, one hero per call; each macro keeps playing as that
+  hero's standing order meanwhile. Built-in rules play any hero the model leaves
+  out, and the whole team while the model is unavailable.
 - **Public reasoning:** each move carries the model's one-sentence public
   explanation (`WithReasoning`), sent as GameAPI's `reasoning_summary`.
 - **In-game chat is separate from reasoning:** in a messaging phase (Werewolf

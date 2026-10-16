@@ -30,8 +30,10 @@ is ``"realtime"`` goes to the game's real-time player, registered by game
 type in ``REALTIME_PLAYERS``; it answers each view with a batch, or
 ``altruagent.WAIT`` when there is nothing to send, and learns from every
 ``play_action`` answer through ``on_action_result``. The Red Alert player is
-in ``examples/llm/redalert.py``. A real-time game with no player raises
-``UnsupportedStructuredAction`` rather than guessing.
+in ``examples/llm/redalert.py``; the Honor of Kings 5v5 player (five heroes,
+one order each, in real time or lockstep) is in ``examples/llm/hok.py``. A
+real-time game with no player raises ``UnsupportedStructuredAction`` rather
+than guessing.
 
 Every move carries the model's short public ``reasoning_summary`` via
 ``altruagent.WithReasoning`` (sent as ``play_action``'s ``reasoning_summary``).
@@ -74,7 +76,7 @@ from altruagent import (
     SendMessage,
     WithReasoning,
 )
-from examples.llm import pokemon, redalert
+from examples.llm import hok, pokemon, redalert
 from examples.llm.base import AdapterFactory, Choice, InvalidChoice, UnsupportedStructuredAction, object_schema
 from examples.llm.providers import LLMProvider, ProviderError, provider_from_env
 
@@ -85,7 +87,14 @@ STRUCTURED_ADAPTERS: dict[str, AdapterFactory] = {**pokemon.ADAPTERS}
 # Real-time games, by game type: a factory for one match's player, called as
 # factory(provider, log=...). The player answers choose_action with a move or
 # WAIT and gets every play_action answer through on_action_result.
-REALTIME_PLAYERS: dict[str, Callable[..., Any]] = {"red_alert": redalert.RedAlertPlayer}
+REALTIME_PLAYERS: dict[str, Callable[..., Any]] = {
+    "red_alert": redalert.RedAlertPlayer,
+    hok.GAME_TYPE: hok.HokPlayer,
+}
+
+# Games whose player also takes their lockstep states (Honor of Kings: one
+# order per hero, which the one-action-per-call path can't give).
+TEAM_GAMES = frozenset({hok.GAME_TYPE})
 
 MAX_ATTEMPTS = 2  # the first answer plus one retry with the validation error
 MESSAGE_REQUESTS_PER_ROUND = 2  # model calls per discussion round before auto-ending it
@@ -157,7 +166,7 @@ class LLMAgent:
     # -- moves ------------------------------------------------------------------
 
     def choose_action(self, state: GameState, context: DecisionContext):
-        if _is_realtime(state):
+        if _is_realtime(state) or (context.game_type or "") in TEAM_GAMES:
             return self._realtime_player(context).choose_action(state, context)
         self._remember(state)
         choice = self._action_choice(state)
