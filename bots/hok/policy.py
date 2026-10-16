@@ -59,6 +59,9 @@ class Knobs:
     danger_ttd: float = 2.0           # seconds to death at the current damage rate: evade
     danger_hp: float = 0.6            # ...but only below this share of HP
     evade_seconds: float = 2.0        # an evade lasts this long (game seconds)
+    tower_aggro_rate: float = 0.08    # under an enemy tower, losing this share of max HP a second with
+                                      # no enemy hero near: the tower is on this hero, step out
+    tower_aggro_hp: float = 0.75      # ...once below this share of HP
     engage_range: float = 9000.0      # an enemy hero this close is in the fight
     assist_range: float = 13000.0     # heroes this close count for each side's strength
     attack_range: float = 9000.0      # a macro target this close is worth hitting
@@ -71,9 +74,12 @@ class Knobs:
     skills_on_minions: bool = True
     hold: bool = True                 # the do-nothing button to wait (else keep advancing)
     group_lead: float = 7000.0        # a hero this far ahead of the team's median waits
-    defend_range: float = 16000.0     # heroes this close to a structure under attack defend it
+    patience_s: float = 15.0          # ...but never longer than this (game seconds), then it goes on
+    defend_range: float = 40000.0     # heroes this close to a structure enemy heroes are hitting defend it
+    defend_hp: float = 0.45           # ...when they have this share of HP
     endgame_seconds: float = 60.0     # tiebreak play in the last minute
     protect_lead: float = 0.5         # "ahead": structure damage lead > this x a tower's max HP
+    window_dead: int = 3              # this many enemy heroes dead: a push window, no waiting
 
 
 def knobs_from_dict(wanted: dict | None) -> Knobs:
@@ -107,23 +113,30 @@ class _Ctx:
     home: tuple[float, float] | None
     retreat_hp: float
     min_pushers: int
+    window: bool = False                  # enough enemy heroes dead: push now
 
 
 class TeamPolicy:
     def __init__(self, knobs: Knobs | None = None) -> None:
         self.knobs = knobs or Knobs()
         self._hp: dict[int, deque] = {}
+        self._max_hp: dict[int, float] = {}
         self._retreating: dict[int, bool] = {}
         self._evade_until: dict[int, float] = {}
         self._holding: dict[int, bool] = {}
+        self._waiting_since: dict[int, float] = {}
         self._struct_max: dict[tuple, float] = {}
         self._struct_last: dict[tuple, float] = {}
         self._struct_camp: dict[tuple, int | None] = {}
         self._struct_hit: dict[tuple, float] = {}
         self._enemy_seen: dict[Any, tuple[float, tuple[float, float]]] = {}
         self._home: tuple[float, float] | None = None
+        self._kills_seen: float | None = None
+        self._enemy_last: dict[Any, tuple[float, float]] = {}     # key -> (t last seen, hp share)
+        self._enemy_dead_until: dict[Any, float] = {}
         self._observed_version: int | None = None
         self._posture = "normal"
+        self.enemies_dead = 0
         self.posture_changes: list[tuple[float, str]] = []
 
     # -- memory ------------------------------------------------------------------------------
@@ -136,6 +149,8 @@ class TeamPolicy:
         t = view.game_seconds
         for seat, hero in view.heroes.items():
             hist = self._hp.setdefault(seat, deque(maxlen=40))
+            if hero.max_hp:
+                self._max_hp[seat] = hero.max_hp
             if hero.hp is not None:
                 if hist and hist[-1][0] > t:
                     hist.clear()  # time went backwards: a new match or a restart
@@ -162,11 +177,29 @@ class TeamPolicy:
                 top = self._struct_max.get(key)
                 if top and last <= 0.25 * top:
                     self._struct_last[key] = 0.0
+        # Enemy deaths: shown dead, or gone from sight low on HP just as our kill count rose.
+        revive_guess = 8.0 + t / 20.0
+        vanished: list[tuple[float, Any]] = []
         for e in view.enemies:
             if e.visible and e.pos is not None and not e.dead:
                 self._enemy_seen[e.key] = (t, e.pos)
+                self._enemy_last[e.key] = (t, e.hp_frac if e.hp_frac is not None else 1.0)
+                self._enemy_dead_until.pop(e.key, None)
             elif e.dead:
                 self._enemy_seen.pop(e.key, None)
+                self._enemy_dead_until[e.key] = max(self._enemy_dead_until.get(e.key, 0.0), t + revive_guess)
+            else:
+                last = self._enemy_last.get(e.key)
+                if last is not None and t - last[0] <= 2.0 and last[1] <= 0.35 \
+                        and self._enemy_dead_until.get(e.key, -1.0) < t:
+                    vanished.append((last[0], e.key))
+        kills = sum(h.kills or 0 for h in view.heroes.values())
+        if self._kills_seen is not None and kills > self._kills_seen:
+            for _, key in sorted(vanished, reverse=True)[: int(kills - self._kills_seen)]:
+                self._enemy_dead_until[key] = t + revive_guess
+                self._enemy_seen.pop(key, None)
+        if self._kills_seen is None or kills >= self._kills_seen:
+            self._kills_seen = kills
         if self._home is None:
             own = [s for s in view.own_structures() if s.pos and s.kind in ("spawn", "crystal")]
             spawn = [s for s in own if s.kind == "spawn"]
@@ -209,6 +242,20 @@ class TeamPolicy:
             return "protect"
         return "allin"
 
+    def _loss_rate(self, seat: int, t: float, window: float = 1.0) -> float:
+        """Share of max HP lost per second over the last ``window`` seconds (0 if none)."""
+        hist = self._hp.get(seat)
+        if not hist or len(hist) < 2:
+            return 0.0
+        recent = [(tt, hp) for tt, hp in hist if t - tt <= window]
+        if len(recent) < 2:
+            return 0.0
+        (t0, hp0), (t1, hp1) = recent[0], recent[-1]
+        top = self._max_hp.get(seat) or 0.0
+        if t1 - t0 < 0.3 or hp1 >= hp0 or top <= 0:
+            return 0.0
+        return (hp0 - hp1) / top / (t1 - t0)
+
     def _ttd(self, seat: int, t: float) -> float:
         hist = self._hp.get(seat)
         if not hist or len(hist) < 2:
@@ -241,16 +288,24 @@ class TeamPolicy:
         enemy_structs = [s for s in view.enemy_structures() if s.alive and s.pos and s.kind in ("tower", "crystal")]
         enemy_towers = [s for s in enemy_structs if s.kind == "tower"]
         own_towers = [s for s in view.own_structures() if s.alive and s.pos and s.kind in ("tower", "crystal")]
-        threatened = [s for s in own_towers if t - self._struct_hit.get(s.key, -1e9) <= 3.0]
+        # Ours under attack by enemy heroes (minions alone are left to our own minions).
+        threatened = [s for s in own_towers if t - self._struct_hit.get(s.key, -1e9) <= 3.0
+                      and any(distance(s.pos, e.pos) <= k.tower_range + 5000 for e in enemies)]
         fronts = {}
         for seat, hero in alive.items():
             fronts[seat] = min((distance(hero.pos, s.pos) for s in enemy_structs), default=math.inf)
+        available = sum(1 for s2, h in alive.items() if not self._retreating.get(s2)
+                        and (h.hp_frac is None or h.hp_frac >= 0.3))
+        enemies_dead = sum(1 for until in self._enemy_dead_until.values() if until > t)
+        self.enemies_dead = enemies_dead
+        window = enemies_dead >= k.window_dead
         ctx = _Ctx(
             t=t, posture=posture, alive=alive, enemies=enemies, ghosts=ghosts,
             enemy_towers=enemy_towers, own_towers=own_towers, threatened=threatened, fronts=fronts,
             home=self._home,
             retreat_hp=k.allin_retreat_hp if posture == "allin" else k.retreat_hp,
-            min_pushers=1 if posture == "allin" else k.min_pushers,
+            min_pushers=1 if posture == "allin" or window else max(1, min(k.min_pushers, available)),
+            window=window,
         )
         out: dict[int, Choice] = {}
         for seat, offers in view.offers.items():
@@ -281,6 +336,11 @@ class TeamPolicy:
         if (hp < k.danger_hp and (near or in_enemy_tower) and c.posture != "allin"
                 and self._ttd(seat, c.t) < k.danger_ttd):
             self._evade_until[seat] = c.t + k.evade_seconds
+        elif (in_enemy_tower and not near and hp < k.tower_aggro_hp and k.tower_aggro_rate > 0
+              and self._loss_rate(seat, c.t) >= k.tower_aggro_rate):
+            self._evade_until[seat] = c.t + k.evade_seconds  # the tower is on this hero: step out
+        if self._retreating.get(seat) or near:
+            self._waiting_since.pop(seat, None)  # a wait starts afresh after a fight or a retreat
         if self._retreating.get(seat):
             self._holding[seat] = False
             return self._go_home(m, "low hp: retreat", hero, c)
@@ -319,7 +379,7 @@ class TeamPolicy:
             return _first(m, [("macro_advance", "close in")], P_ADVANCE)
 
         # 5. Defend a structure of ours that is losing HP.
-        if c.threatened and hp >= 0.5 and c.posture != "allin":
+        if c.threatened and hp >= k.defend_hp and c.posture != "allin":
             s = min(c.threatened, key=lambda s: distance(pos, s.pos))
             d = distance(pos, s.pos)
             if d <= k.defend_range:
@@ -329,6 +389,8 @@ class TeamPolicy:
                     return Choice("macro_attack", "defend: attack", P_POSITION, ["macro_retreat"])
                 if c.home is None or distance(s.pos, c.home) < distance(pos, c.home):
                     return self._go_home(m, "defend: go back to the structure", hero, c, priority=P_POSITION)
+                if "macro_advance" in m:  # the structure lies ahead of this hero, toward the enemy
+                    return Choice("macro_advance", "defend: go to the structure", P_POSITION, ["macro_attack"])
 
         # 7. Protect a lead: stay out of enemy tower range, near our side.
         if c.posture == "protect":
@@ -345,28 +407,30 @@ class TeamPolicy:
         if tower is not None and c.posture != "allin":
             dt = distance(pos, tower.pos)
             low = tower.hp_frac is not None and tower.hp_frac <= k.low_tower
-            if dt <= k.tower_range + 1500 and not low and not self._enough_at(tower.pos, c):
+            if dt <= k.tower_range + 1500 and not low and not self._enough_at(tower.pos, c) \
+                    and self._patient(seat, c.t):
                 self._holding[seat] = False
                 if dt <= k.tower_range:
                     return self._go_home(m, "tower without the team: step out", hero, c, priority=P_POSITION)
                 o = m.get("macro_attack")
-                if o and o.dist <= k.attack_range * 0.6 and not self._aims_at_structure(o, pos, c):
+                if o and o.dist <= k.attack_range and not self._aims_at_structure(o, pos, c):
                     return Choice("macro_attack", "wait for the team: farm", P_ATTACK, ["macro_retreat"])
                 return self._hold(m, "wait for the team at the tower", P_HOLD)
 
         # 6. Grouping: the hero far ahead of the team waits.
-        if k.hold and c.posture == "normal" and len(c.fronts) >= 3 and seat in c.fronts:
+        if k.hold and c.posture == "normal" and not c.window and len(c.fronts) >= 3 and seat in c.fronts:
             healthy = [c.fronts[s] for s in c.fronts if not self._retreating.get(s)]
             if len(healthy) >= 3:
                 lead = statistics.median(healthy) - c.fronts[seat]
                 limit = k.group_lead * (0.5 if self._holding.get(seat) else 1.0)
-                if lead > limit:
+                if lead > limit and self._patient(seat, c.t):
                     self._holding[seat] = True
                     o = m.get("macro_attack")
-                    if o and o.dist <= k.attack_range * 0.6:
+                    if o and o.dist <= k.attack_range and not self._aims_at_structure(o, pos, c):
                         return Choice("macro_attack", "ahead of the team: farm", P_ATTACK, ["macro_advance"])
                     return self._hold(m, "ahead of the team: wait", P_HOLD)
         self._holding[seat] = False
+        self._waiting_since.pop(seat, None)
 
         # Farm and push.
         o = m.get("macro_attack")
@@ -380,6 +444,18 @@ class TeamPolicy:
         return _first(m, [("macro_advance", "push: advance"), ("macro_attack", "attack (no advance)")], P_ADVANCE)
 
     # -- helpers -----------------------------------------------------------------------------
+
+    def _patient(self, seat: int, t: float) -> bool:
+        """Whether this hero may still wait for the team: waits end after ``patience_s``, and a
+        hero that ran out of patience goes on for as long again before it waits anew."""
+        since = self._waiting_since.setdefault(seat, t)
+        waited = t - since
+        if waited <= self.knobs.patience_s:
+            return True
+        if waited > 2 * self.knobs.patience_s:
+            self._waiting_since[seat] = t
+            return True
+        return False
 
     def _go_home(self, m: dict[str, Offer], reason: str, hero: Hero, c: _Ctx, *,
                  priority: int = P_SAVE) -> Choice:

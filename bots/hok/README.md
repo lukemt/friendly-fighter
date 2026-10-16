@@ -100,3 +100,33 @@ server:
   anything better ("one seed fooled us"), and the same scripted opponents every time.
 - `agent/commander.py`'s pattern for the optional planner (below): slow, in a background thread,
   only setting knobs.
+
+## Known unknowns (what only a live game will show)
+
+Each is a guess the bot is built to survive; `harness/replay.py`'s schema report answers most of
+them from the first recording.
+
+| Unknown | What the bot assumes | If it's wrong |
+|---|---|---|
+| Distance scale | Upstream's 9000 is "in range"; towers reach ~9000 | Engage/tower rules fire too early or late; all distances are `Knobs` |
+| Label format | `"... (nearest: enemy hero 169, 4123 away)"` (upstream's GAMES.md) | Target kind falls back to matching the label distance against visible heroes and towers; no distance at all: macros are treated as out of range, so heroes advance instead of attacking |
+| A standing skill order on cooldown | May idle the hero (the harsh reading) | The bot switches back to attack as soon as the skill leaves the offer, so either way costs a step or two |
+| `macro_advance` | Walks to the nearest enemy structure; may stop under it without attacking | The tower rules and the evade rule keep heroes from standing there alone |
+| `your_pending_seats` in real time | Every living hero, every step | If only heroes without standing orders are pending, changes still go out as soon as a hero is listed |
+| `standing_orders` format and lag | `{"<seat>": "macro_…"}`, current | Also reads `s3:macro_x` and `{"macro": ...}`; an order sent < 1.5 s ago isn't resent; with no report at all it trusts what was accepted |
+| The do-nothing button (`s<n>:button_0`) | Idles the hero and clears its order | Used only to hold position; `Knobs.hold = false` turns it off |
+| Destroyed structures | Leave the list, or stay at 0 HP | Counted as destroyed when they leave the list at ≤ 25% HP |
+| Fog and per-seat views | Team vision: the same enemies in every summary | The union of the five views is used |
+| `revive_time` units | Only `> 0` with `hp` 0 matters | — |
+| Read/send rate limits | ~3 idle reads/s plus one read per sent order | `FF_HOK_PACE_S` slows it down |
+| Lockstep length | 5 calls per step: 3000 steps would take ~25-50 min, so the time limit ends it | The endgame clock uses `min(seconds_left, steps_left x 0.2 s)` |
+| What counts for the tiebreak | All damage to enemy towers and crystal (minions' too) | The score estimate is HP lost by visible structures, which is what any rule would count |
+
+## After the first live game
+
+1. `python -m bots.hok.harness.replay ~/srv/friendly-fighter-hok/recordings/<session>/seat<N>.jsonl.gz`
+   (in this workspace: copy the file in first). Read the schema report against the table above.
+2. Fix `view.py` for any field that differs, set the distance knobs from the label distances seen at
+   first contact, and add the real payload as a test fixture.
+3. Check the runtime's log for `[hok] refused`, `[hok] illegal`, `[hok] exception` lines, and the
+   status lines (structure damage dealt/taken, k/d) every 30 s of game time.

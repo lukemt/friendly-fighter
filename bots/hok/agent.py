@@ -83,6 +83,7 @@ class HokAgent:
         self._last_plan: dict[int, Choice] | None = None
         self._plan_version: int | None = None
         self.stats: Counter = Counter()
+        self.reasons: Counter = Counter()
         self.decide_ms_total = 0.0
         self.decide_ms_max = 0.0
 
@@ -134,6 +135,8 @@ class HokAgent:
         else:
             plan = self.policy.plan(view)
             self._plan_version = view.version
+            for choice in plan.values():  # where the team's time goes (status lines, the sim)
+                self.reasons[choice.reason.split(" (")[0].split(":")[0]] += 1
         self._last_plan = plan
         self._status(view, plan)
         now = self._clock()
@@ -385,7 +388,8 @@ class HokAgent:
         self._log(
             f"[hok] t={t:.0f}s v={view.version} left={'?' if left is None else f'{left:.0f}s'} "
             f"posture={self.policy._posture} structures dealt/taken={dealt:.0f}/{taken:.0f} "
-            f"k/d={kills:.0f}/{deaths:.0f} enemies_seen={len(view.visible_enemies())} | {' '.join(heroes)} | "
+            f"k/d={kills:.0f}/{deaths:.0f} enemies_seen={len(view.visible_enemies())} "
+            f"enemies_dead~{self.policy.enemies_dead} | {' '.join(heroes)} | "
             f"sends={self.stats['sends']} waits={self.stats['waits']} refused={sum(v for k, v in self.stats.items() if k.startswith('refused:'))} "
             f"fallbacks={self.stats['fallbacks'] + self.stats['illegal']}"
         )
