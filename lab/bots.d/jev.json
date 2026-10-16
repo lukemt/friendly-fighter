@@ -387,6 +387,78 @@
     "council",
     "composition"
    ]
+  },
+  {
+   "name": "jev-a1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + army waiting 5 cells from home + riflemen when the enemy is mostly infantry (jev-st5 + jev-rifr)",
+   "tags": [
+    "jev",
+    "rules",
+    "combo"
+   ]
+  },
+  {
+   "name": "jev-a2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "focus": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-a1 (staging 5 cells + riflemen rule) + focus fire when defending",
+   "tags": [
+    "jev",
+    "rules",
+    "combo"
+   ]
+  },
+  {
+   "name": "jev-st5-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_st5_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-st5 jev-st5@9e879f7a at 850b164+changes: jev-base with the army waiting 5 cells from home toward the enemy (under the towers) instead of a fifth of the way; idle units regroup there",
+   "tags": [
+    "frozen",
+    "jev",
+    "rules",
+    "stage"
+   ]
   }
  ]
 }

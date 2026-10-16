@@ -99,10 +99,10 @@ waits: a 1.2 s answer is 30 ticks of game the bot plays on old decisions.
   and missile silo in `structures.yaml`; `badr.bomber` is in sight at 18:54 in `367635db`): the
   Soviet AIs fire their support powers at the densest structures. The nuke (missile silo, charge 9
   minutes) goes for any region with structures worth 3,000 or more, parabombs (Ukraine's airfield,
-  every 5 minutes) for any structure, the spy plane (every 2.5 minutes) too. The opponent factions
-  of the big drops: 12 of 16 Soviet (ukraine, russia). The Allied AIs have no such decisions.
-  `docs/STRATEGY.md` says nothing of this yet; the codex family found the bombers from the other
-  side (AA, evacuation, repair: `bots/codex/README.md`).
+  every 5 minutes) for any structure, the spy plane (every 2.5 minutes) too. Every AI can build the
+  silo (its prerequisite is any tech center), so the big drops hit Soviet and Allied opponents alike.
+  The coordinator wrote it up in `docs/STRATEGY.md` (and `lab superweapons` flags the games); the
+  codex family found the bombers from the other side (AA, evacuation, repair: `bots/codex/README.md`).
 
 **What the engine rules allow** (all measured, runs 148 and 149, game `2e110913`):
 - A **sold building is no loss.** `deaths_cost` only counts what is destroyed. A sale pays 50% of the
@@ -157,7 +157,7 @@ probes: same branches, same scores).
 | Bot | What it is | Status |
 |---|---|---|
 | `jev-council-m` | `ff-jev-council` (`bots.jev_council:create_agent`) with `--think measured`, for the Jev check | played 1 game (run 151) |
-| `jev-base` | a copy of frozen v10 (`bots/jev/v10/`), the base of the family and the control | registered; parity with v10 not yet checked |
+| `jev-base` | a copy of frozen v10 (`bots/jev/v10/`), the base of the family and the control | parity with v10 checked: identical in all 15 branches of `@normal-fight`, twice (runs 170, 180) |
 | `jev-selltest` | mechanics test: second MCV at 6:00, then sells every building | runs 147-149 |
 | `jev-ls1` | `jev-base` + insurance MCV from 10:30 + overrun sale | probe run 156 (smoke) |
 | `jev-ls2`, `jev-ls2h` | `jev-base` + insurance from 10:30 + cash-out at 18:00 (`h`: the army goes to the MCV) | `jev-ls2h` probe run 161 |
@@ -165,7 +165,8 @@ probes: same branches, same scores).
 | `jev-ls4s`, `jev-ls4m`, `jev-ls4t` | no fleeing; cash-out at 17:00; army and harvesters split / with the MCV / stay | run 166, stopped after 5 of 33 games (below) |
 | `jev-lsj` code: `laststand_jev.py` | Jev decides when to bank (asks every 15 s from 14:00) | written and unit-tested, never played; **parked** |
 | `jev-timed` | v10 timing every `choose_action` (wall and CPU) | run 168: 0.53 ms mean per view |
-| `jev-st5`, `jev-st8` | `jev-base`, the army waits 5 / 8 cells from home (`stage_cells`) and idle units regroup there | probe run 170; full games run 178 |
+| `jev-st5`, `jev-st8` | `jev-base`, the army waits 5 / 8 cells from home (`stage_cells`) and idle units regroup there | probe run 170; `jev-st5` in full games: run 181; frozen as `jev-st5-v1` |
+| `jev-a1`, `jev-a2` | `jev-st5` + the riflemen rule (`a1`); + focus fire (`a2`) | registered |
 | `jev-rifb` | `jev-base`, riflemen only while the enemy army is unseen after 5:00 (`blind_production="rifles"`) | registered |
 | `jev-rifr` | `jev-rifb` + riflemen at 60%+ infantry among the enemy seen, rockets at 35%- (`rifle_rule`) | registered; the rules side of the Jev test |
 | `jev-focus` | `jev-base` + focus fire when defending (`focus`) | registered |
