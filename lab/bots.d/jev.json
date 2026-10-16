@@ -13,6 +13,46 @@
     "council",
     "latency"
    ]
+  },
+  {
+   "name": "jev-base",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "copy of the frozen champion v10 (bots/jev/v10): the base every jev bot changes by opt-in settings",
+   "tags": [
+    "jev",
+    "rules",
+    "control"
+   ]
+  },
+  {
+   "name": "jev-selltest",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.selltest:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "mcv_at": 360
+    }
+   },
+   "think": 0.005,
+   "description": "mechanics test: v10 + second MCV at 6:00, then sells every building",
+   "tags": [
+    "jev",
+    "test"
+   ]
   }
  ]
 }
