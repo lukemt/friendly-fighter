@@ -159,20 +159,47 @@ def test_a_dead_waiters_ticket_is_dropped(slots, monkeypatch):
 def test_a_slot_limit_applies_to_every_session_and_the_reserver_holds_the_rest(slots, monkeypatch):
     monkeypatch.setenv("FF_LAB_SLOTS", "4")
     slots.mkdir(parents=True, exist_ok=True)
+    quiet = dict(log=lambda *a, **k: None)
     assert batch.slot_count() == 4 and batch.slot_limit() is None
     batch.set_slot_limit(2)
     assert batch.slot_count() == 2 and batch.all_slots() == 4
     held: dict[int, int] = {}
-    with batch.GameSlot(run_id=1, label="playing", log=lambda *a, **k: None):  # (slot 0)
-        assert batch.reserve_step(held) and sorted(held) == [2, 3]
-        labels = {h["slot"]: h.get("label") for h in batch.slots_in_use()}
-        assert labels == {0: "playing", 2: batch.RESERVED_LABEL, 3: batch.RESERVED_LABEL}
-        with batch.GameSlot(run_id=2, label="b", log=lambda *a, **k: None):  # (slot 1: the last one under the limit)
-            assert not batch.GameSlot(run_id=3, log=lambda *a, **k: None)._take()  # (2 and 3 are reserved)
+    ticket: dict = {}
+    with batch.GameSlot(run_id=1, label="playing", **quiet):  # (slot 0)
+        assert batch.reserve_step(held, ticket) and sorted(held) == [1, 2]  # (any free slots)
+        assert "fd" not in ticket  # (it has them all: out of the queue)
+        with batch.GameSlot(run_id=2, label="b", **quiet):  # (the second game: the limit)
+            assert not batch.GameSlot(run_id=3, **quiet)._take()  # (two games play: the limit)
+            labels = sorted(h.get("label") for h in batch.slots_in_use())
+            assert labels == sorted(["playing", "b", batch.RESERVED_LABEL, batch.RESERVED_LABEL])
     batch.set_slot_limit(3)
-    assert batch.reserve_step(held) and sorted(held) == [3]
+    assert batch.reserve_step(held, ticket) and len(held) == 1
     batch.set_slot_limit(None)
-    assert batch.slot_limit() is None and not batch.reserve_step(held) and held == {}
+    assert batch.slot_limit() is None and not batch.reserve_step(held, ticket) and held == {}
+
+
+def test_the_reserver_short_of_slots_waits_first_in_the_queue(slots, monkeypatch):
+    """A worker from before the limit polls the slots, and one that just finished takes its slot back at
+    once unless someone waits: the reserver waits first, so the freed slot is the reserver's."""
+    monkeypatch.setenv("FF_LAB_SLOTS", "2")
+    slots.mkdir(parents=True, exist_ok=True)
+    quiet = dict(log=lambda *a, **k: None)
+    a = batch.GameSlot(run_id=1, label="a", **quiet).__enter__()
+    b = batch.GameSlot(run_id=2, label="b", **quiet).__enter__()  # (both slots: games from before the limit)
+    batch.set_slot_limit(1)
+    held: dict[int, int] = {}
+    ticket: dict = {}
+    assert batch.reserve_step(held, ticket) and held == {} and "fd" in ticket
+    assert batch.waiting()[0].get("label") == batch.RESERVED_LABEL  # (first in the queue)
+    late = batch._Ticket(b"{}")
+    assert not late.first()  # (a waiter, old code or new, is behind it)
+    a.__exit__(None, None, None)
+    assert batch.reserve_step(held, ticket) and len(held) == 1 and "fd" not in ticket
+    assert late.first()
+    late.close()
+    b.__exit__(None, None, None)
+    batch.set_slot_limit(None)
+    assert not batch.reserve_step(held, ticket)
 
 
 def test_a_limit_at_or_above_the_machine_is_no_limit(slots, monkeypatch):

@@ -78,24 +78,56 @@ def set_slot_limit(limit: int | None) -> None:
         path.write_text(f"{max(1, int(limit))}\n")
 
 
-def reserve_step(held: dict[int, int]) -> bool:
-    """One round of the reserver: hold the slots at or above the limit as they come free, let go of the
-    others. ``held``: slot -> fd. False when there is nothing left to do (no limit, nothing held)."""
+RESERVER_TICKET = "0" * 20  # (sorts before every waiter's ticket: first in the queue)
+
+
+def _reserved_wanted() -> int:
     limit = slot_limit()
-    want = set(range(limit, all_slots())) if limit else set()
-    for k in [k for k in held if k not in want]:
+    return max(0, all_slots() - limit) if limit else 0
+
+
+def reserve_step(held: dict[int, int], ticket: dict | None = None) -> bool:
+    """One round of the reserver: hold ``all_slots() - limit`` slots (any of them) so that games get only
+    the limit, whatever code a session runs. Short of them, it waits first in the queue (``ticket``: its
+    place, kept between rounds), so a worker that finishes a game doesn't take the slot back (sessions
+    on code from before the limit poll the slots too). ``held``: slot -> fd. False when there is nothing
+    left to do (no limit, nothing held)."""
+    ticket = ticket if ticket is not None else {}
+    want = _reserved_wanted()
+    for k in sorted(held, reverse=True)[:max(0, len(held) - want)]:
         os.close(held.pop(k))
-    for k in sorted(want - held.keys()):
+    if len(held) < want and "fd" not in ticket:
+        q = _queue_dir()
+        q.mkdir(parents=True, exist_ok=True)
+        name = f"{RESERVER_TICKET}-{os.getpid()}-reserver"
+        fd = os.open(q / name, os.O_RDWR | os.O_CREAT, 0o644)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        os.ftruncate(fd, 0)
+        os.write(fd, json.dumps({"pid": os.getpid(), "family": "main", "run": None, "label": RESERVED_LABEL,
+                                 "since": time.time()}).encode())
+        ticket.update(fd=fd, name=name)
+    for k in range(all_slots()):
+        if len(held) >= want:
+            break
+        if k in held:
+            continue
         fd = os.open(SLOTS_DIR / f"slot-{k}", os.O_RDWR | os.O_CREAT, 0o644)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            os.close(fd)  # (a game still plays there: taken when it ends)
+            os.close(fd)  # (a game still plays there)
             continue
         os.ftruncate(fd, 0)
         os.write(fd, json.dumps({"pid": os.getpid(), "family": "main", "run": None, "label": RESERVED_LABEL,
                                  "since": time.time()}).encode())
         held[k] = fd
+    if len(held) >= want and "fd" in ticket:
+        try:
+            os.unlink(_queue_dir() / ticket["name"])
+        except FileNotFoundError:
+            pass
+        os.close(ticket.pop("fd"))
+        ticket.pop("name", None)
     return bool(want or held)
 
 
@@ -112,12 +144,19 @@ def reserve_forever(poll: float = 2.0) -> None:
     """The reserver (``lab slots --reserve``, started by ``lab slots N``): until the limit is lifted."""
     (SLOTS_DIR / RESERVER_FILE_NAME).write_text(str(os.getpid()))
     held: dict[int, int] = {}
+    ticket: dict = {}
     try:
-        while reserve_step(held):
-            time.sleep(poll)
+        while reserve_step(held, ticket):
+            time.sleep(0.2 if len(held) < _reserved_wanted() else poll)  # (short: as fast as any waiter)
     finally:
         for fd in held.values():
             os.close(fd)
+        if "fd" in ticket:
+            try:
+                os.unlink(_queue_dir() / ticket["name"])
+            except FileNotFoundError:
+                pass
+            os.close(ticket["fd"])
         try:
             if int((SLOTS_DIR / RESERVER_FILE_NAME).read_text()) == os.getpid():
                 (SLOTS_DIR / RESERVER_FILE_NAME).unlink()
@@ -139,7 +178,9 @@ class GameSlot:
                            "since": time.time()}).encode()
 
     def _take(self) -> bool:
-        for k in range(slot_count()):
+        if slot_limit() and sum(1 for h in slots_in_use() if h.get("label") != RESERVED_LABEL) >= slot_count():
+            return False  # (as many games as the limit already play)
+        for k in range(all_slots()):
             fd = os.open(SLOTS_DIR / f"slot-{k}", os.O_RDWR | os.O_CREAT, 0o644)
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
