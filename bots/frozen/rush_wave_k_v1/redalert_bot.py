@@ -51,6 +51,9 @@ VEHICLE_PRIORITY = ("4tnk", "3tnk", "2tnk", "1tnk", "v2rl", "arty", "ftrk", "jee
 SUPPORT_VEHICLES = ("v2rl", "arty")  # one of every SUPPORT_EVERY vehicles, when available
 SUPPORT_EVERY = 4
 INFANTRY_PRIORITY = ("e1", "e3")  # alternated
+# unit_focus "antiinf" (rush-wave): against an infantry-heavy enemy, flamethrowers, grenadiers and
+# riflemen instead of rocket soldiers; artillery as the only support vehicle (V2s are for buildings).
+ANTI_INFANTRY_PRIORITY = ("e4", "e1", "e2")
 # Focus-fire order for enemy buildings: construction yard (no rebuilding), then
 # defenses, then production, then refineries, then the rest. Walls are ignored.
 FOCUS_PRIORITY = (("fact",), DEFENSES, ("weap", "tent", "barr"), ("proc",))
@@ -118,16 +121,18 @@ class Knobs:
 
     posture: str = "attack"          # "eco" | "defend" | "attack"
     attack_threshold: int = 8        # combat units needed to launch a wave
-    unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only)
+    unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only) | "antiinf"
     target: str = "nearest"          # "nearest" | "enemy_base" | "harvesters"
     opening: str = "standard"        # "standard" | "guard": a defense and infantry at home through the rush window
     defenses: int = 2                # at most this many defenses (once the economy is up)
     greed: int = 0                   # extra refineries (up to 2 + greed) before the rest, and as many more harvesters
     early_refineries: int = 0        # refineries before the war factory beyond the first (income sooner, tanks later)
-    surplus: int = SURPLUS_CASH      # unspent money (cash + ore) above this buys more factories
-    extra_barracks: int = 0          # barracks beyond the first once the war factory stands and money piles up
-    fallback: float = 0.0            # attackers at the base worth this many times our army: meet them at our defenses
     aim: tuple[int, int] | None = None  # attack here (the commander's pick), unless enemies are in the way
+    guard_defenses: int = 1          # the guard opening builds this many defenses once the barracks stands (rush-wave)
+    guard_infantry: int = GUARD_INFANTRY_CAP  # ...and this many infantry before the war factory (rush-wave)
+    late_buildings_from: float = 0.0  # no service depot or radar dome before this game time, seconds (rush-wave)
+    guard_mix: bool = False          # the guard alternates rifles and rockets (v10's orders of 2 always pick rifles)
+    defend_radius: int = DEFEND_RADIUS  # enemies this close to home pull the army out to fight (rush-wave: smaller = fight at the towers)
     note: str = ""
 
 
@@ -360,7 +365,7 @@ class RedAlertBot:
         # units are only bought from what is left, so buildings never starve.
         free = cash - self._owed(production, now)
         if "fact" in types and not building_busy:
-            pick = self._next_building(types, available, economy, production, cash, knobs)
+            pick = self._next_building(types, available, economy, production, cash, knobs, now)
             if pick and add({"cmd": "build", "item": pick}, f"build {pick}"):
                 self._mark("build", pick, now)
         if "fact" in types and queued["Defense"] == 0 and (knobs.posture != "eco" or knobs.opening == "guard"):
@@ -382,7 +387,7 @@ class RedAlertBot:
 
         # 6. Army production. (The guard opening, attacked at home with a small army: infantry from
         # whatever money there is, before anything else.)
-        if knobs.opening == "guard" and self._threats(obs, home) and \
+        if knobs.opening == "guard" and self._threats(obs, home, knobs.defend_radius) and \
                 sum(1 for u in units if is_combat(u)) < GUARD_EMERGENCY_ARMY:
             infantry = [i for i in INFANTRY_PRIORITY if i in available]
             if infantry and queued["Infantry"] == 0 and cash >= self._costs.get(infantry[0], 100):
@@ -427,9 +432,9 @@ class RedAlertBot:
 
         # 8. Defend, else attack.
         combat = [u for u in units if is_combat(u)]
-        threats = self._threats(obs, home)
+        threats = self._threats(obs, home, knobs.defend_radius)
         if threats:
-            self._defend(add, combat, threats, home, now, notes, obs=obs, buildings=buildings, knobs=knobs)
+            self._defend(add, combat, threats, home, now, notes)
         else:
             self._attack(add, combat, raw, home, enemy_base, stage, knobs, now, notes)
 
@@ -438,7 +443,7 @@ class RedAlertBot:
 
     # -- building choices ---------------------------------------------------------------
 
-    def _next_building(self, types, available, economy, production, cash, knobs: Knobs) -> str | None:
+    def _next_building(self, types, available, economy, production, cash, knobs: Knobs, now: float = 0.0) -> str | None:
         have = {t: types.count(t) for t in set(types)}
         spare = int(economy.get("power_provided") or 0) - int(economy.get("power_drained") or 0)
         barracks = next((b for b in BARRACKS if b in available), None)
@@ -462,16 +467,14 @@ class RedAlertBot:
             plan.append("proc")
         if knobs.greed and have.get("proc", 0) < 2 + knobs.greed:
             plan.append("proc")
-        if not have.get("fix"):
-            plan.append("fix")
-        if not have.get("dome"):
-            plan.append("dome")
+        if now >= knobs.late_buildings_from:  # (rush-wave: money for the guard first)
+            if not have.get("fix"):
+                plan.append("fix")
+            if not have.get("dome"):
+                plan.append("dome")
         if knobs.posture == "eco" and have.get("proc", 0) < 3:
             plan.append("proc")
-        if (knobs.extra_barracks and cash > knobs.surplus and has_barracks and have.get("weap")
-                and sum(have.get(b, 0) for b in BARRACKS) < 1 + knobs.extra_barracks):
-            plan.append(barracks)
-        if cash > knobs.surplus and have.get("weap", 0) < 2 and have.get("proc", 0) >= 2:
+        if cash > SURPLUS_CASH and have.get("weap", 0) < 2 and have.get("proc", 0) >= 2:
             plan.append("weap")
         if cash > 3000 and have.get("proc", 0) < 3:
             plan.append("proc")
@@ -494,7 +497,8 @@ class RedAlertBot:
         refineries), and only from money nothing else is waiting for. The guard opening
         builds one as soon as the barracks stands."""
         have = sum(types.count(d) for d in DEFENSES)
-        if knobs is not None and knobs.opening == "guard" and have < 1 and any(b in types for b in BARRACKS):
+        if (knobs is not None and knobs.opening == "guard" and have < knobs.guard_defenses
+                and any(b in types for b in BARRACKS)):
             return next((d for d in GUARD_DEFENSES if d in available and self._costs.get(d, 600) <= free), None)
         if have >= (knobs.defenses if knobs is not None else 2) or "weap" not in types or types.count("proc") < 2:
             return None
@@ -521,19 +525,21 @@ class RedAlertBot:
         infantry = [i for i in INFANTRY_PRIORITY if i in available]
         if knobs.unit_focus == "rockets" and "e3" in available:  # (against aircraft and armor)
             infantry = ["e3"]
+        if knobs.unit_focus == "antiinf":  # (against an infantry-heavy enemy; falls back to the default mix)
+            infantry = [i for i in ANTI_INFANTRY_PRIORITY if i in available] or infantry
         surplus = free - reserve > SURPLUS_CASH
         want_infantry = knobs.unit_focus != "vehicles" or "weap" not in types or surplus
         if (knobs.opening == "guard" and now < GUARD_SECONDS and infantry and queued["Infantry"] == 0 and has_proc
-                and self._infantry_ordered < GUARD_INFANTRY_CAP):
+                and self._infantry_ordered < knobs.guard_infantry):
             # The guard: infantry first, whatever the buildings are waiting for (the queue waits for
             # money like any other: OpenRA shares it out as production runs).
-            pick = infantry[self._infantry_ordered % len(infantry)]
+            pick = infantry[(self._infantry_ordered // 2 if knobs.guard_mix else self._infantry_ordered) % len(infantry)]
             if add({"cmd": "train", "item": pick, "count": 2}):
                 self._mark("train", pick, now)
                 self._infantry_ordered += 2
             infantry = []
         if infantry and queued["Infantry"] == 0 and want_infantry:
-            cap = GUARD_INFANTRY_CAP if knobs.opening == "guard" else EARLY_INFANTRY_CAP
+            cap = knobs.guard_infantry if knobs.opening == "guard" else EARLY_INFANTRY_CAP
             early_cap = self._infantry_ordered >= (cap if "weap" not in types else 10**6)
             early_cap = early_cap or (not has_proc and self._infantry_ordered >= 2)
             pick = infantry[self._infantry_ordered % len(infantry)]
@@ -546,7 +552,7 @@ class RedAlertBot:
         vehicles = [v for v in VEHICLE_PRIORITY if v in available]
         if vehicles and queued["Vehicle"] == 0 and knobs.unit_focus != "infantry":
             pick = vehicles[0]
-            support = [v for v in SUPPORT_VEHICLES if v in available]
+            support = [v for v in SUPPORT_VEHICLES if v in available and (v == "arty" or knobs.unit_focus != "antiinf")]
             if support and self._vehicles_ordered % SUPPORT_EVERY == SUPPORT_EVERY - 1:
                 pick = support[0]
             cost = self._costs.get(pick, 800)
@@ -556,20 +562,17 @@ class RedAlertBot:
                     self._mark("train", pick, now)
                     self._vehicles_ordered += count
 
-    def _threats(self, obs, home) -> list[tuple[int, int]]:
+    def _threats(self, obs, home, radius: int = DEFEND_RADIUS) -> list[tuple[int, int]]:
         cells = []
         for enemy in _list(obs.get("visible_enemies")):
             cell = _cell(enemy)
             if cell and not enemy.get("wreck") and not str(enemy.get("type") or "").endswith("husk"):
-                if _dist(cell, home) <= DEFEND_RADIUS:
+                if _dist(cell, home) <= radius:
                     cells.append(cell)
         return cells
 
-    def _defend(self, add, combat, threats, home, now, notes, *, obs=None, buildings=None, knobs: Knobs | None = None) -> None:
+    def _defend(self, add, combat, threats, home, now, notes) -> None:
         target = min(threats, key=lambda c: _dist(c, home))
-        rally = self._fallback_spot(combat, home, obs, buildings, knobs)
-        if rally is not None:  # (outnumbered: fight where our defenses and the yard's repairs help)
-            target = rally
         def near_home(u: dict[str, Any]) -> bool:
             cell = _cell(u)
             return cell is not None and _dist(cell, home) <= HOME_RADIUS
@@ -581,22 +584,6 @@ class RedAlertBot:
         ]
         if self._order_units(add, "attack_move", helpers, target, now):
             notes.append(f"defend base vs {len(threats)} enemies at {list(target)}")
-
-    def _fallback_spot(self, combat, home, obs, buildings, knobs: Knobs | None) -> tuple[int, int] | None:
-        """Where an outnumbered army meets attackers at the base: the middle of our defenses (or the
-        base center), when the attackers in sight are worth ``knobs.fallback`` times our army."""
-        if not knobs or not knobs.fallback or obs is None:
-            return None
-        def worth(t: str) -> int:
-            return self._costs.get(t, 300)
-        theirs = sum(worth(str(e.get("type") or "").lower()) for e in _list(obs.get("visible_enemies"))
-                     if (c := _cell(e)) and _dist(c, home) <= DEFEND_RADIUS and not e.get("wreck")
-                     and str(e.get("type") or "").lower() not in ("harv", "mcv"))
-        ours = sum(worth(str(u.get("type") or "").lower()) for u in combat)
-        if theirs <= knobs.fallback * max(ours, 1):
-            return None
-        towers = [c for b in buildings or [] if str(b.get("type") or "").lower() in DEFENSES and (c := _cell(b))]
-        return _centroid(towers) if towers else home
 
     def _attack(self, add, combat, raw, home, enemy_base, stage, knobs: Knobs, now, notes) -> None:
         time_info = _dict(raw.get("time"))
