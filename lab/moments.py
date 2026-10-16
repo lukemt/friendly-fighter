@@ -45,8 +45,11 @@ def _candidates(db, f: dict) -> list:
              "g.termination != 'engine_crashed'", f"s.kind NOT IN ({','.join('?' * len(BRANCHABLE))})"]
     args: list = list(BRANCHABLE)
     if f.get("runs"):
-        conds.append(f"g.run_id IN ({','.join('?' * len(f['runs']))})")
-        args += f["runs"]
+        from .reuse import run_clause
+
+        clause, more = run_clause("g", list(f["runs"]))
+        conds.append(clause)
+        args += more
     if f.get("bot"):
         conds.append("s.bot = ?")
         args.append(f["bot"])

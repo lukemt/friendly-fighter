@@ -222,5 +222,5 @@ to shared code are the ones the rules are there to keep careful.
 - **A stopped run leaves nothing behind:** its workers die with it, and their slots free
   themselves. Engine lanes stay loaded between runs on purpose.
 - **Bot versions:** each bot's version is a hash of its settings and its code (a module bot: its
-  module and every `bots/`/`agent/` module it imports). A branch played the same way is reused,
-  never replayed. Changing shared code changes the versions of the bots built on it.
+  module and every `bots/`/`agent/` module it imports). A branch or a whole game played the same way is
+  reused, never replayed (`lab compare`/`play`/`gate` too: docs/LAB.md, "Played once"). Changing shared code changes the versions of the bots built on it.

@@ -121,10 +121,22 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
             print(f"[lab] {', '.join(jev_bots)} need Jev, and {problem}: they would play on frozen decisions. "
                   f"Not starting.", flush=True)
             raise SystemExit(2)
+    reused: list[str] = []
+    if kind in REUSE_KINDS and not getattr(a, "no_reuse", False):
+        from lab import reuse
+
+        jobs, reused = reuse.split(db, jobs, registry.load(), _uses_jev)
     run_id = db.start_run(kind, _command(), params, note=a.note or "", experiment=a.experiment or "")
-    workers = min(a.workers or _quota(), len(jobs))
-    print(f"[lab] run {run_id}: {len(jobs)} games on {workers} workers (logs: {batch.LOG_DIR}/run-{run_id}-w*.log)",
-          flush=True)
+    if reused:
+        from lab import reuse
+
+        reuse.link(db, run_id, reused)
+        print(f"[lab] run {run_id}: {len(reused)} game(s) already played the same way (same bot versions, seats, map, "
+              f"seed, length and engine build): reused, not played again (--no-reuse plays them)", flush=True)
+    workers = max(1, min(a.workers or _quota(), len(jobs)))
+    if jobs:
+        print(f"[lab] run {run_id}: {len(jobs)} games on {workers} workers (logs: {batch.LOG_DIR}/run-{run_id}-w*.log)",
+              flush=True)
     t0 = time.monotonic()
 
     def progress(msg, k, n):
@@ -139,7 +151,8 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
 
     status = "done"
     try:
-        batch.run(jobs, workers=workers, run_id=run_id, record=a.record, on_result=progress)
+        if jobs:
+            batch.run(jobs, workers=workers, run_id=run_id, record=a.record, on_result=progress)
     except KeyboardInterrupt:
         status = "interrupted"
         print("[lab] interrupted", flush=True)
@@ -147,7 +160,8 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
         db.end_run(run_id, status)
     wall = time.monotonic() - t0
     n = db.one("SELECT COUNT(*) AS n FROM games WHERE run_id = ?", run_id)["n"]
-    print(f"[lab] run {run_id}: {n} games in {wall:.0f} s ({wall / max(n, 1):.1f} s a game)")
+    print(f"[lab] run {run_id}: {n} games in {wall:.0f} s ({wall / max(n, 1):.1f} s a game)"
+          + (f", plus {len(reused)} reused" if reused else ""))
     if jev_bots:
         from lab import jevlog
 
@@ -156,6 +170,9 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
             print(warning)
             db.add_note(warning, run_id=run_id, author="lab")
     return run_id
+
+
+REUSE_KINDS = {"play", "league", "gate", "compare", "exploit"}  # (whole games: lab/reuse.py)
 
 
 def _uses_jev(name: str) -> bool:
@@ -1149,7 +1166,10 @@ def main() -> int:
         if vs:
             sp.add_argument("--vs", help="only games against this bot")
 
-    def playing(sp):
+    def playing(sp, reuse=True):
+        if reuse:
+            sp.add_argument("--no-reuse", action="store_true",
+                            help="play every game, even those already played the same way (lab/reuse.py)")
         sp.add_argument("--map", default="all", help="a map, maps separated by commas, or all (rotating)")
         sp.add_argument("--minutes", type=float, default=20)
         sp.add_argument("--seed", type=int, default=1)
@@ -1265,7 +1285,7 @@ def main() -> int:
     s.add_argument("--control-only", action="store_true", help="play only the controls (e.g. for moments played by hand)")
     s.add_argument("--report", action="store_true", help="print the report of what was played, play nothing")
     s.add_argument("--runs", help="--report: only these probe runs")
-    playing(s)
+    playing(s, reuse=False)
 
     s = sub.add_parser("board", help="the board: every family's entries against the champion (show, play, run, history)")
     s.add_argument("action", nargs="?", default="show", choices=["show", "play", "run", "history"])
