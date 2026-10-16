@@ -92,9 +92,13 @@ cd /workspace/.worktrees/<family> && claude            # or codex; give it its b
 `new` creates the worktree and branch, `bots/<family>/` with a README template, and
 `lab/bots.d/<family>.json`. The lab finds the shared database by itself. Nothing needs setting.
 
-**Codex:** its sandbox must allow writing to `/workspace/sim/lab/` and `~/openra-sim/lanes/` (the
-shared lab and the engine lanes, outside the worktree), and local network connections (the
-engines talk over localhost TCP). Without both, lab runs fail.
+**Codex:** its own sandbox can't run in this container. Its sandboxing tool (bubblewrap) needs
+Linux user namespaces, which the container doesn't allow; checked with `codex sandbox` on
+codex-cli 0.157. So start Codex without its sandbox and with approvals on:
+`codex -s danger-full-access -a on-request`. The lab needs that anyway: it writes to
+`/workspace/sim/lab/` and `~/openra-sim/lanes/`, outside the worktree, and the engines talk over
+localhost TCP. With its sandbox off, Codex is held only by this file and the git hook. Claude's
+deny rules don't apply to it, so the hard rules above are Codex's to keep.
 
 ## Working in a family session
 

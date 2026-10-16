@@ -487,6 +487,21 @@ lab probe NAME --report [--stop-after 300] [--stop-quiet 45] [--runs 119,120]
   situations an idea is for, reuse, halving and early stops; engine snapshots would change the rest
   (LAB_PLAN L14).
 
+## Several sessions at once
+
+Bot families are built by separate agent sessions (Claude Code, Codex), each in a git worktree
+of its own (`scripts/session.py new <family>`). The rules are in [AGENTS.md](../AGENTS.md). What
+the lab does for it:
+
+- **One lab for all:** a worktree finds the main checkout's `sim/lab` by itself (`lab.MAIN_ROOT`):
+  the same database, traces, moment sets and notes. Runs record their session (`runs.params.family`).
+- **Game slots:** every lab game takes one of the machine's slots (`sim/lab/slots/`, `FF_LAB_SLOTS`,
+  default the CPU quota). All sessions' games together never outnumber the CPUs, and a stopped
+  run's workers die with it. `lab status` shows who holds the slots.
+- **Family registries:** `lab/bots.d/<family>.json`, names `<family>-...` (a family session can
+  register nothing else); `lab bots add/freeze` write each bot back to its own file.
+- **Limits:** a family session `lab forget`s only its own runs.
+
 ## Experiments and notes
 
 ```bash

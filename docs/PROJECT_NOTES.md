@@ -228,3 +228,7 @@ The longer-term direction (modular bot, league of bots, snapshot branching) is i
 8. **The lab plan:** [LAB_PLAN.md](LAB_PLAN.md) (2026-10-15) covers where v10 stands, lab
    infrastructure to build (contestant bots in their own processes, Claude as the council's
    advisor, decision branches, tournament scoring), bots to add, and experiments E1–E10 in order.
+9. **Several agent sessions (2026-10-16):** [AGENTS.md](../AGENTS.md) holds the rules for every
+   agent (Claude Code, Codex): a coordinator in `/workspace`, one family session per git worktree
+   (`scripts/session.py new <family>`), a shared lab and shared game slots, and a push guard.
+   Games are 20 minutes since 2026-10-16, and the experiment funnel is LAB_PLAN.md Part 0.
