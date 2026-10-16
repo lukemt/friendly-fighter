@@ -184,6 +184,25 @@
     }
    },
    "think": 0.005
+  },
+  {
+   "name": "rush-wave-k-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.rush_wave_k_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 22
+    }
+   },
+   "think": 0.005,
+   "description": "frozen rush-wave-k rush-wave-k@fa5ee998 at b533231: ",
+   "tags": [
+    "frozen"
+   ]
   }
  ]
 }
