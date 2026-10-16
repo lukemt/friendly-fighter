@@ -540,13 +540,30 @@ def run(jobs: list[dict], *, workers: int, run_id: int, record: bool = False, db
 STALE_HOURS = 2.0
 
 
+def boot_time() -> float | None:
+    """When the machine started (``btime`` in /proc/stat), or None."""
+    try:
+        for line in Path("/proc/stat").read_text().splitlines():
+            if line.startswith("btime "):
+                return float(line.split()[1])
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def stale_runs(db, now: float | None = None) -> list[dict]:
-    """Runs still marked running whose process is gone: its pid (recorded since 2026-10-16) is dead, or,
-    for older runs, it holds no game slot, waits for none, and has had no game for STALE_HOURS."""
+    """Runs still marked running whose process is gone: started before the machine last booted, or its
+    pid (recorded since 2026-10-16) is dead, or, for older runs, it holds no game slot, waits for none,
+    and has had no game for STALE_HOURS."""
     now = now if now is not None else time.time()
+    booted = boot_time()
     live = {h.get("run") for h in slots_in_use()} | {w.get("run") for w in waiting()}
     out = []
     for r in db.q("SELECT * FROM runs WHERE status = 'running' ORDER BY id"):
+        if booted and (r["started"] or 0) < booted:  # (the machine restarted since: no process of it is left,
+            last = db.one("SELECT MAX(COALESCE(finished, created)) AS t FROM games WHERE run_id = ?", r["id"])["t"]
+            out.append({**dict(r), "last_game": last})  # and its pid may be someone else's now)
+            continue
         if r["id"] in live:
             continue
         pid = (json.loads(r["params"] or "{}") or {}).get("pid")

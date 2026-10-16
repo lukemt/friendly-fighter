@@ -226,4 +226,7 @@ def test_stale_runs_are_the_dead_ones(tmp_path, monkeypatch, slots):
     done = db.start_run("compare", "lab compare e", {})
     db.end_run(done)
     assert _json.loads(db.one("SELECT params FROM runs WHERE id = ?", alive)["params"])["pid"] == _os.getpid()
+    monkeypatch.setattr(batch, "boot_time", lambda: None)
     assert [r["id"] for r in batch.stale_runs(db)] == [old, dead]  # (no pid, quiet for 3 h; a dead pid)
+    monkeypatch.setattr(batch, "boot_time", lambda: _time.time() + 60)  # (the machine restarted after them all)
+    assert [r["id"] for r in batch.stale_runs(db)] == [alive, old, recent, dead]
