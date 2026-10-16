@@ -297,6 +297,35 @@ a fresh seed doesn't share them).
 
 ---
 
+## Part 1b: other architectures (the user's idea, 2026-10-16)
+
+Every bot of ours so far is one architecture: the scripted bot (`agent/redalert_bot.py`, `Knobs`)
+under the council's three loops (strategist, quartermaster, field commander), answered by code
+rules (v10) or Jev. The families' leads are v10 plus one setting. What else has won elsewhere:
+StarCraft bots (UAlbertaBot, Steamhammer, CherryPi) are **modular** (separate managers for
+economy, production, army, scouting) and pick from a **portfolio of strategies** by reading the
+opponent, some with an **opponent model** kept across games. In microRTS, scripted bots won for
+years; deep reinforcement learning won only lately, with far more games than this machine plays
+(~2,000 a day). The strongest contestant here, ext-henry, is modular (brain, commander,
+executor, squads, an economy schedule, per-opponent profiles in `opponents.py`).
+
+| # | Architecture | Why here (evidence) | Cost | First test |
+|---|---|---|---|---|
+| A1 | **A portfolio and a selector:** several whole strategies (v10; anti-rush with `defend_radius` 22; macro with henry-style refineries; a timing attack), and a selector that reads the opponent from what was scouted by 3:00-6:00 and switches | Different leads win against different opponents (rush-wave-k-v1 Rush 5/8 vs v10 3/8; jev-a1m8 7/7 vs ext-henry, v10 4/8), and v10 commits to one plan: after one raid it stays on hold for the game (the jev family, run 195) | low-medium: the strategies are settings of the same core | each strategy alone vs `@screen` (which wins where), then the selector vs v10 and vs each strategy alone, `--sprt` |
+| A2 | **An opponent model across matches:** the platform names the opponent at the start (`OfficialAssignment.opponents`; imported games show "Yuriko Red", "Cryosis"). Remember what each did (rush time, army mix, expansions) and open with its counter | Tournament opponents repeat; henry's bot already keeps profiles | low, on top of A1 | lab: a "memory" from earlier lab games against the same bot, vs no memory |
+| A3 | **Modular managers** (henry's and UAlbertaBot's shape): an economy manager with a refinery and harvester schedule, production, an army manager with squads (main army, home guard, raiders), scouting; each with its own rules | ext-henry beats v10 5-1 by out-building it (assets 85k vs 57k at 17:54) and its last stand; v10's army is one group that scatters (the regroup lead, run 187) | high: a new bot, days | its first manager alone (the economy) inside v10, then more |
+| A4 | **A learned evaluation:** a model trained on the lab's ~5,700 games (timeline every 5 s: armies, economy, kills, losses, both seats) that predicts the result from the state at any time | Lets a bot choose between options by the predicted result (attack or hold, expand or not), and lets the lab end games already decided (a 20-minute game is ~60 s of a slot) | low-medium: gradient boosting on what the database has | how well minute 10-12 predicts the end (held-out games), then one decision (posture) by the model, probed |
+| A5 | **Decisions learned from branches** (search offline, rules online): at sampled moments play each option for 60-180 s (the probes do this by hand), label the best, train a small classifier for that decision | The platform gives no forward model live, but the lab's engine is deterministic and branches are cheap (~34 s) | medium, and CPU: ~N options x branches per label | one decision (attack now / wait) at unselected moments |
+| A6 | Deep RL, one network for everything | microRTS: won only with very many games | not here | no |
+
+**Order:** A1 with A2 first (cheapest, uses what we have, proven in StarCraft); A4 alongside (a
+tool for the selector and for the lab's speed); A3 if A1 shows that the economy and army
+structure, not the plan, is what loses to ext-henry; A5 for the decisions the others leave open.
+Each is a family's brief (AGENTS.md: two families never chase the same idea). The machine's 5
+slots are the limit: a fourth family shares them with the other three (first come, first served).
+
+---
+
 ## Part 2: bots to add
 
 | Group | Bot | Source | Why | Effort |
