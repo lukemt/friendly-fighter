@@ -130,8 +130,8 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
 | 0. Idea card | `lab experiment new <family>-<topic> --hypothesis "..."` | nothing |
 | 1a. Play it by hand | `lab human start --moment ID --stop-after 180 --stop-quiet 45`, then `lab h ...` (the game waits between commands) | your time, almost no CPU |
 | 1. Probe the situation | `lab probe @rush-wave --variants <family>-a,<family>-b --halving --stop-after 180 --stop-quiet 45` | 5-15 min |
-| 2. Targeted screen | `lab compare ff-council-champ-v10,<family>-a --baselines ai-rush --games 8 --seed N` | 5-15 min |
-| 3. Fast suite | `lab compare ff-council-champ-v10,<family>-a --baselines @ais,@exploiters --games 8 --seed N` | 15-25 min |
+| 2. Targeted screen | `lab compare ff-council-champ-v10,<family>-a --baselines ai-rush --games 40 --seed 2026 --sprt` | stops when clear, 5-15 min |
+| 3. Fast suite | `lab compare ff-council-champ-v10,<family>-a --baselines @screen --games 40 --seed 2026 --sprt`, then `--baselines @smoke --games 2` | 15-30 min |
 | 4. Gate | ask the coordinator (`lab note "<family>-a: ready for a gate, runs ..."`) | about an hour |
 
 - **Manual play (stage 1a)** tries a tactic before anyone codes it, or finds out why a bot loses.
@@ -146,6 +146,10 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
   `ff-council-champ-v10-placebo` as a variant and compare against it (docs/LAB.md, "Moments and
   probes"), and confirm with whole games.
 - Put the champion first in `lab compare`: the first bot is the reference.
+- **Screen on seed 2026 with `--sprt`** (docs/LAB.md, "Stop when clear"): the champion's games on
+  that seed are already played and get reused, so a compare plays only your bot's games, and
+  `--sprt` stops each candidate as soon as its answer is clear. A screen's BETTER is checked on
+  a fresh seed (the gate): many sessions screening on one seed will find its lucky games.
 - Pass `--experiment <family>-<topic> --note "..."` on every run.
 - Freeze a candidate before you report its numbers: `lab bots freeze <family>-a --as <family>-a-v1`.
 - Run one big run at a time. Check `lab status` first.

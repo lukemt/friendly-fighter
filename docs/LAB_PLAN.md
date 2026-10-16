@@ -245,6 +245,56 @@ one fixed schedule (6 baselines × 8 games, 20 min), played from each family's w
 shared lab, whole games reused when played the same way (verified, runs 126-127), standings paired
 with the reference, snapshots over time. The coordinator runs it (AGENTS.md, duty 9).
 
+### L16. Decide with fewer games (the user's question, 2026-10-16: "test hypotheses and find the next champion in the fastest, most resource-efficient way")
+
+**Where the machine goes** (measured 2026-10-16, experiment `lab-speed`):
+- **The slots are the limit.** Since 06:00 all 5 are busy (4.9 of 5 an hour), the CPUs too (load
+  9.3 on 6). More workers would not help: only fewer games per decision, and cheaper games.
+- **A 20-minute game takes ~60 s** of a slot (15x real time); with ext-henry ~206 s (its Python;
+  ext-henry-rusher 130 s, yuriko 143 s). A branch: ~34 s.
+- **A third of the 20-minute games played in a day were the champion's** (567 of 1,647), mostly
+  on seeds no other run used: each family's own `--seed`, and compare's seeds depended on the
+  baseline's place in `--baselines`.
+- **The noise:** v10 and a candidate on the same game differ in points with sd 0.52 (994 pairs);
+  73% of pairs are equal. A 95% interval of +-0.1 points a game needs ~100 pairs, +-0.05 ~400.
+  The board (48) sees +-0.15. The improvements we find are 0.05-0.2 (rush-wave-k-v1 +0.07,
+  jev-st5-v1 +0.10, jev-rifr-v1 +0.19).
+- **Games that tell nothing:** against ext-henry-rusher, ext-henry-yuriko, chaotic, counter (100%
+  of pairs equal), ff-turtle (94%), ext-ryan (83%) every good bot wins.
+- **Net (kills minus losses) is a slightly sharper measure than points**: its t-value was higher
+  for 5 of 7 candidates (median x1.17, ~1.4x fewer games for the same certainty), and it predicts
+  the points on held-out games as well (r 0.92 vs 0.93). Points stay the decision (the tournament
+  counts wins); net can screen.
+
+**Built (2026-10-16):**
+1. **The same seeds everywhere** (`league.game_seed`): the champion's game against an opponent on a
+   seed is played once, then reused by every compare, gate and the board. Screen on seed 2026 (the
+   board's): the reference's games are already there, so a compare plays only the candidate's. With
+   one candidate that halves the games.
+2. **`lab compare --sprt`** (lab/sprt.py): the sequential test chess engines are tested with
+   (Fishtest, OpenBench). Simulated on our pairs: a +0.1 candidate called better 78% of the time
+   (a fixed 56-pair compare: 31%), a no-gain one 4%; clearly worse ones stop after 20-50 pairs.
+   `--games` is the cap.
+3. **`@screen`** (the opponents where bots differ) and **`@smoke`** (2 games each where they
+   don't: catches breakage).
+
+**The funnel with these** (stages 2-3 of Part 0): `lab compare ff-council-champ-v10,X --baselines
+@screen --seed 2026 --games 40 --sprt`, plus `--baselines @smoke --games 2`. A BETTER goes to the gate on
+a fresh seed (the holdout: many families screening on one seed will find its lucky games, and
+a fresh seed doesn't share them).
+
+**Next, by expected gain:**
+- **`--sprt` for gates** (the h2h and the baselines as one test; non-regression bounds
+  `-0.05,0` for a change aimed at one opponent: "no worse elsewhere", Fishtest's second test).
+- **Engine snapshots** (L14): a late-game idea (the Tanya, the last stand, salvage) branches at
+  15:00 from saved states instead of replaying 15 minutes (~2/3 of a branch's time).
+- **Profile ext-henry's 206 s** (our wrapper or theirs: `bots/external.py` copies, logs, clocks).
+  It is the opponent we most need to play.
+- **Tune numbers with SPSA** (Fishtest's tuner): for a knob bot, nudge all settings at once by
+  random +-steps, 2 games per step, move towards the better side. Many settings in the games one
+  hand-made variant takes now.
+- **A screen on net**: `--sprt` on net (in thousands) for stage 2, points for the gate.
+
 ---
 
 ## Part 2: bots to add

@@ -22,20 +22,30 @@ def _job(a: str, b: str, *, map_id: str, seed: int, minutes: int, label: str, sw
 
 def matchup(a: str, b: str, games: int, *, maps: list[str] = MAPS, seed: int = 1, minutes: int = 20,
             label: str = "") -> list[dict]:
-    return [_job(a, b, map_id=maps[i % len(maps)], seed=seed * 10007 + i, minutes=minutes,
+    return [_job(a, b, map_id=maps[i % len(maps)], seed=game_seed(seed, i), minutes=minutes,
                  label=label or f"{a} vs {b}", swap=bool(i % 2)) for i in range(games)]
 
 
+def game_seed(seed: int, i: int) -> int:
+    """The ``i``-th game's seed of a run on ``seed``: the same for every opponent and every command
+    (matchup, compare, gate, the board), so the champion's game against an opponent on a seed is
+    played once and reused by every later run (lab/reuse.py). Until 2026-10-16 compare and gate added
+    1000 x the baseline's place in --baselines, which made each list of baselines its own games."""
+    return seed * 10007 + i
+
+
 def compare(candidates: list[str], baselines: list[str], games: int, *, maps: list[str] = MAPS, seed: int = 1,
-            minutes: int = 20) -> list[dict]:
-    """Every candidate against every baseline, ``games`` each, on the same seeds (paired)."""
+            minutes: int = 20, interleaved: bool = False) -> list[dict]:
+    """Every candidate against every baseline, ``games`` each, on the same seeds (paired).
+    ``interleaved``: game 1 against every baseline, then game 2, ... (a sequential test's order:
+    a stop at any point has seen every baseline about as often)."""
+    order = ([(k, i) for i in range(games) for k in range(len(baselines))] if interleaved
+             else [(k, i) for k in range(len(baselines)) for i in range(games)])
     jobs = []
-    for k, base in enumerate(baselines):
-        for i in range(games):
-            s = seed * 10007 + 1000 * (k + 1) + i
-            for who in candidates:
-                jobs.append(_job(who, base, map_id=maps[i % len(maps)], seed=s, minutes=minutes,
-                                 label=f"compare:{base}", swap=bool(i % 2)))
+    for k, i in order:
+        for who in candidates:
+            jobs.append(_job(who, baselines[k], map_id=maps[i % len(maps)], seed=game_seed(seed, i), minutes=minutes,
+                             label=f"compare:{baselines[k]}", swap=bool(i % 2)))
     return jobs
 
 
@@ -66,11 +76,11 @@ def gate(candidate: str, champion: str, baselines: list[str], games: int, *, map
          minutes: int = 20) -> list[dict]:
     """``games`` against the champion, and ``games`` each for candidate and champion against every baseline
     (the same seeds for both)."""
-    jobs = [_job(candidate, champion, map_id=maps[i % len(maps)], seed=seed * 10007 + i, minutes=minutes,
+    jobs = [_job(candidate, champion, map_id=maps[i % len(maps)], seed=game_seed(seed, i), minutes=minutes,
                  label=f"gate:{candidate}:h2h", swap=bool(i % 2)) for i in range(games)]
-    for k, base in enumerate(baselines):
+    for base in baselines:
         for i in range(games):
-            s = seed * 10007 + 1000 * (k + 1) + i
+            s = game_seed(seed, i)
             m = maps[i % len(maps)]
             for who in (candidate, champion):
                 jobs.append(_job(who, base, map_id=m, seed=s, minutes=minutes, label=f"gate:{candidate}:{base}",

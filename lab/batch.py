@@ -207,18 +207,44 @@ def _brief(game: dict) -> dict:
                       for s in game["seats"]]}
 
 
+class Feed:
+    """Hands ``jobs`` to the workers' queue in order, ``count`` at a time, skipping those ``keep(index)``
+    turns down by then; after the last, one ``None`` a worker (stop)."""
+
+    def __init__(self, jobs: list[dict], keep, put, workers: int, run_id: int) -> None:
+        self.jobs, self.keep, self.put, self.workers, self.run_id = jobs, keep, put, workers, run_id
+        self.pending = list(range(len(jobs)))
+        self.closed = False
+        self.skipped = 0
+
+    def __call__(self, count: int) -> None:
+        while count > 0 and self.pending:
+            i = self.pending.pop(0)
+            if self.keep is None or self.keep(i):
+                self.put({**self.jobs[i], "run_id": self.run_id})
+                count -= 1
+            else:
+                self.skipped += 1
+        if not self.pending and not self.closed:
+            self.closed = True
+            for _ in range(self.workers):
+                self.put(None)
+
+
 def run(jobs: list[dict], *, workers: int, run_id: int, record: bool = False, db_path: str | None = None,
-        on_result=None) -> list[dict]:
-    """Play ``jobs`` (``GameJob`` dicts) on ``workers`` processes; returns the results in the order they end."""
+        on_result=None, keep=None) -> list[dict]:
+    """Play ``jobs`` (``GameJob`` dicts) on ``workers`` processes; returns the results in the order they end.
+
+    ``keep(index)``: the jobs are handed out one at a time, in order, as workers free up, and a job
+    is played only if ``keep`` still says so then (a sequential test stops what is decided). Without
+    it every job is queued at the start."""
     lab_env()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     ctx = mp.get_context("spawn")
     job_q, res_q = ctx.Queue(), ctx.Queue()
-    for job in jobs:
-        job_q.put({**job, "run_id": run_id})
     workers = max(1, min(workers, len(jobs)))
-    for _ in range(workers):
-        job_q.put(None)
+    feed = Feed(jobs, keep, job_q.put, workers, run_id)
+    feed(len(jobs) if keep is None else workers)
     procs = [ctx.Process(target=_worker, args=(i, job_q, res_q, str(LOG_DIR / f"run-{run_id}-w{i}.log"), record,
                                                 db_path), name=f"lab-worker-{i}", daemon=False)
              for i in range(workers)]
@@ -240,6 +266,8 @@ def run(jobs: list[dict], *, workers: int, run_id: int, record: bool = False, db
             out.append(msg)
             if on_result is not None:
                 on_result(msg, len(out), len(jobs))
+            if keep is not None:
+                feed(1)
     except KeyboardInterrupt:
         for p in procs:
             p.terminate()
