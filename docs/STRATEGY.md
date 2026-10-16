@@ -8,7 +8,8 @@ the first lab leagues and gates, and from Claude playing OpenRA's three AIs by h
 
 ## The score decides almost everything
 
-- **The tiebreak decides.** Nearly every game ends at the 10-minute limit. The tiebreak is
+- **The tiebreak decides.** Nearly every game ends at the time limit (20 minutes on the platform;
+  the lab played 10 until run 114, see "20-minute games" below). The tiebreak is
   kills minus losses, in credits.
   - **Evidence:** 184 simulator games of `ff-default` against the Normal AI, before the lab:
     every one went to the time limit. Lab leagues 9, 15, 26 and 28: wipe-outs only against the
@@ -36,6 +37,38 @@ the first lab leagues and gates, and from Claude playing OpenRA's three AIs by h
     Overall: +0.20 points a game, 95% CI +0.04 to +0.36.
 - **A scout that dies loses standoffs.** Two dead riflemen (−200) decided many mirror games.
   - **Evidence:** run 48: with a scout, 0/8 and 1/8 against our turtles; without, 4/8 and 4/8.
+
+## 20-minute games (run 116, the champion compare of run 64 at the platform's length)
+
+The platform plays 20 minutes; everything up to run 114 was 10. Same bots, suites and seeds as run
+64 (`lab compare ... --seed 41`); 239 games (one lost to an engine stopped by hand).
+
+| Bot | 10 min (run 64) | 20 min (run 116) |
+|---|---|---|
+| `ff-council-champ-v10` | 95% | **86%** (+0.21 points a game over the greedy turtle, CI +0.10..+0.32) |
+| `ff-greedy-turtle-eco` | 86% | 77% |
+| `ff-greedy-turtle` | 76% | 64% |
+
+- **v10 stays the best, and the gap grew** (+0.21 vs +0.19). It loses most where the others do.
+- **The Rush AI breaks bases late.** v10 against Rush: 7/8 at 10 minutes, 4/8 at 20. Rush wiped the
+  greedy turtles 12 times (from 7:48) and v10 3 times, at 17:04-17:25. Moments 2 min before those
+  wipes are the set `@late-rush` (`lab moments show late-rush`).
+- **Wipe-outs happen now, but only against us.** 41 games ended with a base destroyed, and every
+  time it was one of the three candidates that lost it. v10 was wiped 7 times (Rush 3, Normal, Turtle, `exploit-eco-tanks`, `ff-default`), all
+  after 12:48. Our bots still never destroy a base.
+- **The Turtle AI turns our way with time** (v10 6/8 at both lengths, the turtles 3-4/8 → 5/8):
+  the bigger economies pull ahead on kills in the second half.
+- **`exploit-eco-tanks` comes back:** v10 8/8 → 6/8 (one wipe at 12:48); the greedy turtles 2-3/8.
+- **How v10 dies to the late Rush** (`8f1c3997`, sidestep): at 12:00 it leads (+7,700, 32 combat
+  units: 22 rocket soldiers, 7 heavy tanks, 3 V2; cash 0). Rush's wave (riflemen and rocket
+  soldiers ~30 each, Tanya, jeeps, light and medium tanks, 8 artillery) wins the fight at
+  12:00-12:30 (32 → 9 units, -10,100 in losses). With no cash it can't rebuild; its harvesters go
+  (6 → 1 by 16:00), then the base (15:41-17:09). The decisive moment is that fight, not the wipe.
+- **From 2 minutes before a wipe nothing saves the base** (probe of @late-rush, runs 120-123: five
+  of our bots, 10-11 of 13 wiped whichever plays; at some moments every bot plays the identical
+  game). Probe the fight instead: `@rush-wave` (30 s before the first 6,000+ score fall after 9:00).
+- 10-minute results overrate every bot against attackers. Judge on 20 (the lab's default since
+  2026-10-16); 10 only for quick opening checks.
 
 ## OpenRA's AIs (as seen in the lab)
 
@@ -133,6 +166,80 @@ used).
 - **The best bot so far needs no API.** `ff-council-rules-eco` is the council's loops answered by
   code rules, plus the economy fix: 86% (run 63) and 16/16 against the exploiters. See
   docs/JEV_LOOPS.md.
+
+## Against other contestants' bots (`@field`, docs/EXTERNAL_BOTS.md)
+
+- **A rushing contestant breaks on v10 and destroys the live bot.**
+  - `ext-ryan` (ryanxxhuang's rule bot): infantry rush at ~0:55, then waves, focus fire, retreats.
+  - Against `ff-council-champ-v10`: 0/18, about −11k a game for the attacker.
+  - Against `ff-default`: 4/4, every game a wipe-out by 5:25.
+  - **Evidence:** runs 73-74 (experiment `field-e1`).
+- **Our champion never finishes weak opponents.**
+  - v10 drew 0-0 with OpenRA's Beginner and Easy AIs (1 game each, runs 69-70).
+  - ext-ryan destroyed the Normal and Turtle AIs within 7 minutes.
+  - A draw is replayed and scores nothing, so finishing is worth points (LAB_PLAN E3).
+
+## How v10 was beaten (Claude advising ext-ryan, runs 75-77)
+
+A rule-based contestant bot with Claude as its advisor beat `ff-council-champ-v10` 2 of 3 games.
+Unadvised, the same bot was 0/18 against it. What v10 does not handle (candidates for v11):
+- **A massed strike on its guard at 6:30-7:30.**
+  - What happened: v10 keeps its army at its ore field and defends. A 28-60-unit blob (medium
+    tanks with masses of riflemen) traded up there: +1,100 (game 1) and +3,050 (game 3).
+  - Then: the attacker went home with the lead.
+- **It does not come back from behind.**
+  - Its attack rule needs `net <= -500`, under 3 minutes left and 25+ combat units.
+  - Behind by 2,350 for 2.5 minutes (game 3), it stayed home and lost.
+  - When it did go out (game 1), its heavy tanks were caught in the open by an all-in.
+- **What it does well:**
+  - its artillery and V2s pick off units parked within range (three medium tanks, game 1);
+  - its economy wins a pure 0-0 asset race: 51.35k against 48.8k (game 2), even against a
+    5-refinery opponent.
+- **For the attacker:**
+  - economy first beats the early rush: assets 30-35k at 6:00 against ext-ryan's ~16k at
+    10:00 when it rushed;
+  - one strike with everything, not waves;
+  - no scouting into its defenses: a lost jeep was −500 that had to be won back.
+- **Evidence:** games `0f6ed344`, `f5707d53`, `09b028ce` (`lab show`, notes, transcripts in
+  `sim/lab/advise/`), against run 73 on the same seeds.
+
+## Trying to fix v10 (experiment `v11`, runs 83-114): not yet
+
+- **A scripted copy of Claude's plan beats v10 22-33% of the time.** `exploit-ryan-plan`
+  (bots/ryan_plan.py): v10 scored 25/32, 25/32 and 50/64 against it (runs 84, 91, 113). Every
+  earlier bot, ext-ryan included, scored 0 against v10. It is the first exploiter that works.
+- **Why v10 loses those games: a smaller army at the moment of the strike.**
+  - At 5:00-6:00 the scripted plan has about twice v10's army (37 against 18 units at 5:00 in
+    `1b8a1c15`).
+  - v10 sits on unspent ore (1,800 at 5:00): one barracks and one war factory can't spend its
+    income.
+  - Its "fortify" plan (enemy army unseen after 5:00) trains rocket soldiers into a mass of
+    riflemen.
+  - The strike then catches v10's army about 10 cells from its base, outside its towers
+    (lost 17-19, killed 4-8).
+- **Five candidate fixes, none better over whole games** (32-64 paired games each against the
+  scripted plan):
+
+  | Candidate | Change (defaults keep v10) | Points against the scripted plan | Note |
+  |---|---|---|---|
+  | `ff-council-v11` | mixed training when blind (`blind_production`), comeback with 10+ units (`comeback_army`, `commit_min_army`) | 25/32, same as v10 | |
+  | `ff-council-v11b` | v11 + factories from 800 unspent (`surplus`), a second barracks (`extra_barracks`) | 20/32 (net −3.3k, CI excludes 0) | worse |
+  | `ff-council-v11c` | v10 + meet attackers at our defenses when outnumbered 1.3x (`fallback`) | 25/32 | triggered in 6 of 32 games |
+  | `ff-council-v11d` | v11 + fallback | 24/32 | |
+  | `ff-council-v11-mixed` | mixed training when blind, alone | 50/64, same as v10 | fresh seeds |
+
+- **Branches show where the changes act.** From 5:30 of v10's 7 losses (`lab branch`, 2 repeats):
+  - mixed training wins 9/14 (net +4.1k), against v10's 12/28 (+0.4k);
+  - the comeback rule alone loses ground (5/14, −0.6k): attacking out of a losing position
+    mostly loses more;
+  - over whole games the gain is given back elsewhere: a small change sends the whole game down
+    another path. Small effects need hundreds of games, and branches, to see.
+- **Next:** the gap is economic and early (army size at 5:00-6:00), not a rule about fights.
+  Candidates:
+  - turn unspent ore into army earlier without delaying the economy (v11b's factories came too
+    early);
+  - scout once to see a massing army;
+  - more advised games against v10 to find what else a human-level plan exploits.
 
 ## What the exploiter search found (`lab exploit`)
 

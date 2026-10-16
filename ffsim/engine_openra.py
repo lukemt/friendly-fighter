@@ -711,25 +711,45 @@ class OpenRAEngine:
 
     def _replay_prefix(self) -> None:
         """Play the snapshot's recorded steps (the same actions at the same ticks: the same game, as
-        ``scripts/ffbench.py`` checks), keeping the last step's views for the first ``step``."""
+        ``scripts/ffbench.py`` checks), keeping the last step's views for the first ``step``.
+
+        Steps without actions are merged: the world runs straight to the tick before the next step
+        with actions, then that step is sent. The actions land on the same ticks, so it is the same
+        game, with ~12x fewer engine calls and ~13% less time for a 17-minute prefix. The check against
+        the trace: every step with actions and the last step must give the trace's views exactly; a
+        merged step only its tick (its reply holds the views of several recorded steps at once, and
+        any difference in the world would show in the next step's views)."""
         views: list = []
+
+        def send(n: int, request, tick: int, digest: str | None) -> None:
+            nonlocal views
+            request = pb.StepRequest.FromString(request.SerializeToString())
+            request.session_id = self.host_session
+            reply = self.host.step(request)
+            if self.trace is not None:
+                request.session_id = ""
+                self.trace.write(json.dumps([base64.b64encode(request.SerializeToString()).decode(), reply.tick,
+                                             views_digest(reply.observations)]) + "\n")
+            if self.prefix_diff is None and (reply.tick != tick or (digest is not None
+                                                                    and views_digest(reply.observations) != digest)):
+                self.prefix_diff = n
+            if reply.observations:
+                views = [(int(o.player[5:]), view_from_pb(o.observation)) for o in reply.observations]
+                if self.first_view_tick is None:
+                    self.first_view_tick = views[0][1]["tick"]
+            self.tick = reply.tick
+            self.steps += 1
+
         with self.step_lock:
+            skipped = None  # the last step without actions not sent yet: (n, until_tick, tick)
             for n, (request, tick, digest) in enumerate(self.prefix, 1):
-                request = pb.StepRequest.FromString(request.SerializeToString())
-                request.session_id = self.host_session
-                reply = self.host.step(request)
-                if self.trace is not None:
-                    request.session_id = ""
-                    self.trace.write(json.dumps([base64.b64encode(request.SerializeToString()).decode(), reply.tick,
-                                                 views_digest(reply.observations)]) + "\n")
-                if self.prefix_diff is None and (reply.tick != tick or views_digest(reply.observations) != digest):
-                    self.prefix_diff = n
-                if reply.observations:
-                    views = [(int(o.player[5:]), view_from_pb(o.observation)) for o in reply.observations]
-                    if self.first_view_tick is None:
-                        self.first_view_tick = views[0][1]["tick"]
-                self.tick = reply.tick
-                self.steps += 1
+                if not len(request.actions) and n < len(self.prefix):
+                    skipped = (n, request.until_tick, tick)
+                    continue
+                if skipped is not None:
+                    send(skipped[0], pb.StepRequest(until_tick=skipped[1]), skipped[2], None)
+                    skipped = None
+                send(n, request, tick, digest)
         self.prefix_views = views
 
     def step(self, until_tick: int) -> list[tuple[int, dict]]:

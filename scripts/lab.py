@@ -314,6 +314,117 @@ def cmd_branch(a, db) -> int:
     return 0
 
 
+def cmd_moments(a, db) -> int:
+    """Named sets of moments to probe from (lab/moments.py)."""
+    from lab import moments
+    from lab.branch import parse_time
+
+    if a.action == "list" or (a.action == "show" and not a.name):
+        rows = moments.sets(db)
+        if not rows:
+            print("no moment sets (lab moments find NAME --kind wiped ...)")
+        for r in rows:
+            print(f"@{r['set_name']:24} {r['n']:4} moments  ({r['kinds']})")
+        return 0
+    if not a.name:
+        raise SystemExit("name the set: lab moments find NAME ...")
+    name = a.name.lstrip("@")
+    if a.action == "show":
+        rows = moments.moments(db, name)
+        for m in rows:
+            print(f"{m['id']:5}  {report.short(m['game_id'])}  seat {m['seat']}  {clock(m['seconds'])}  {m['kind']:13} {m['why']}")
+        print(f"@{name}: {len(rows)} moments")
+        return 0
+    if a.action == "drop":
+        n = moments.drop(db, name, [int(x) for x in _split(a.ids)] if a.ids else None)
+        print(f"@{name}: dropped {n} moment(s)")
+        return 0
+    if a.action == "add":
+        if not (a.game and a.at):
+            raise SystemExit("lab moments add NAME --game GAME --at 13:00 [--seat 0] [--why ...]")
+        g = db.find_game(a.game)
+        if g is None:
+            raise SystemExit(f"no game {a.game!r}")
+        found = [{"game_id": g["id"], "seat": a.seat or 0, "seconds": parse_time(a.at) / 25, "kind": "manual",
+                  "why": a.why or ""}]
+    else:  # find
+        f = {"runs": [int(x) for x in _split(a.runs)] if a.runs else None, "bot": a.bot, "vs": a.vs, "map": a.map}
+        found = moments.find(db, a.kind, f, lead=a.lead, at=parse_time(a.at) / 25 if a.at else None, drop=a.drop,
+                             window=a.window, after=parse_time(a.after) / 25 if a.after else None,
+                             before=parse_time(a.before) / 25 if a.before else None)
+        if a.limit:
+            found = found[:a.limit]
+        for m in found:
+            print(f"  {report.short(m['game_id'])}  seat {m['seat']}  {clock(m['seconds'])}  {m['why']}")
+    if a.dry_run:
+        print(f"{len(found)} moment(s) found (dry run: not saved)")
+        return 0
+    new = moments.save(db, name, found)
+    print(f"@{name}: {new} new moment(s), {len(moments.moments(db, name))} in the set")
+    return 0
+
+
+def cmd_probe(a, db) -> int:
+    """Branch every moment of a set with the variants and the control, and compare (lab/moments.py)."""
+    from lab import moments
+
+    name = a.set.lstrip("@")
+    rule = {"stop_after": a.stop_after, "stop_quiet": a.stop_quiet}
+    if a.report:
+        print(moments.probe_report(db, name, [int(x) for x in _split(a.runs)] if a.runs else None, **rule))
+        return 0
+    variants = _split(a.variants or "")
+    if not variants:
+        raise SystemExit("name the variants: lab probe SET --variants A,B")
+    _check_bots(variants)
+    controls = {db.one("SELECT bot FROM seats WHERE game_id = ? AND position = ?", m["game_id"], m["seat"])["bot"]
+                for m in moments.moments(db, name)}
+    if set(variants) & controls:
+        print(f"note: {', '.join(sorted(set(variants) & controls))} played some of these moments: there it is the "
+              f"control, and only other moments test it as a variant")
+    opts = dict(rule, spread=a.spread, seed=a.seed, control=not a.no_control, reuse=not a.no_reuse)
+
+    def play(ids, alive, rnd=None):
+        jobs, reused = moments.probe_jobs(db, name, alive, moment_ids=ids, limit=a.limit, **opts)
+        print(f"[probe] {f'round {rnd}: ' if rnd else ''}{len(alive)} variant(s) on "
+              f"{len(ids) if ids is not None else 'the'} moments: {len(jobs)} branch(es) to play, {reused} reused",
+              flush=True)
+        if jobs:
+            _play(db, jobs, a, "probe", {**vars(a), "set": name, "round": rnd})
+
+    chosen = [int(x) for x in _split(a.moments)] if a.moments else None
+    if not a.halving:
+        play(chosen, variants)
+        print()
+        print(moments.probe_report(db, name, **rule))
+        return 0
+    if a.no_control:
+        raise SystemExit("--halving compares to the control: drop --no-control")
+    order = moments.halving_order(db, name, a.seed)
+    if chosen:
+        order = [m for m in order if m in set(chosen)]
+    if a.limit:
+        order = order[:a.limit]
+    m, alive, dropped, rnd = min(a.start, len(order)), list(variants), {}, 1
+    while True:
+        ids = order[:m]
+        play(ids, alive, rnd)
+        stats = moments.variant_stats(moments.outcomes(db, name, moment_ids=ids, **rule))
+        for v in sorted(alive, key=lambda v: -stats.get(v, {"mean": float("-inf")})["mean"]):
+            st = stats.get(v)
+            print(f"   {v:32} " + (f"{st['mean']:+8,.0f} over {st['n']} ({st['verdict']})" if st else "no pairs"))
+        if m >= len(order) or len(alive) <= 1:
+            break
+        keep = moments.survivors({v: stats[v] for v in alive if v in stats})
+        for v in alive:
+            if v not in keep:
+                dropped[v] = rnd
+        alive, m, rnd = keep, min(len(order), m * 2), rnd + 1
+    print()
+    print(moments.probe_report(db, name, dropped=dropped, **rule))
+    return 0
+
+
 POSTURES = ("defend", "gather", "commit", "retreat")
 
 
@@ -794,6 +905,85 @@ def cmd_human(a, db) -> int:
     return 1
 
 
+def cmd_external(a, db) -> int:
+    from bots import external
+
+    table = registry.load()
+    bots = [b for b in external.registered(table) if not a.names or b.name in a.names]
+    unknown = set(a.names or []) - {b.name for b in bots}
+    if unknown:
+        print(f"not contestants' bots: {', '.join(sorted(unknown))}")
+        return 1
+    seen = set()
+    for b in bots:
+        kw = b.params.get("kwargs") or {}
+        where = (kw.get("repo"), kw.get("commit"))
+        if a.action == "fetch" and where not in seen:
+            seen.add(where)
+            print(external.fetch(kw["repo"], kw.get("url") or "", kw["commit"]))
+        elif a.action == "list":
+            try:
+                external.check_checkout(kw["repo"], kw["commit"])
+                there = "ready"
+            except external.ExternalBotError as exc:
+                there = f"not ready: {exc}"
+            print(f"{b.name:18} {kw.get('repo')} @ {kw.get('commit')}  {there}")
+    return 0
+
+
+def cmd_advise(a, db) -> int:
+    from lab import advise
+
+    if a.action == "serve":
+        a.run_id = a.run_id or None
+        return advise.serve(a)
+    if a.action == "status":
+        try:
+            print(advise.SESSION_FILE.read_text())
+        except OSError:
+            print("no advise session")
+            return 1
+        print(advise.client(["status"]))
+        return 0
+    if a.action == "stop":
+        print(advise.client(["quit"]))
+        try:
+            os.kill(json.loads(advise.SESSION_FILE.read_text())["pid"], 0)
+        except (OSError, ValueError, KeyError):
+            advise.SESSION_FILE.unlink(missing_ok=True)  # (a session that died without cleaning up)
+        return 0
+    if advise.SESSION_FILE.exists():
+        print("an advise session is running ('lab advise stop' first, or 'lab adv status')")
+        return 1
+    if not a.bot:
+        print("which bot? lab advise start --bot ext-ryan-claude --vs ai-normal")
+        return 1
+    _check_bots([a.bot, a.vs])
+    run_id = db.start_run("advise", _command(), vars(a), note=a.note or "", experiment=a.experiment or "")
+    log = LAB_DIR / "advise" / f"session-{run_id}.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [sys.executable, str(Path(__file__).resolve()), "advise", "serve", "--bot", a.bot, "--vs", a.vs,
+           "--map", a.map, "--seat", str(a.seat), "--minutes", str(a.minutes), "--run-id", str(run_id)]
+    if a.seed is not None:
+        cmd += ["--seed", str(a.seed)]
+    subprocess.Popen(cmd, stdout=open(log, "ab"), stderr=subprocess.STDOUT, start_new_session=True, cwd=ROOT)
+    for _ in range(240):
+        time.sleep(0.25)
+        if advise.SESSION_FILE.exists():
+            print(f"advise session started (run {run_id}): {a.bot} vs {a.vs} on {a.map}, seat {a.seat}")
+            print("next: lab adv wait  (then: brief LAYER | answer JSON | skip | look | log | detach; docs/LAB.md)")
+            return 0
+    print(f"the session did not start; see {log}")
+    return 1
+
+
+def cmd_adv(a, db) -> int:
+    from lab import advise
+
+    print(advise.client(a.argv))
+    return 0
+
+
 def cmd_h(a, db) -> int:
     from lab import human
 
@@ -818,7 +1008,7 @@ def main() -> int:
 
     def playing(sp):
         sp.add_argument("--map", default="all", help="a map, maps separated by commas, or all (rotating)")
-        sp.add_argument("--minutes", type=float, default=10)
+        sp.add_argument("--minutes", type=float, default=20)
         sp.add_argument("--seed", type=int, default=1)
         sp.add_argument("--workers", type=int, default=None, help="games at once (default: the CPU quota)")
         sp.add_argument("--note", default="")
@@ -833,7 +1023,7 @@ def main() -> int:
     s.add_argument("--knobs", help="ff: JSON knobs")
     s.add_argument("--factory", help="module: package.module:function")
     s.add_argument("--kwargs", help="module: JSON keyword arguments")
-    s.add_argument("--type", default="normal", help="ai: normal/rush/turtle/naval")
+    s.add_argument("--type", default="normal", help="ai: normal/rush/turtle/naval/beginner/easy/medium")
     s.add_argument("--think", default=str(registry.DEFAULT_THINK), help="seconds of game time per decision")
     s.add_argument("--desc")
     s.add_argument("--tags")
@@ -892,6 +1082,45 @@ def main() -> int:
     s.add_argument("--repeats", type=int, default=3)
     s.add_argument("--stop-after", type=float, default=None, help="end each branch this many seconds later")
     s.add_argument("--no-control", action="store_true", help="don't add the original bot as a control branch")
+    playing(s)
+
+    s = sub.add_parser("moments", help="named sets of moments to probe from (find, add, show, list, drop)")
+    s.add_argument("action", choices=["find", "add", "show", "list", "drop"])
+    s.add_argument("name", nargs="?", help="the set (with or without @)")
+    s.add_argument("--kind", default="wiped", choices=["wiped", "building-lost", "swing", "at"])
+    s.add_argument("--runs", help="find in these runs (separated by commas; default: every game)")
+    s.add_argument("--bot", help="the seat to branch: this bot's")
+    s.add_argument("--vs", help="only games against this bot")
+    s.add_argument("--map")
+    s.add_argument("--lead", type=float, help="seconds before the event (wiped 120, building-lost 30, swing 15)")
+    s.add_argument("--at", help="kind at: this game time; add: the moment's time")
+    s.add_argument("--drop", type=int, default=5000, help="swing: the score fall that counts")
+    s.add_argument("--window", type=float, default=60.0, help="swing: within this many seconds")
+    s.add_argument("--after", help="only moments after this game time (e.g. 10:00)")
+    s.add_argument("--before", help="only moments before this game time")
+    s.add_argument("--limit", type=int)
+    s.add_argument("--dry-run", action="store_true", help="find: list, don't save")
+    s.add_argument("--game", help="add: the game")
+    s.add_argument("--seat", type=int, help="add: the seat to branch (default 0)")
+    s.add_argument("--why", help="add: what the moment is")
+    s.add_argument("--ids", help="drop: only these moment ids (default: the whole set)")
+
+    s = sub.add_parser("probe", help="branch every moment of a set with variants and the control, and compare")
+    s.add_argument("set")
+    s.add_argument("--variants", help="bots for the branched seat, separated by commas")
+    s.add_argument("--stop-after", type=float, default=300.0, help="end each branch this many seconds later")
+    s.add_argument("--stop-quiet", type=float, default=None,
+                   help="also end a branch once nothing was killed or lost for this many seconds (decided)")
+    s.add_argument("--spread", type=int, default=1, help="branch each moment at this many points 2 s apart")
+    s.add_argument("--no-control", action="store_true")
+    s.add_argument("--limit", type=int, help="only the first N moments of the set")
+    s.add_argument("--moments", help="only these moments (ids from lab moments show, separated by commas)")
+    s.add_argument("--halving", action="store_true",
+                   help="successive halving: all variants on --start moments, the better half on twice as many, ...")
+    s.add_argument("--start", type=int, default=3, help="--halving: moments in the first round")
+    s.add_argument("--no-reuse", action="store_true", help="play branches again even if played the same way before")
+    s.add_argument("--report", action="store_true", help="print the report of what was played, play nothing")
+    s.add_argument("--runs", help="--report: only these probe runs")
     playing(s)
 
     s = sub.add_parser("look", help="the board at a moment of a recorded game")
@@ -971,7 +1200,7 @@ def main() -> int:
     s.add_argument("--vs", default="ai-normal")
     s.add_argument("--map", default="trapped")
     s.add_argument("--seat", type=int, default=0)
-    s.add_argument("--minutes", type=float, default=10)
+    s.add_argument("--minutes", type=float, default=20)
     s.add_argument("--seed", type=int, default=None)
     s.add_argument("--autopilot", default="macro", choices=["off", "macro", "full"])
     s.add_argument("--name", default="claude")
@@ -1003,7 +1232,7 @@ def main() -> int:
     s.add_argument("bot", nargs="?")
     s.add_argument("--run", type=int)
     s.add_argument("--why")
-    s = sub.add_parser("curves", help="each bot's army, harvesters and assets at 3, 6 and 9 minutes")
+    s = sub.add_parser("curves", help="each bot's army, harvesters and assets at 3, 6, 9, 14 and 19 minutes")
     s.add_argument("--runs", help="runs separated by commas (default: every game)")
     s.add_argument("--bots", help="bots separated by commas")
     s = sub.add_parser("dashboard", help="the database as an HTML page (sim/lab/dashboard.html)")
@@ -1015,16 +1244,33 @@ def main() -> int:
     s.add_argument("--game")
     s.add_argument("--yes", action="store_true")
 
+    s = sub.add_parser("external", help="contestants' bots: fetch their pinned code / list them")
+    s.add_argument("action", choices=["fetch", "list"])
+    s.add_argument("names", nargs="*", help="bots (default: every contestant's bot)")
+    s = sub.add_parser("advise", help="a game with Claude as a bot's advisor: start / status / stop")
+    s.add_argument("action", choices=["start", "status", "stop", "serve"])
+    s.add_argument("--bot", help="the advised bot (e.g. ext-ryan-claude)")
+    s.add_argument("--vs", default="ai-normal")
+    s.add_argument("--map", default="trapped")
+    s.add_argument("--seat", type=int, default=0)
+    s.add_argument("--minutes", type=float, default=20)
+    s.add_argument("--seed", type=int, default=None)
+    s.add_argument("--run-id", type=int)
+    s.add_argument("--note", default="")
+    s.add_argument("--experiment", default="")
+    s = sub.add_parser("adv", help="a command for the advisor desk (see lab/advise.py)")
+    s.add_argument("argv", nargs=argparse.REMAINDER)
+
     s = sub.add_parser("h", help="a command for the human seat (see lab/human.py)")
     s.add_argument("argv", nargs=argparse.REMAINDER)
 
     a = p.parse_args()
     db = LabDB()
-    handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch,
+    handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch, "moments": cmd_moments, "probe": cmd_probe,
                 "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
                 "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "champion": cmd_champion, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
-                "h": cmd_h}
+                "h": cmd_h, "external": cmd_external, "advise": cmd_advise, "adv": cmd_adv}
     return handlers[a.command](a, db)
 
 

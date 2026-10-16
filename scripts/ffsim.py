@@ -294,7 +294,7 @@ def cmd_serve(a) -> int:
                         think=think_arg(a.think), seed=getattr(a, "seed", None), prefetch=prefetch)
     server = serve(platform, a.port)
     print(f"[ffsim] platform at http://127.0.0.1:{server.server_address[1]} (maps {sorted(Rules.load().maps)})")
-    print("  POST /sim/matches {\"map_id\": \"trapped\", \"max_minutes\": 10, \"seats\": [{\"kind\": \"agent\", \"key\": KEY}, "
+    print("  POST /sim/matches {\"map_id\": \"trapped\", \"max_minutes\": 20, \"seats\": [{\"kind\": \"agent\", \"key\": KEY}, "
           "{\"kind\": \"ai:normal\"}]}")
     try:
         while True:
@@ -332,7 +332,7 @@ def main() -> int:
     r.add_argument("--seat0", default="agent:A")
     r.add_argument("--seat1", default="agent:A")
     r.add_argument("--map", default="trapped", choices=MAPS + ["random"])
-    r.add_argument("--minutes", type=int, default=10)
+    r.add_argument("--minutes", type=int, default=20)
     r.add_argument("--games", type=int, default=1)
     r.add_argument("--parallel", type=int, default=None,
                    help="games at once (default: virtual time, the CPU quota; real time, all)")

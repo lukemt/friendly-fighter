@@ -10,6 +10,8 @@ and played on from there with other bots. The command line is `scripts/lab.py` (
 alias lab='.venv/bin/python scripts/lab.py'
 ```
 
+**Where it goes next:** [LAB_PLAN.md](LAB_PLAN.md) (infrastructure, bots to add, experiments).
+
 ## Quick start
 
 ```bash
@@ -22,6 +24,8 @@ lab games --bot ff-default --limit 10             # then: lab show <game>
 lab human start --vs ai-normal                    # play yourself: lab h go 10, lab h attack 60 66 all ...
 lab look <game> --at 6:30                         # the board at that moment of a recorded game
 lab branch <game> --at 6:00 --variants ff-turtle,ff-rush --repeats 3 --stop-after 120
+lab moments find late-rush --runs 116 --vs ai-rush --kind wiped --after 10:00   # a set of moments
+lab probe late-rush --variants ff-turtle,ff-guard-turtle --stop-after 180      # every moment, each variant vs the control
 lab gate ff-turtle --champion ff-default --games 6
 lab dashboard                                     # sim/lab/dashboard.html: ratings, games with charts, runs, notes
 lab import                                        # the games our runtime played on the platform
@@ -36,7 +40,7 @@ lab status                                        # the database, engine lanes, 
 |---|---|---|
 | `ff` | our agent (`agent/agent.py`, the tournament bot) | `knobs`: posture, attack_threshold, unit_focus, target |
 | `module` | any agent factory | `factory: "package.module:function"`, `kwargs` |
-| `ai` | OpenRA's own AI, inside the engine | `type`: normal, rush, turtle, naval |
+| `ai` | OpenRA's own AI, inside the engine | `type`: normal, rush, turtle, naval, beginner, easy, medium |
 | `human` | you (or Claude) at the controls | (`lab human`) |
 
 **Bots in the list today:**
@@ -46,7 +50,10 @@ lab status                                        # the database, engine lanes, 
   (lab processes blank the key otherwise). Its think time is `measured`, so its real latency is game time.
 - **Weak baselines:** `builder` builds a base and never an army; `idle` never acts; `chaotic` has our
   economy, but sends its army to random places every 15-40 s (an erratic, LLM-like player).
-- **OpenRA's AIs:** `ai-normal`, `ai-rush`, `ai-turtle` and `ai-naval`.
+- **OpenRA's AIs:** `ai-normal`, `ai-rush`, `ai-turtle` and `ai-naval`; weaker: `ai-beginner`, `ai-easy`
+  and `ai-medium` (suite `@ais-all` has all seven).
+- **Other contestants' bots** (`@field`, docs/EXTERNAL_BOTS.md): `ext-ryan` (ryanxxhuang's rule bot) and
+  `ext-ryan-claude` (the same bot with Claude as its advisor, see "Claude as a bot's advisor").
 
 Each bot has a `think` value: the game time each of its decisions costs, which is 5 ms for our agent.
 A slower bot is a bigger number, not a sleep, so it costs no wall time.
@@ -57,6 +64,29 @@ Add a bot:
 lab bots add ff-big-waves --kind ff --knobs '{"attack_threshold": 16, "unit_focus": "vehicles"}' --desc "..." --tags ours
 lab bots add my-bot --kind module --factory bots.my_bot:create_agent
 ```
+
+### Other contestants' bots
+
+A bot built on the AltruAgent starter is a `module` bot with the factory `bots.external:create_agent`
+and its repository pinned in `kwargs` (`repo`, `url`, `commit`; `env` for its settings; `stubs` to
+switch off one of its functions). Its code is cloned into `sim/external/<repo>` (gitignored, never
+copied into ours) and played in-process:
+
+```bash
+lab external fetch          # clone every contestant's bot at its pinned commit
+lab external list           # which are ready
+```
+
+What `bots/external.py` does for each seat:
+- **Its own copy, under another name.** Their `agent` package would clash with ours.
+- **The game's clock.** Their `time.monotonic()` is the game time, tick / 25, so their timers keep
+  their meaning in virtual time.
+- **Its own environment.** `env` overlays the process environment for that seat only.
+- **No API ever.** `anthropic` is a stub.
+
+Their log lines are kept per seat (written to `sim/lab/external/<bot>/` with `LAB_EXTERNAL_LOGS=1`,
+and always in advise sessions). A changed checkout or another commit is refused, so a bot's version
+always says what played.
 
 A new kind of bot is any module with a `create_agent()` that returns what the runtime expects (an
 object with `choose_action(state, context)`, as `agent/agent.py`).
@@ -175,7 +205,7 @@ size would need. `exploit` samples settings of the scripted bot (`knobs:posture=
 best again, and prints the command to keep the winner as a sparring partner.
 
 ```bash
-lab play A B --games 12 [--map all|trapped|sidestep,trapped] [--minutes 10] [--seed 1] [--workers 4]
+lab play A B --games 12 [--map all|trapped|sidestep,trapped] [--minutes 20] [--seed 1] [--workers 4]
 lab league BOT... [--tag ours] --games 60 [--balance]
 lab gate CANDIDATE --champion ff-default --baselines ai-normal,ai-rush,ai-turtle --games 6
 ```
@@ -209,8 +239,9 @@ goes through the virtual clock and JSON, as on the wire. Checked against the rea
   matched it exactly. The runtime's processes can drift a little; the lab doesn't.
 
 **Cost.**
-- **Time:** a 10-minute game takes 15-25 s in a worker, so with 4 workers about 6 s a game, or
-  ~600 games an hour.
+- **Time:** games are 20 minutes by default, the platform's length (tournament games are 20;
+  pass `--minutes 10` for quick checks). A 10-minute game takes 15-25 s in a worker, a
+  20-minute one about twice that, so with 4 workers about 12 s a game, or ~300 games an hour.
 - **Disk:** a game is ~40 KB of trace plus its database rows.
 
 ## Playing yourself
@@ -273,6 +304,47 @@ terrain. `map X Y R` zooms to full size around a cell.
 Your game is saved like any other lab game: the bot is `human-<name>`, and every command and its
 answer is in `human_log`. One human session at a time; it runs in the background
 (`sim/lab/human/session-<run>.log`) until `lab h quit`.
+
+## Claude as a bot's advisor
+
+A bot that asks a model for advice can ask Claude instead. Each request becomes a question at the
+desk, and the game waits for the answer. `ext-ryan-claude` is ryanxxhuang's bot with its own
+three-layer Claude advisor:
+- **strategy:** posture, unit mix, build targets, raids, the plan. Every 60 s here.
+- **tactical:** production and the army's action and target. Every 20 s.
+- **fast:** micro. Off.
+
+The prompts, payloads and answer handling are theirs, unchanged; Claude takes the model's place.
+
+```bash
+lab advise start --bot ext-ryan-claude --vs ai-normal [--map trapped] [--seat 0] [--seed N]
+lab adv wait                 # the next question: layer, game time, the payload, the fields to answer
+lab adv brief strategy       # that layer's system prompt (their playbook and role): read once per layer
+lab adv answer '{...}'       # checked against the question's JSON schema; refused with the reasons
+lab adv skip                 # no answer: the bot keeps its last instructions
+lab adv look | log [N]       # the board now | the bot's log lines (it logs each answer it applied)
+lab adv detach               # no more questions: the bot finishes the game on its rules
+lab advise stop
+```
+
+- **No game time passes while a question waits** (the seat's think is `paused`). The answer is
+  applied in the same decision, so this is an advisor without latency: an upper bound on what
+  advice can add.
+- **The game is a normal lab game**, saved with a note pointing to the transcript
+  (`sim/lab/advise/<game>.jsonl`: every question's payload and the answer).
+- **The pacing is the bot's setting** (`env` in its entry: `STRATEGY_EVERY`, `TACTICAL_EVERY`,
+  `FAST_MODEL=off`). About 40 questions make a 10-minute game.
+- **One session at a time**, running in the background (`sim/lab/advise/session-<run>.log`).
+- **Generic desk:** `lab/advise.py` `Desk.ask(system, payload, schema)` serves any bot that can
+  put its question as a JSON schema.
+- **Scripted advisors:** `advisor: "package.module:Class"` in an external bot's kwargs puts code at
+  the desk instead of Claude, with no pausing. `exploit-ryan-plan` is ext-ryan advised by
+  `bots/ryan_plan.py` `PlanDesk`, the plan Claude played against v10 (runs 75-77):
+  - economy first;
+  - one massed strike on the ore-field guard, clear of known defenses;
+  - hold a lead, all-in when behind late.
+
+  It wins 22-33% against v10, where every earlier bot won none.
 
 ## Looking back
 
@@ -367,6 +439,54 @@ its own. A game is also chaotic after a big fight: one recorded game is a single
 moment, and the control branch can end far from the original. `lab coach` prints this check
 ("fidelity") and saves no label when they disagree.
 
+## Moments and probes: an idea against the situations it is for
+
+The first stage of the experiment funnel (LAB_PLAN.md, Part 0). A **moment set** is a named list of
+moments (a seat of a recorded game at a time) that share a situation; a **probe** branches all of
+them with each variant and compares it to the control moment by moment.
+
+```bash
+lab moments find NAME --kind wiped|building-lost|swing|at [--runs 116] [--bot B] [--vs ai-rush] [--map M]
+                 [--lead S] [--at 13:00] [--drop 5000 --window 60] [--after 10:00] [--before T] [--limit N] [--dry-run]
+lab moments add NAME --game G --at 13:00 [--seat 0] [--why "..."]
+lab moments list | show NAME | drop NAME [--ids 3,4]
+lab probe NAME --variants A,B [--stop-after 300] [--stop-quiet 45] [--spread 1] [--limit N] [--workers W]
+lab probe NAME --variants A,B,C,D --halving [--start 3]   # successive halving (below)
+lab probe NAME --report [--stop-after 300] [--stop-quiet 45] [--runs 119,120]
+```
+
+- **Finders** (one moment per game and seat at most; only our bots' seats, games with a trace):
+  - `wiped`: the seat lost its base, `--lead` (120 s) before the end;
+  - `building-lost`: its first lost building (after `--after`), 30 s before;
+  - `swing`: its score fell by `--drop` within `--window` s; 15 s before the fall began;
+  - `at`: every game at `--at`, for situations that aren't events (standoffs).
+- **The control** is the bot that played the moment, with the same fresh memory as the variants
+  (see Branching), so the comparison is fair. Moments of different bots share one control row.
+- **The report** per variant: the mean score change since the moment, the paired difference to the
+  control at the same moments with a 95% t-interval (a verdict, BETTER/WORSE/unclear, from 3 pairs
+  on), in how many moments it did better, how often the seat was wiped, W-D-L at the stop, and how
+  long the branches lasted. Branches of a set from earlier probes count too, for the same stop rule
+  and only at the bots' current versions (a changed bot is another variant); `--runs` narrows it.
+- **Reuse:** a branch already played the same way (same moment and offset, bots at their current
+  versions, seed, stop rule, engine build) is not played again: one moment with the same bots
+  replays one way, so the recorded result is the result. A control is played once per moment,
+  ever. `--no-reuse` plays everything.
+- **`--stop-quiet S`:** also ends a branch once nothing was killed or lost for S seconds: the
+  situation is decided (a push beaten off, a standoff). A wipe-out ends it anyway.
+- **`--halving`:** successive halving for many ideas. Round 1 plays every variant on `--start`
+  moments (3; the set in a fixed shuffled order), then the better half by paired difference (minus
+  any already WORSE) plays on twice as many, and so on until the set is used up or one is left.
+  With reuse, each round plays only its new moments. 10 variants on 13 moments: ~45 branches
+  instead of 130.
+- **Cost:** a branch replays the game up to the moment first, and that replay is mostly the engine
+  simulating the world: 17 minutes take ~26 s on an idle machine (~21 s of it engine ticks; ~44 s
+  with 4 other games running), 5 minutes ~10 s. Steps without orders are merged in the replay (~13%
+  faster; checked against the trace at every step with orders). OpenRA's own AI thinks ~6% of that
+  time (`RL_BOT_TIMING=1`), so replaying with the AI asleep, as OpenRA loads a save game, would gain
+  little. A late branch costs about a game played to its moment: probes save by playing only the
+  situations an idea is for, reuse, halving and early stops; engine snapshots would change the rest
+  (LAB_PLAN L14).
+
 ## Experiments and notes
 
 ```bash
@@ -386,10 +506,13 @@ lab note --game <game> "the wave walked into two pillboxes at 6:29"
 | `sim/lab/traces/<game>.trace.gz` | each game's engine trace (replay, look, branch) |
 | `sim/lab/logs/` | the workers' logs (the bots' log lines) |
 | `sim/lab/human/` | the human session's address and logs |
+| `sim/lab/advise/` | the advise session's address and logs, and each advised game's transcript |
+| `sim/lab/external/` | contestants' bots' log lines and their advisors' last prompts |
+| `sim/external/` | contestants' repositories at their pinned commits (`lab external fetch`) |
 | `sim/lab/dashboard.html` | the dashboard (`lab dashboard`) |
 | `sim/lab/jev/` | the Jev bots' call logs (`lab jev`) |
 | `lab/bots.json` | the bot registry (committed) |
-| `bots/` | bots of our own (`jev_bot.py`, `example.py`); `bots/frozen/`: frozen copies |
+| `bots/` | bots of our own (`jev_bot.py`, `example.py`); `bots/frozen/`: frozen copies; `bots/external.py`: contestants' bots |
 
 Database tables:
 

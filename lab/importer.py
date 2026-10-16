@@ -1,8 +1,9 @@
 """Games played on the real platform, into the lab database (``lab import``).
 
 Our runtime records every match it plays (``agent/recorder.py``: ``recordings/<session>/seat<N>.jsonl.gz``,
-every state it saw, every move and answer). This turns each one into a lab game: the seats (ours as
-``ff-live``, an opponent by its platform name as ``platform:<name>``), the result, the score every
+every state it saw, every move and answer). This turns each one into a lab game: the seats (ours by
+the bot the recording names, an opponent by its platform name as ``platform:<name>``), the result (from
+the last state, else from the runtime's final ``get_result`` in ``wire-*.jsonl.gz``), the score every
 5 s, the events and every batch, so the same reports work on tournament and Testing games. Local
 simulator recordings (``sim-*``) are skipped: lab games are recorded by the lab. Importing again
 skips games already in the database, unless they had no result yet.
@@ -20,6 +21,8 @@ from . import ROOT
 from .capture import SAMPLE_TICKS, _timeline_row, summarize_orders
 
 RECORDINGS = ROOT / "recordings"
+# Recordings made before the recorder wrote the bot's name: which bot was live from when (epoch seconds).
+LIVE_BOTS = [(0.0, "ff-live"), (1792100418.0, "ff-council-champ-v10")]  # 2026-10-15 23:50:18 CEST: the champion
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
@@ -43,8 +46,11 @@ def _seat_file(game_id: str, path: Path) -> dict | None:
     pending: dict | None = None
     last_raw = None
     times: list[float] = []
+    bot = None
     for r in _records(path):
         kind = r.get("kind")
+        if kind == "config":
+            bot = r.get("bot")
         if isinstance(r.get("t"), (int, float)):
             times.append(r["t"]) if not times else (times.append(r["t"]) if len(times) < 2 else times.__setitem__(1, r["t"]))
         if kind == "state":
@@ -83,8 +89,23 @@ def _seat_file(game_id: str, path: Path) -> dict | None:
         return None
     timeline = [(t[0], pos) + tuple(t[2:]) for t in timeline]
     events = [(e[0], pos) + tuple(e[2:]) for e in events]
-    return {"pos": pos, "states": states, "first": states[0], "last": last_raw or states[-1], "timeline": timeline,
+    return {"pos": pos, "bot": bot, "states": states, "first": states[0], "last": last_raw or states[-1], "timeline": timeline,
             "events": events, "decisions": decisions, "t0": times[0] if times else None, "t1": times[-1] if times else None}
+
+
+def _wire_result(folder: Path) -> dict | None:
+    """The runtime's last terminal ``get_result`` answer in this match's wire logs."""
+    found = None
+    for path in sorted(folder.glob("wire-*.jsonl.gz")):
+        for r in _records(path):
+            answer = r.get("answer")
+            if r.get("tool") == "get_result" and isinstance(answer, dict) and answer.get("is_terminal"):
+                found = answer
+    return found
+
+
+def _live_bot(t0: float | None) -> str:
+    return [name for since, name in LIVE_BOTS if (t0 or 0) >= since][-1]
 
 
 def import_recordings(db, root: Path = RECORDINGS, *, run_id: int | None = None) -> list[str]:
@@ -102,12 +123,12 @@ def import_recordings(db, root: Path = RECORDINGS, *, run_id: int | None = None)
         if old is not None:
             for table in ("games", "seats", "timeline", "events", "decisions"):
                 db.conn.execute(f"DELETE FROM {table} WHERE {'id' if table == 'games' else 'game_id'} = ?", (gid,))
-        _save(db, gid, seats, run_id)
+        _save(db, gid, seats, run_id, _wire_result(folder))
         done.append(gid)
     return done
 
 
-def _save(db, gid: str, seats: list[dict], run_id: int | None) -> None:
+def _save(db, gid: str, seats: list[dict], run_id: int | None, wire: dict | None = None) -> None:
     ours = {s["pos"]: s for s in seats}
     any_seat = seats[0]
     last = max((s["last"] for s in seats), key=lambda raw: ((raw.get("observation") or {}).get("tick") or 0))
@@ -117,6 +138,12 @@ def _save(db, gid: str, seats: list[dict], run_id: int | None) -> None:
     winner = None
     if isinstance(result.get("winner_seat"), str) and result["winner_seat"].startswith("Multi"):
         winner = int(result["winner_seat"][5:])
+    elif not result and wire and wire.get("status") == "completed" and len(ours) == 1:
+        # Only our seat's view: our return says who won (1 win, 0 loss, 0.5 draw).
+        pos = next(iter(ours))
+        mine = wire.get("your_return")
+        result = {"reason": wire.get("termination_reason"), "outcome": "decided"}
+        winner = pos if mine == 1.0 else (1 - pos) if mine == 0.0 else None
     outcome = "unknown" if not result else ("no_result" if result.get("outcome") == "no_result" else
                                             "draw" if winner is None else "decisive")
     first_tick = min((s["first"].get("observation") or {}).get("tick") or 0 for s in seats)
@@ -136,7 +163,7 @@ def _save(db, gid: str, seats: list[dict], run_id: int | None) -> None:
         player = next((p for p in players if p.get("seat") == f"Multi{pos}"), {})
         if mine is not None:
             mil = ((mine["last"].get("observation") or {}).get("military")) or {}
-            bot, kind = "ff-live", "platform"
+            bot, kind = mine.get("bot") or _live_bot(mine.get("t0")), "platform"
         else:
             other = next(iter(ours.values()))
             om = ((other["last"].get("observation") or {}).get("military")) or {}

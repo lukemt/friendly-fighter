@@ -67,6 +67,9 @@ def knobs_from_dict(wanted: dict | None) -> Knobs:
 
 
 class FriendlyFighter:
+    #: The bot's name in the recordings (and so in ``lab import``); ``ff-live`` when knobs change it.
+    BOT = "ff-default"
+
     def __init__(self, *, knobs: Knobs | None = None, think_seconds: float | None = None,
                  record: bool | None = None, controls: bool = True) -> None:
         """``knobs``/``think_seconds``: as ``FF_KNOBS``/``FF_THINK_MS`` (which they override) for one agent
@@ -79,7 +82,8 @@ class FriendlyFighter:
         self._commander: Commander | None = None
         self._fallback: Any = None
         self._fallback_ready = False
-        self._recorder = Recorder(enabled=record)
+        custom = knobs is not None or bool(os.environ.get("FF_KNOBS"))
+        self._recorder = Recorder(enabled=record, bot="ff-live" if custom and self.BOT == "ff-default" else self.BOT)
         self._remote: RemoteSeat | None = None
         self._probe: Probe | None = None
         self._probe_checked = False

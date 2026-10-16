@@ -362,8 +362,8 @@ def pairs_matrix(db, f: dict, bots: list[str] | None = None) -> str:
 
 
 def net_by_minute(db, game_ids: list[str], bot: str) -> list[float | None]:
-    """Mean net score of ``bot`` at minutes 1..10 over these games."""
-    sums, counts = [0.0] * 11, [0] * 11
+    """Mean net score of ``bot`` at minutes 1..20 over these games."""
+    sums, counts = [0.0] * 21, [0] * 21
     for gid in game_ids:
         g = db.one("SELECT info FROM games WHERE id = ?", gid)
         start = json.loads(g["info"] or "{}").get("start_tick") or 0
@@ -372,13 +372,13 @@ def net_by_minute(db, game_ids: list[str], bot: str) -> list[float | None]:
             if s["bot"] != bot:
                 continue
             series = _net_series(db, gid, pos, 1 - pos, s["kind"])
-            for m in range(1, 11):
+            for m in range(1, 21):
                 t = start + m * 60 * TPS
                 hit = [n for tt, n, _ in series if tt <= t]
                 if hit and series and series[-1][0] >= t - 125:
                     sums[m] += hit[-1]
                     counts[m] += 1
-    return [round(sums[m] / counts[m]) if counts[m] else None for m in range(1, 11)]
+    return [round(sums[m] / counts[m]) if counts[m] else None for m in range(1, 21)]
 
 
 def unit_costs() -> dict[str, int]:
@@ -423,7 +423,7 @@ def observer(db, f: dict, focus: list[str] | None = None, worst: int = 5) -> str
         out.append(f"== {bot}: {n} games, {wins} W {draws} D {n - wins - draws} L, mean net "
                    f"{round(sum(s['net'] or 0 for s in mine) / n)}")
         curve = net_by_minute(db, list({s["game_id"] for s in mine}), bot)
-        out.append("   mean net at minute 1..10: " + " ".join("-" if v is None else f"{v:+d}" for v in curve))
+        out.append("   mean net at minute 1..20: " + " ".join("-" if v is None else f"{v:+d}" for v in curve))
         if mine[0]["kind"] != "ai":
             lost = Counter()
             killed_n = 0
@@ -650,7 +650,7 @@ def compare_report(db, run_id: int, candidates: list[str], baselines: list[str])
     return "\n".join(out)
 
 
-def curves(db, runs: list[int] | None = None, bots: list[str] | None = None, minutes=(3, 6, 9)) -> str:
+def curves(db, runs: list[int] | None = None, bots: list[str] | None = None, minutes=(3, 6, 9, 14, 19)) -> str:
     """The hands, not the result: each bot's army value, harvesters and assets at these minutes,
     averaged over its games (from the 5 s timeline)."""
     where, args = ["g.branch_of IS NULL"], []

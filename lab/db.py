@@ -12,7 +12,8 @@ Tables:
 - ``events``: units and buildings made and lost, enemies spotted and killed, attacks;
 - ``decisions``: every batch of orders, its reasoning and verdicts (one compressed blob per seat);
 - ``notes``, ``experiments``: what we wrote down about games, runs and experiments;
-- ``human_log``: every command given at a human seat.
+- ``human_log``: every command given at a human seat;
+- ``moments``: named sets of moments (a seat of a game at a time) to probe from (``lab/moments.py``).
 
 Several processes write (``lab.batch`` workers): WAL mode, and each game is one transaction.
 """
@@ -72,6 +73,10 @@ CREATE TABLE IF NOT EXISTS experiments (
 );
 CREATE TABLE IF NOT EXISTS human_log (
   game_id TEXT, wall REAL, tick INTEGER, command TEXT, answer TEXT
+);
+CREATE TABLE IF NOT EXISTS moments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, set_name TEXT, game_id TEXT, seat INTEGER, seconds REAL, kind TEXT,
+  why TEXT, created REAL, UNIQUE (set_name, game_id, seat, seconds)
 );
 CREATE INDEX IF NOT EXISTS seats_bot ON seats (bot);
 CREATE INDEX IF NOT EXISTS games_run ON games (run_id);

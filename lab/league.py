@@ -20,14 +20,14 @@ def _job(a: str, b: str, *, map_id: str, seed: int, minutes: int, label: str, sw
     return {"bots": [b, a] if swap else [a, b], "map": map_id, "seed": seed, "minutes": minutes, "label": label}
 
 
-def matchup(a: str, b: str, games: int, *, maps: list[str] = MAPS, seed: int = 1, minutes: int = 10,
+def matchup(a: str, b: str, games: int, *, maps: list[str] = MAPS, seed: int = 1, minutes: int = 20,
             label: str = "") -> list[dict]:
     return [_job(a, b, map_id=maps[i % len(maps)], seed=seed * 10007 + i, minutes=minutes,
                  label=label or f"{a} vs {b}", swap=bool(i % 2)) for i in range(games)]
 
 
 def compare(candidates: list[str], baselines: list[str], games: int, *, maps: list[str] = MAPS, seed: int = 1,
-            minutes: int = 10) -> list[dict]:
+            minutes: int = 20) -> list[dict]:
     """Every candidate against every baseline, ``games`` each, on the same seeds (paired)."""
     jobs = []
     for k, base in enumerate(baselines):
@@ -40,7 +40,7 @@ def compare(candidates: list[str], baselines: list[str], games: int, *, maps: li
 
 
 def league(bots: list[str], games: int, *, kinds: dict[str, str], maps: list[str] = MAPS, seed: int = 1,
-           minutes: int = 10, played: dict[tuple[str, str], int] | None = None, label: str = "league") -> list[dict]:
+           minutes: int = 20, played: dict[tuple[str, str], int] | None = None, label: str = "league") -> list[dict]:
     """``kinds``: each bot's kind (two OpenRA AIs can't play each other here: the lab steps the
     engine for agents). ``played``: games each pair already has (they are evened out)."""
     pairs = [tuple(sorted(p)) for p in itertools.combinations(sorted(set(bots)), 2)
@@ -63,7 +63,7 @@ def league(bots: list[str], games: int, *, kinds: dict[str, str], maps: list[str
 
 
 def gate(candidate: str, champion: str, baselines: list[str], games: int, *, maps: list[str] = MAPS, seed: int = 1,
-         minutes: int = 10) -> list[dict]:
+         minutes: int = 20) -> list[dict]:
     """``games`` against the champion, and ``games`` each for candidate and champion against every baseline
     (the same seeds for both)."""
     jobs = [_job(candidate, champion, map_id=maps[i % len(maps)], seed=seed * 10007 + i, minutes=minutes,

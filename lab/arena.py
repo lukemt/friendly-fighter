@@ -56,11 +56,33 @@ class _Horizon:
             match._tiebreak("horizon")
 
 
+class _Quiet:
+    """Ends a branch on the score once it is decided: no seat has killed or lost anything for
+    ``seconds`` (counted from the branch's start at the earliest). A wipe-out ends it anyway."""
+
+    def __init__(self, seconds: float) -> None:
+        self.seconds = seconds
+        self.last: dict[int, tuple] = {}
+        self.changed: float | None = None
+
+    def on_view(self, match, seat, view) -> None:
+        if match.phase != "playing":
+            return
+        now = match.game_seconds()
+        m = view.get("military") or {}
+        score = (m.get("kills_cost"), m.get("deaths_cost"))
+        if self.changed is None or self.last.get(seat.position) not in (None, score):
+            self.changed = now
+        self.last[seat.position] = score
+        if now - self.changed >= self.seconds:
+            match._tiebreak("quiet")
+
+
 @dataclass
 class GameJob:
     bots: list[str]
     map: str = "trapped"
-    minutes: int = 10
+    minutes: int = 20
     seed: int | None = None
     label: str = ""
     branch: dict | None = None  # {"of": game id, "tick": T, "label": "..."}
@@ -172,6 +194,8 @@ class Arena:
         capture = Capture(session_id).attach(match)
         if (job.extra or {}).get("stop_at_seconds") is not None:
             match.watchers.append(_Horizon(float(job.extra["stop_at_seconds"])))
+        if (job.extra or {}).get("stop_quiet") is not None:
+            match.watchers.append(_Quiet(float(job.extra["stop_quiet"])))
         seats = []
         for pos, bot in enumerate(seat_bots):
             if bot.kind == "human":
@@ -183,7 +207,8 @@ class Arena:
         wall0 = time.monotonic()
         for s in seats:
             s.start()
-        timeout = None if any(b.kind == "human" for b in seat_bots) else GAME_TIMEOUT_SECONDS
+        timeout = (None if any(b.kind == "human" or b.think == "paused" for b in seat_bots)  # (someone thinks: no limit)
+                   else GAME_TIMEOUT_SECONDS)
         while match.phase != "finished":
             time.sleep(0.05)
             if timeout is not None and time.monotonic() - wall0 > timeout:
@@ -202,7 +227,7 @@ class Arena:
         trace = self._close_trace(engine)
         errors = {s.position: s.error for s in seats if getattr(s, "error", None)}
         scores = dict(getattr(match, "scores", None) or {})
-        if (match.termination_reason in ("time_limit", "idle_timeout", "horizon") and not all(b.is_agent for b in seat_bots)
+        if (match.termination_reason in ("time_limit", "idle_timeout", "horizon", "quiet") and not all(b.is_agent for b in seat_bots)
                 and len({tuple(match.tiebreak_score(s))[0] for s in match.seats}) == 1 and scores):
             # Level on kills against an OpenRA AI: the platform would compare assets, but the AI's are
             # unknown here (it has no view), so the agent would always win: a draw is the honest record.
