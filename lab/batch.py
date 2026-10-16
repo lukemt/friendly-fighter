@@ -42,8 +42,87 @@ def cpu_quota() -> int:
     return os.cpu_count() or 1
 
 
-def slot_count() -> int:
+def all_slots() -> int:
+    """The machine's game slots: ``FF_LAB_SLOTS``, default the CPU quota."""
     return max(1, int(os.environ.get("FF_LAB_SLOTS") or cpu_quota()))
+
+
+# A limit for every session at once (``lab slots N``, 2026-10-16: a game is an engine and a bot process,
+# so 5 slots kept ~10 processes busy on 5.5 CPUs, load 12-20, next to the live runtime and other games'
+# simulators). Read at every slot taken, so it applies to running runs too; slots at or above it are held
+# by a reserver process (``reserve_step``), which also holds them against sessions on older code.
+LIMIT_FILE_NAME = "limit"
+RESERVER_FILE_NAME = "reserver.pid"
+RESERVED_LABEL = "reserved (lab slots)"
+
+
+def slot_limit() -> int | None:
+    try:
+        return max(1, int((SLOTS_DIR / LIMIT_FILE_NAME).read_text().split()[0]))
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def slot_count() -> int:
+    """The slots games may take now: the machine's, or fewer under ``lab slots N``."""
+    limit = slot_limit()
+    return min(all_slots(), limit) if limit else all_slots()
+
+
+def set_slot_limit(limit: int | None) -> None:
+    SLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = SLOTS_DIR / LIMIT_FILE_NAME
+    if limit is None or limit >= all_slots():
+        path.unlink(missing_ok=True)
+    else:
+        path.write_text(f"{max(1, int(limit))}\n")
+
+
+def reserve_step(held: dict[int, int]) -> bool:
+    """One round of the reserver: hold the slots at or above the limit as they come free, let go of the
+    others. ``held``: slot -> fd. False when there is nothing left to do (no limit, nothing held)."""
+    limit = slot_limit()
+    want = set(range(limit, all_slots())) if limit else set()
+    for k in [k for k in held if k not in want]:
+        os.close(held.pop(k))
+    for k in sorted(want - held.keys()):
+        fd = os.open(SLOTS_DIR / f"slot-{k}", os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)  # (a game still plays there: taken when it ends)
+            continue
+        os.ftruncate(fd, 0)
+        os.write(fd, json.dumps({"pid": os.getpid(), "family": "main", "run": None, "label": RESERVED_LABEL,
+                                 "since": time.time()}).encode())
+        held[k] = fd
+    return bool(want or held)
+
+
+def reserver_pid() -> int | None:
+    try:
+        pid = int((SLOTS_DIR / RESERVER_FILE_NAME).read_text())
+        os.kill(pid, 0)
+        return pid
+    except (OSError, ValueError):
+        return None
+
+
+def reserve_forever(poll: float = 2.0) -> None:
+    """The reserver (``lab slots --reserve``, started by ``lab slots N``): until the limit is lifted."""
+    (SLOTS_DIR / RESERVER_FILE_NAME).write_text(str(os.getpid()))
+    held: dict[int, int] = {}
+    try:
+        while reserve_step(held):
+            time.sleep(poll)
+    finally:
+        for fd in held.values():
+            os.close(fd)
+        try:
+            if int((SLOTS_DIR / RESERVER_FILE_NAME).read_text()) == os.getpid():
+                (SLOTS_DIR / RESERVER_FILE_NAME).unlink()
+        except (OSError, ValueError):
+            pass
 
 
 class GameSlot:
@@ -186,9 +265,9 @@ def waiting() -> list[dict]:
 
 
 def slots_in_use() -> list[dict]:
-    """Who holds which slot now (for lab status)."""
+    """Who holds which slot now (for lab status), the reserver's included (``label`` RESERVED_LABEL)."""
     out = []
-    for k in range(slot_count()):
+    for k in range(all_slots()):
         path = SLOTS_DIR / f"slot-{k}"
         if not path.exists():
             continue
@@ -414,4 +493,32 @@ def run(jobs: list[dict], *, workers: int, run_id: int, record: bool = False, db
     finally:
         for p in procs:
             p.join(30)
+    return out
+
+
+STALE_HOURS = 2.0
+
+
+def stale_runs(db, now: float | None = None) -> list[dict]:
+    """Runs still marked running whose process is gone: its pid (recorded since 2026-10-16) is dead, or,
+    for older runs, it holds no game slot, waits for none, and has had no game for STALE_HOURS."""
+    now = now if now is not None else time.time()
+    live = {h.get("run") for h in slots_in_use()} | {w.get("run") for w in waiting()}
+    out = []
+    for r in db.q("SELECT * FROM runs WHERE status = 'running' ORDER BY id"):
+        if r["id"] in live:
+            continue
+        pid = (json.loads(r["params"] or "{}") or {}).get("pid")
+        if pid:
+            try:
+                os.kill(int(pid), 0)
+                continue  # (alive)
+            except ProcessLookupError:
+                pass
+            except (PermissionError, ValueError):
+                continue
+        last = db.one("SELECT MAX(COALESCE(finished, created)) AS t FROM games WHERE run_id = ?", r["id"])["t"]
+        if not pid and now - max(last or 0, r["started"] or 0) < STALE_HOURS * 3600:
+            continue
+        out.append({**dict(r), "last_game": last})
     return out

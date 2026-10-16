@@ -4,6 +4,7 @@ own bots, game slots are shared, module bots are versioned by everything they im
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import subprocess
 import threading
 import time
@@ -153,3 +154,49 @@ def test_a_dead_waiters_ticket_is_dropped(slots, monkeypatch):
     assert batch.waiting() == [] and not any(q.iterdir())
     with _quiet(run_id=6):
         assert [h["run"] for h in batch.slots_in_use()] == [6]
+
+
+def test_a_slot_limit_applies_to_every_session_and_the_reserver_holds_the_rest(slots, monkeypatch):
+    monkeypatch.setenv("FF_LAB_SLOTS", "4")
+    slots.mkdir(parents=True, exist_ok=True)
+    assert batch.slot_count() == 4 and batch.slot_limit() is None
+    batch.set_slot_limit(2)
+    assert batch.slot_count() == 2 and batch.all_slots() == 4
+    held: dict[int, int] = {}
+    with batch.GameSlot(run_id=1, label="playing", log=lambda *a, **k: None):  # (slot 0)
+        assert batch.reserve_step(held) and sorted(held) == [2, 3]
+        labels = {h["slot"]: h.get("label") for h in batch.slots_in_use()}
+        assert labels == {0: "playing", 2: batch.RESERVED_LABEL, 3: batch.RESERVED_LABEL}
+        with batch.GameSlot(run_id=2, label="b", log=lambda *a, **k: None):  # (slot 1: the last one under the limit)
+            assert not batch.GameSlot(run_id=3, log=lambda *a, **k: None)._take()  # (2 and 3 are reserved)
+    batch.set_slot_limit(3)
+    assert batch.reserve_step(held) and sorted(held) == [3]
+    batch.set_slot_limit(None)
+    assert batch.slot_limit() is None and not batch.reserve_step(held) and held == {}
+
+
+def test_a_limit_at_or_above_the_machine_is_no_limit(slots, monkeypatch):
+    monkeypatch.setenv("FF_LAB_SLOTS", "3")
+    batch.set_slot_limit(5)
+    assert batch.slot_limit() is None and batch.slot_count() == 3
+
+
+def test_stale_runs_are_the_dead_ones(tmp_path, monkeypatch, slots):
+    import json as _json
+    import os as _os
+    import time as _time
+
+    from lab.db import LabDB
+
+    db = LabDB(tmp_path / "lab.db")
+    alive = db.start_run("compare", "lab compare a", {})       # (this process: alive)
+    old = db.start_run("compare", "lab compare b", {})
+    db.conn.execute("UPDATE runs SET params = ?, started = ? WHERE id = ?", (_json.dumps({"family": "jev"}), _time.time() - 3 * 3600, old))
+    recent = db.start_run("compare", "lab compare c", {})
+    db.conn.execute("UPDATE runs SET params = ? WHERE id = ?", (_json.dumps({"family": "jev"}), recent))
+    dead = db.start_run("compare", "lab compare d", {})
+    db.conn.execute("UPDATE runs SET params = ? WHERE id = ?", (_json.dumps({"pid": 2 ** 22 + 12345}), dead))
+    done = db.start_run("compare", "lab compare e", {})
+    db.end_run(done)
+    assert _json.loads(db.one("SELECT params FROM runs WHERE id = ?", alive)["params"])["pid"] == _os.getpid()
+    assert [r["id"] for r in batch.stale_runs(db)] == [old, dead]  # (no pid, quiet for 3 h; a dead pid)

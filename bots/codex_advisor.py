@@ -22,6 +22,7 @@ login, no API key).
 
 from __future__ import annotations
 
+import atexit
 import gc
 import itertools
 import json
@@ -93,6 +94,7 @@ class CodexServer:
         self._write = threading.Lock()
         self._asking = threading.Lock()
         self.declined = 0  # (approval requests answered "decline")
+        self.broken = False  # (it hung or failed: replaced, never asked again)
 
     # -- the connection --
 
@@ -102,11 +104,19 @@ class CodexServer:
                                      stderr=subprocess.DEVNULL, cwd=self.cwd, env=child_env(), text=True, bufsize=1)
         weakref.finalize(self, _stop, self.proc)
         threading.Thread(target=self._read, name="codex-reader", daemon=True).start()
-        self.request("initialize", {"clientInfo": {"name": "ff-lab", "title": "friendly-fighter lab", "version": "1"}})
-        self._send({"jsonrpc": "2.0", "method": "initialized"})
+        try:
+            self.request("initialize", {"clientInfo": {"name": "ff-lab", "title": "friendly-fighter lab", "version": "1"}})
+            self._send({"jsonrpc": "2.0", "method": "initialized"})
+        except BaseException:
+            self.close()  # (a child that didn't come up is never left running)
+            raise
         return self
 
+    def alive(self) -> bool:
+        return self.proc is not None and self.proc.poll() is None and not self.broken
+
     def close(self) -> None:
+        self.broken = True
         if self.proc is not None:
             _stop(self.proc)
 
@@ -187,6 +197,7 @@ class CodexServer:
                         self.request("turn/interrupt", {"threadId": thread}, timeout=5)
                     except Exception:  # noqa: BLE001 - it timed out anyway
                         pass
+                    self.broken = True  # (a hung turn: replaced before the next question)
                     raise Skipped(f"codex: no answer in {timeout:g} s")
                 try:
                     ev = self._events.get(timeout=min(left, 1.0))
@@ -217,6 +228,44 @@ class CodexServer:
 def start_server() -> CodexServer:
     """A running ``codex app-server`` (tests replace this with a fake one)."""
     return CodexServer().start()
+
+
+# One app-server per process, shared by every desk and game a lab worker plays (run 225: one per game,
+# never closed, left 9 of them running in two workers, ~100 MB each, some spinning a CPU, until requests
+# timed out). Replaced when it dies or hangs; after a failed start, none for RESTART_BACKOFF seconds.
+RESTART_BACKOFF = 60.0
+_shared: CodexServer | None = None
+_shared_lock = threading.Lock()
+_down_until = 0.0
+
+
+def shared_server() -> CodexServer:
+    global _shared, _down_until
+    with _shared_lock:
+        if _shared is not None and _shared.alive():
+            return _shared
+        if _shared is not None:
+            _shared.close()
+            _shared = None
+        if time.monotonic() < _down_until:
+            raise Skipped(f"codex: the app-server didn't start; retrying in {_down_until - time.monotonic():.0f} s")
+        try:
+            _shared = start_server()
+        except BaseException:
+            _down_until = time.monotonic() + RESTART_BACKOFF
+            raise
+        return _shared
+
+
+def close_shared() -> None:
+    global _shared
+    with _shared_lock:
+        if _shared is not None:
+            _shared.close()
+            _shared = None
+
+
+atexit.register(close_shared)
 
 
 def parse_answer(text: str):
@@ -267,8 +316,11 @@ class CodexDesk:
                "asked": time.time()}
         started = time.monotonic()
         try:
-            if self.server is None:
-                self.server = (self._server_factory or start_server)()
+            if self._server_factory is not None:  # (a desk's own server: tests)
+                if self.server is None or not self.server.alive():
+                    self.server = self._server_factory()
+            else:
+                self.server = shared_server()
             text = payload if isinstance(payload, str) else json.dumps(payload, separators=(",", ":"), default=str)
             row["payload"] = payload
             brief = (system or "") + ("\n\n" + self.ADDENDUM if self.ADDENDUM else "")
@@ -290,6 +342,8 @@ class CodexDesk:
             raise
         except Exception as exc:  # noqa: BLE001 - a model problem must never stall the game
             row["skipped"] = f"codex: {type(exc).__name__}: {exc}"[:300]
+            if self.server is not None:
+                self.server.close()  # (it hung or failed: the next question gets a fresh one)
             raise Skipped(row["skipped"]) from None
         finally:
             row["latency"] = round(time.monotonic() - started, 2)

@@ -791,7 +791,44 @@ def cmd_branches(a, db) -> int:
 
 
 def cmd_runs(a, db) -> int:
+    if a.stale or a.close_stale:
+        from lab.batch import stale_runs
+
+        stale = stale_runs(db)
+        for r in stale:
+            print(f"run {r['id']} ({json.loads(r['params'] or '{}').get('family', '?')}, started "
+                  f"{report._when(r['started'])}, last game {report._when(r['last_game']) if r['last_game'] else 'none'}): "
+                  f"{r['command'][:70]}")
+        if not stale:
+            print("no stale runs")
+        if a.close_stale:
+            for r in stale:
+                db.end_run(r["id"], "stopped")
+            print(f"marked {len(stale)} run(s) stopped (their games stay)")
+        return 0
     print(report.runs_table(db, a.limit))
+    return 0
+
+
+def cmd_slots(a, db) -> int:
+    """The machine's game slots for every session: ``lab slots`` (show), ``lab slots N``, ``lab slots off``."""
+    from lab import FAMILY, batch
+
+    if a.reserve:
+        batch.reserve_forever()
+        return 0
+    if a.limit is not None:
+        if FAMILY:
+            print("the slot limit is the coordinator's (AGENTS.md: a fair share of the machine)")
+            return 1
+        batch.set_slot_limit(None if a.limit == "off" else int(a.limit))
+        if batch.slot_limit() and not batch.reserver_pid():
+            subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "slots", "--reserve"],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True, cwd=str(ROOT))
+    limit, n = batch.slot_limit(), batch.all_slots()
+    print(f"game slots: {batch.slot_count()} of the machine's {n}" + (f" (lab slots {limit}: the rest reserved"
+          f"{', reserver pid ' + str(batch.reserver_pid()) if batch.reserver_pid() else ', reserver starting'})" if limit else ""))
     return 0
 
 
@@ -1040,8 +1077,11 @@ def cmd_status(a, db) -> int:
 
     print(f"this session: {'family ' + FAMILY if FAMILY else 'the main checkout'} ({ROOT}); lab shared at {LAB_DIR}"
           + (f" (main checkout {MAIN_ROOT})" if MAIN_ROOT != ROOT else ""))
-    held = slots_in_use()
-    print(f"game slots: {len(held)} of {slot_count()} in use" + ("" if held else " (all free)"))
+    from lab.batch import RESERVED_LABEL, all_slots, slot_limit
+
+    held = [h for h in slots_in_use() if h.get("label") != RESERVED_LABEL]
+    limited = f" (lab slots {slot_limit()}: {all_slots() - slot_count()} reserved)" if slot_limit() else ""
+    print(f"game slots: {len(held)} of {slot_count()} in use" + limited + ("" if held else " (all free)"))
     for h in held:
         since = f"{(time.time() - h['since']) / 60:.0f} min" if h.get("since") else "?"
         print(f"  slot {h['slot']}: {h.get('family', '?')}, run {h.get('run')}, {h.get('label', '')[:50]} (pid {h.get('pid')}, {since})")
@@ -1449,6 +1489,11 @@ def main() -> int:
 
     s = sub.add_parser("runs", help="recent runs")
     s.add_argument("--limit", type=int, default=20)
+    s.add_argument("--stale", action="store_true", help="runs still marked running whose process is gone")
+    s.add_argument("--close-stale", action="store_true", help="mark those stopped (their games stay)")
+    s = sub.add_parser("slots", help="every session's game slots: show, limit (lab slots N), lift (lab slots off)")
+    s.add_argument("limit", nargs="?", help="N, or off")
+    s.add_argument("--reserve", action="store_true", help=argparse.SUPPRESS)
 
     s = sub.add_parser("superweapons", help="games an OpenRA AI's superweapon may have decided (flag, list)")
     s.add_argument("--flag", action="store_true", help="flag the games not checked yet")
@@ -1550,7 +1595,7 @@ def main() -> int:
     handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch, "moments": cmd_moments, "probe": cmd_probe, "board": cmd_board,
                 "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
-                "runs": cmd_runs, "note": cmd_note, "superweapons": cmd_superweapons, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "champion": cmd_champion, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
+                "runs": cmd_runs, "slots": cmd_slots, "note": cmd_note, "superweapons": cmd_superweapons, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "champion": cmd_champion, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
                 "h": cmd_h, "external": cmd_external, "advise": cmd_advise, "adv": cmd_adv}
     return handlers[a.command](a, db)
 

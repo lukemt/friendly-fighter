@@ -162,6 +162,48 @@ def test_a_server_that_cannot_start_is_a_skip_not_a_crash(monkeypatch):
         desk.ask(system="", payload={}, schema=SCHEMA)
 
 
+def test_desks_in_one_process_share_one_server_and_a_hung_one_is_replaced(fake, monkeypatch):
+    started = []
+    monkeypatch.setattr(ca, "start_server", lambda: started.append(fake("ok")) or started[-1])
+    monkeypatch.setattr(ca, "_shared", None)
+    monkeypatch.setattr(ca, "_down_until", 0.0)
+    for _ in range(3):  # (three games in one lab worker)
+        ca.CodexDesk().ask(system="", payload={}, schema=SCHEMA)
+    assert len(started) == 1 and started[0].alive()
+    started[0].broken = True  # (it hung)
+    ca.CodexDesk().ask(system="", payload={}, schema=SCHEMA)
+    assert len(started) == 2 and not started[0].alive() and started[0].proc.poll() is not None
+    ca.close_shared()
+    assert started[1].proc.poll() is not None
+
+
+def test_a_server_that_failed_to_start_is_not_retried_at_once(monkeypatch):
+    monkeypatch.setenv(ca.OPT_IN, "1")
+    tries = []
+
+    def broken():
+        tries.append(1)
+        raise TimeoutError("initialize")
+
+    monkeypatch.setattr(ca, "start_server", broken)
+    monkeypatch.setattr(ca, "_shared", None)
+    monkeypatch.setattr(ca, "_down_until", 0.0)
+    for _ in range(3):
+        with pytest.raises(Skipped):
+            ca.CodexDesk().ask(system="", payload={}, schema=SCHEMA)
+    assert len(tries) == 1  # (then a minute's backoff: no new process for every question)
+
+
+def test_a_child_that_does_not_come_up_is_stopped(tmp_path):
+    script = tmp_path / "mute.py"
+    script.write_text("import sys, time\nfor line in sys.stdin: time.sleep(60)\n")
+    server = ca.CodexServer(command=[sys.executable, str(script)], cwd=tmp_path / "cwd")
+    server.request = lambda *a, **k: (_ for _ in ()).throw(TimeoutError("no answer"))
+    with pytest.raises(TimeoutError):
+        server.start()
+    assert server.proc.poll() is not None and not server.alive()
+
+
 def test_rate_limits(fake):
     assert fake().rate_limits()["rateLimits"]["primary"]["usedPercent"] == 3
 

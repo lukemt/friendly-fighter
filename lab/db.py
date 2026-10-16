@@ -21,6 +21,7 @@ Several processes write (``lab.batch`` workers): WAL mode, and each game is one 
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import time
 import zlib
@@ -120,7 +121,7 @@ class LabDB:
         from . import FAMILY
 
         commit, dirty = git_state()
-        params = {**params, "family": FAMILY or "main"}  # (the session that ran it: AGENTS.md)
+        params = {**params, "family": FAMILY or "main", "pid": os.getpid()}  # (the session and process that ran it)
         cur = self.conn.execute(
             "INSERT INTO runs (started, kind, command, git_commit, git_dirty, params, note, experiment, status) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running')",

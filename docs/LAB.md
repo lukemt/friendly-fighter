@@ -659,6 +659,13 @@ the lab does for it:
 - **Game slots:** every lab game takes one of the machine's slots (`sim/lab/slots/`, `FF_LAB_SLOTS`,
   default the CPU quota). All sessions' games together never outnumber the CPUs, and a stopped
   run's workers die with it. `lab status` shows who holds the slots.
+- **Fewer slots for everyone:** `lab slots 3` (the coordinator's; `lab slots off` lifts it). A game is
+  an engine plus a bot process, so a slot is more than one CPU: 5 slots ran the load to 12-20 on 5.5
+  CPUs next to the live runtime. The limit is read at every slot taken, running runs included, and a
+  reserver process holds the slots above it (against sessions on older code too).
+- **Stale runs:** `lab runs --stale` lists runs still marked running whose process is gone (a dead pid,
+  recorded since 2026-10-16; for older runs, no slot, no place in the queue and no game for 2 hours);
+  `lab runs --close-stale` marks them stopped. Their games stay.
 - **Family registries:** `lab/bots.d/<family>.json`, names `<family>-...` (a family session can
   register nothing else); `lab bots add/freeze` write each bot back to its own file.
 - **Limits:** a family session `lab forget`s only its own runs.
