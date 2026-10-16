@@ -133,7 +133,9 @@ test before relying on them.
   - **No player on the platform has support powers** (the API's command list, skill/redalert, has
     no such order), so we can't nuke back, and **no tournament opponent can nuke us**. Only the
     OpenRA AIs in the lab do. Don't build defenses against it; count these late wipes as lab noise
-    when judging bots.
+    when judging bots. Since 2026-10-16 the lab plays without superweapons (docs/LAB.md), and
+    `lab superweapons` lists the older games a nuke likely decided: for v10, 9 of 44 games against
+    Normal, 5 of 24 against Turtle, 9 of 104 against Rush.
   - **Selling books no loss:** a sold building isn't counted in losses, pays 50% of its value
     (times its health) and gives infantry worth 40%. A player is out only with no building and no
     MCV (jev runs 148-149). The jev family is testing "bank the lead": sell before the nuke while

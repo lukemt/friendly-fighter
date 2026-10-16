@@ -125,6 +125,9 @@ class Arena:
             host = self.pool.take()
             _yield_cpu(host)
             seed = opts.get("seed") or match.rng.randrange(1, 2 ** 31)
+            from . import LAB_LOBBY
+
+            lobby = opts.get("lobby") or {**LAB_LOBBY, **(lobby or {})}
             engine = OpenRAEngine(match.session_id, match.map_id, kinds, lobby=lobby, lockstep=True, host=host,
                                   seed=seed, trace_path=opts.get("trace"), prefix=opts.get("prefix"))
         self.engines[match.session_id] = engine
@@ -173,6 +176,7 @@ class Arena:
                                  f"stays an agent and an OpenRA AI the same AI (asked for {','.join(kinds)})")
             opts["prefix"] = prefix_until(steps, int(job.branch["tick"]))
             opts["seed"] = head["seed"]
+            opts["lobby"] = head.get("lobby")  # (a branch keeps its game's lobby: superweapons on in older games)
             start_tick = (json.loads(origin["info"] or "{}")).get("start_tick")
             job.map = origin["map"]
             job.branch["of_id"] = origin["id"]
@@ -283,6 +287,12 @@ class Arena:
                 "buildings_lost": mil.get("buildings_lost"), "batches": batches, "orders": orders,
                 "rejected": rejected, "think": str(bot.seat().get("think")) if bot.is_agent else None})
         self.db.save_game(game, seat_rows, capture.timeline, capture.events, capture.decisions)
+        try:
+            from . import superweapons
+
+            superweapons.flag(self.db, session_id)  # (an AI's airfield powers remain: parabombs)
+        except Exception:  # noqa: BLE001  (a flag never costs a game)
+            pass
         self.platform.matches.pop(session_id, None)
         self.options.pop(session_id, None)
         game["seats"] = seat_rows

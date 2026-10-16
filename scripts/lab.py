@@ -732,6 +732,31 @@ def cmd_runs(a, db) -> int:
     return 0
 
 
+def cmd_superweapons(a, db) -> int:
+    """Games an OpenRA AI's superweapon may have decided (lab/superweapons.py): flag, then list."""
+    from lab import superweapons
+
+    if a.flag:
+        new = superweapons.flag_all(db)
+        print(f"flagged {len(new)} more game(s)")
+    rows = db.q("SELECT g.id, g.map, g.finished, g.branch_of, json_extract(g.info, '$.superweapon') AS hit FROM games g "
+                "WHERE json_extract(g.info, '$.superweapon') IS NOT NULL ORDER BY g.finished")
+    hits = [(r, json.loads(r["hit"])) for r in rows]
+    if a.bot:
+        hits = [(r, h) for r, h in hits
+                if db.one("SELECT 1 FROM seats WHERE game_id = ? AND position = ? AND bot = ?", r["id"], h["position"], a.bot)]
+    decided = [(r, h) for r, h in hits if h.get("decided")]
+    print(f"{len(hits)} game(s) with a superweapon hit ({superweapons.MIN_BUILDINGS}+ buildings in "
+          f"{superweapons.WINDOW // 25} s), {sum(1 for r, _ in hits if r['branch_of'] is None)} whole; "
+          f"{len(decided)} likely decided by it (level or ahead before, lost)")
+    table = [[report.short(r["id"]), r["map"], "branch" if r["branch_of"] else "", h["at"], h["buildings"],
+              f"{h['net_before']:+,}" if h.get("net_before") is not None else "?", f"{h['net_end'] or 0:+,}", h["result"],
+              "yes" if h.get("decided") else ""] for r, h in (decided if a.decided else hits)[-(a.limit or 40):]]
+    if table:
+        print(report._table(table, ["game", "map", "", "hit at", "bldgs", "net before", "net end", "result", "decided"]))
+    return 0
+
+
 def cmd_note(a, db) -> int:
     game = db.find_game(a.game)["id"] if a.game else None
     from lab import FAMILY
@@ -1352,6 +1377,12 @@ def main() -> int:
     s = sub.add_parser("runs", help="recent runs")
     s.add_argument("--limit", type=int, default=20)
 
+    s = sub.add_parser("superweapons", help="games an OpenRA AI's superweapon may have decided (flag, list)")
+    s.add_argument("--flag", action="store_true", help="flag the games not checked yet")
+    s.add_argument("--bot", help="only hits on this bot's seat")
+    s.add_argument("--decided", action="store_true", help="only games it likely decided")
+    s.add_argument("--limit", type=int)
+
     s = sub.add_parser("note", help="write down an observation")
     s.add_argument("text", nargs="+")
     s.add_argument("--game")
@@ -1446,7 +1477,7 @@ def main() -> int:
     handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch, "moments": cmd_moments, "probe": cmd_probe, "board": cmd_board,
                 "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
-                "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "champion": cmd_champion, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
+                "runs": cmd_runs, "note": cmd_note, "superweapons": cmd_superweapons, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "champion": cmd_champion, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,
                 "h": cmd_h, "external": cmd_external, "advise": cmd_advise, "adv": cmd_adv}
     return handlers[a.command](a, db)
 
