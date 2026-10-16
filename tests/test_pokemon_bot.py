@@ -3,14 +3,16 @@ guide's (<control_plane>/skill/pokemon) and the existing Pokémon fixtures."""
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 
 import pytest
 
 from altruagent import DecisionContext, GameState, LegalAction
 from bots.pokemon import PokemonAgent, create_agent
 from bots.pokemon import agent as pokemon_agent
-from bots.pokemon.battle import TurnPlanner
+from bots.pokemon.battle import TurnPlanner, _status, read_board
 from bots.pokemon.damage import Battler, damage
 from bots.pokemon.dex import calc_stat, effectiveness, mon_from_card
 
@@ -430,3 +432,59 @@ def test_friendly_fighter_routes_pokemon_to_the_bot(monkeypatch):
 
 def test_create_agent():
     assert isinstance(create_agent(), PokemonAgent)
+
+
+# -- the live payload -------------------------------------------------------------------------------------
+# tests/data/pokemon_live.json: states from the first live test match (2026-10-16, self-play), with
+# the session and seat ids replaced and the protocol log left out.
+
+LIVE = json.loads((Path(__file__).parent / "data" / "pokemon_live.json").read_text())
+LIVE_CTX = DecisionContext(session_id="live-session", tournament_id=None, game_type="pokemon_vgc_doubles_draft",
+                           agent_id="seat-a", seat_position=0)
+
+
+def live(name):
+    return GameState.from_mcp_state(LIVE[name])
+
+
+def live_agent():
+    agent = PokemonAgent(log=False)
+    agent.choose_action(live("draft"), LIVE_CTX)
+    agent.choose_action(live("team_preview"), LIVE_CTX)
+    return agent
+
+
+def test_a_live_match_plays_every_phase_without_a_fallback():
+    agent = live_agent()
+    for name in ("turn_1", "forced_switch", "turn_7"):
+        state = live(name)
+        decision = agent.choose_action(state, LIVE_CTX)
+        pokemon_agent.check(decision, state)
+    assert agent.fallbacks == 0 and agent.decisions == 5
+
+
+def test_live_fields_count_from_turn_zero():
+    # The platform sends {"GRASSY_TERRAIN": 0}: the value is the turn it started, not a flag.
+    agent = live_agent()
+    state = live("turn_1")
+    template = state.legal_actions[0].input["action"]
+    my_cards, foe_cards = agent._species_cards()
+    board = read_board(state.raw["observation"], template["slots"], my_cards, foe_cards)
+    assert board.fld.terrain_id == "grassyterrain"
+    assert [b.mon.species_id for b in board.mine] == ["ironhands", "archaludon"]
+    assert [b.mon.species_id for b in board.foes] == ["rillaboom", "dondozo"]
+    assert all(b.hp == 1.0 for b in board.mine + board.foes)
+
+
+def test_live_spellings_of_weather_side_conditions_and_status():
+    obs = dict(LIVE["turn_7"]["observation"])
+    obs.update(weather={"SANDSTORM": 3}, side_conditions={"TAILWIND": 6}, opponent_side_conditions={"LIGHT_SCREEN": 5})
+    state = live("turn_7")
+    agent = live_agent()
+    my_cards, foe_cards = agent._species_cards()
+    board = read_board(obs, state.legal_actions[0].input["action"]["slots"], my_cards, foe_cards)
+    assert board.fld.weather_id == "sandstorm"
+    assert board.my_side.tailwind and board.foe_side.light_screen
+    # Iron Hands is "FNT" in the team; the opponent's second slot is empty.
+    assert board.foes[1] is None and board.foes[0].mon.species_id == "cresselia"
+    assert _status({"status": "BRN"}) == "brn" and _status({"status": "FNT"}) == ""

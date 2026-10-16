@@ -748,8 +748,10 @@ def _summaries(container: object) -> dict[str, dict]:
 
 
 def _conditions(value: object) -> set[str]:
+    # The platform sends poke-env's maps, {"GRASSY_TERRAIN": 0}: a field or side condition is up
+    # while its key is there, and the value is the turn it started (or its layers), so 0 counts.
     if isinstance(value, dict):
-        return {to_id(k) for k, v in value.items() if v}
+        return {to_id(k) for k, v in value.items() if v is not False and v is not None}
     if isinstance(value, (list, tuple, set)):
         return {to_id(x.get("name") if isinstance(x, dict) else x) for x in value}
     if isinstance(value, str) and value:

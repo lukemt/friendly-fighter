@@ -30,13 +30,15 @@ from typing import Any, Callable
 
 from altruagent import DecisionContext, GameState, LegalAction
 
-from ..dex import species as species_data, to_id
+from ..dex import move as move_data, species as species_data, to_id
 from .baselines import make_baseline
 
 HERE = Path(__file__).resolve().parent
 SHOWDOWN_DIR = Path(os.environ.get("SHOWDOWN_DIR", "/home/dev/showdown"))
 FORMAT = "gen9vgc2025regi"
 CARDS = HERE.parent / "data" / "sim_cards.json"
+# The 18 cards of the first live test match (2026-10-16): standard VGC sets, items shared.
+LIVE_CARDS = HERE.parent / "data" / "live_cards.json"
 GAME = "pokemon_vgc_doubles_draft"
 SNAKE = [0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0]
 STAT_KEYS = ("hp", "atk", "def", "spa", "spd", "spe")
@@ -45,8 +47,8 @@ NO_TARGET = {"self", "allAdjacentFoes", "allAdjacent", "all", "allySide", "foeSi
              "scripted", "foeSideOrAlly"}
 
 
-def load_cards() -> list[dict]:
-    with CARDS.open() as f:
+def load_cards(pool: str = "sim") -> list[dict]:
+    with (LIVE_CARDS if pool == "live" else CARDS).open() as f:
         return json.load(f)
 
 
@@ -89,11 +91,19 @@ def make_state(observation: dict, actions: list[dict], phase: str, version: int)
     })
 
 
-def card_summary(card: dict) -> dict:
+def card_summary(card: dict, *, own: bool = True) -> dict:
+    """A roster entry at Team Preview, as the platform sends it: our own with its set, the
+    opponent's with no HP, item, ability or moves."""
     sp = species_data(card["species"]) or {}
-    return {"species": to_id(card["species"]), "name": card["species"], "types": [t.upper() for t in sp.get("types", [])],
-            "base_stats": sp.get("bs", {}), "item": card.get("item"), "ability": card.get("ability"),
-            "moves": [to_id(m) for m in card.get("moves", [])]}
+    s = {"species": to_id(card["species"]), "name": card["species"], "current_hp": 0, "max_hp": 0,
+         "current_hp_fraction": 0, "status": None, "ability": None, "item": "unknown_item",
+         "types": [t.upper() for t in sp.get("types", [])], "base_stats": sp.get("bs", {}),
+         "boosts": {k: 0 for k in BOOST_KEYS}, "moves": [], "fainted": False, "active": False, "revealed": False,
+         "is_terastallized": False}
+    if own:
+        s.update(current_hp_fraction=1.0, ability=to_id(card.get("ability")), item=to_id(card.get("item")),
+                 moves=[to_id(m) for m in card.get("moves", [])])
+    return s
 
 
 def card_set(card: dict) -> dict:
@@ -175,7 +185,8 @@ def run_preview(seat: Seat, foe: Seat, rng: random.Random) -> list[int]:
     roster = [to_id(c["species"]) for c in seat.roster]
     obs = {"phase": "team_preview", "battle_format": FORMAT, "waiting_for_action": True,
            "your_roster": [card_summary(c) for c in seat.roster],
-           "opponent_roster": [card_summary(c) for c in foe.roster]}
+           "opponent_roster": [card_summary(c, own=False) for c in foe.roster],
+           "clock": {"decision_seconds_left": 90, "bank_seconds_left": 420}}
     template = {"type": "select_lineup", "roster": roster, "bring_count": 4, "lead_count": 2,
                 "instructions": "Choose exactly 4 species from roster for bring, and 2 of them for leads."}
     actions = [{"action_id": "select_lineup", "label": "Select lineup",
@@ -214,9 +225,10 @@ class BattleView:
     def __init__(self) -> None:
         self.mons: dict[str, dict[str, MonState]] = {"p1": {}, "p2": {}}
         self.active: dict[str, list[str | None]] = {"p1": [None, None], "p2": [None, None]}
-        self.weather = ""
-        self.fields: set[str] = set()
-        self.sides: dict[str, set[str]] = {"p1": set(), "p2": set()}
+        # As the platform sends them (poke-env's maps): {"GRASSY_TERRAIN": the turn it started}.
+        self.weather: dict[str, int] = {}
+        self.fields: dict[str, int] = {}
+        self.sides: dict[str, dict[str, int]] = {"p1": {}, "p2": {}}
         self.turn = 0
         self.winner: str | None = None
         self.ended = False
@@ -294,15 +306,19 @@ class BattleView:
                     if mid not in mon.moves:
                         mon.moves.append(mid)
                 elif tag == "-weather":
-                    self.weather = "" if parts[2] == "none" else parts[2]
+                    name = enum_name(parts[2])
+                    if parts[2] == "none":
+                        self.weather = {}
+                    elif name not in self.weather:
+                        self.weather = {name: self.turn}
                 elif tag == "-fieldstart":
-                    self.fields.add(to_id(parts[2].replace("move: ", "")))
+                    self.fields[enum_name(parts[2])] = self.turn
                 elif tag == "-fieldend":
-                    self.fields.discard(to_id(parts[2].replace("move: ", "")))
+                    self.fields.pop(enum_name(parts[2]), None)
                 elif tag == "-sidestart":
-                    self.sides[parts[2][:2]].add(to_id(parts[3].replace("move: ", "")))
+                    self.sides[parts[2][:2]].setdefault(enum_name(parts[3]), self.turn)
                 elif tag == "-sideend":
-                    self.sides[parts[2][:2]].discard(to_id(parts[3].replace("move: ", "")))
+                    self.sides[parts[2][:2]].pop(enum_name(parts[3]), None)
                 elif tag == "-item":
                     _, _, mon = self._mon(parts[2])
                     mon.item = parts[3]
@@ -323,17 +339,37 @@ class BattleView:
                 continue
 
 
+def enum_name(name: str) -> str:
+    """A Showdown condition as poke-env's enum spells it: "move: Light Screen" -> "LIGHT_SCREEN"."""
+    return name.replace("move: ", "").strip().upper().replace(" ", "_").replace("-", "_")
+
+
+def status_name(status: str | None, fainted: bool = False) -> str | None:
+    """poke-env's spelling: "BRN", "PAR"..., "FNT" once fainted."""
+    if fainted:
+        return "FNT"
+    return status.upper() if status else None
+
+
+BOOST_KEYS = ("accuracy", "atk", "def", "evasion", "spa", "spd", "spe")
+
+
 def summary(mon: MonState, *, own: dict | None = None, active: bool = False) -> dict:
+    """A Pokémon as the platform's observation shows it: the opponent's in percent, with an
+    unknown item and ability until they're revealed."""
     sp = species_data(mon.species) or {}
-    s = {"species": mon.species, "name": sp.get("name", mon.species), "types": [t.upper() for t in sp.get("types", [])],
-         "base_stats": sp.get("bs", {}), "current_hp": mon.hp, "max_hp": mon.max_hp,
-         "current_hp_fraction": round(mon.hp / mon.max_hp, 4) if mon.max_hp else 0.0, "status": mon.status or None,
-         "boosts": dict(mon.boosts), "moves": list(mon.moves), "fainted": mon.fainted, "active": active,
-         "revealed": True, "ability": mon.ability, "item": mon.item}
+    s = {"species": mon.species, "name": sp.get("name", mon.species), "current_hp": round(mon.hp),
+         "max_hp": round(mon.max_hp), "current_hp_fraction": round(mon.hp / mon.max_hp, 4) if mon.max_hp else 0.0,
+         "status": status_name(mon.status, mon.fainted), "ability": to_id(mon.ability) if mon.ability else None,
+         "item": "unknown_item" if mon.item is None else to_id(mon.item),
+         "types": [t.upper() for t in sp.get("types", [])], "base_stats": sp.get("bs", {}),
+         "boosts": {k: mon.boosts.get(k, 0) for k in BOOST_KEYS}, "moves": list(mon.moves), "fainted": mon.fainted,
+         "active": active, "revealed": True, "is_terastallized": False}
     if own is not None:
         cur, mx, st = parse_condition(own["condition"])
-        s.update(current_hp=cur, max_hp=mx, current_hp_fraction=round(cur / mx, 4) if mx else 0.0, status=st or None,
-                 fainted=own["condition"].endswith("fnt"), moves=list(own.get("moves", [])),
+        fainted = own["condition"].endswith("fnt")
+        s.update(current_hp=round(cur), max_hp=round(mx), current_hp_fraction=round(cur / mx, 4) if mx else 0.0,
+                 status=status_name(st, fainted), fainted=fainted, moves=list(own.get("moves", [])),
                  ability=own.get("baseAbility"), item=own.get("item"))
     return s
 
@@ -408,11 +444,14 @@ def build_turn(request: dict, view: BattleView, side: str) -> tuple[dict, dict]:
                         opts.append({"target": t, "side": "opponent", "species": name})
                     elif t < 0:
                         idx = -t - 1
-                        opts.append({"target": t, "side": "self" if idx == i else "ally",
+                        opts.append({"target": t, "side": "ally",
                                      "species": own_ids[idx] if idx < len(own_ids) else None})
                     else:
                         opts.append({"target": 0, "side": "none", "species": None})
-                options.append({"type": "move", "move_id": m["id"], "move_name": m.get("move"), "current_pp": m.get("pp"),
+                mv = move_data(m["id"]) or {}
+                options.append({"type": "move", "move_id": m["id"], "base_power": mv.get("bp", 0),
+                                "category": str(mv.get("cat", "")).upper(), "move_type": str(mv.get("type", "")).upper(),
+                                "current_pp": m.get("pp"), "accuracy": (mv.get("acc") or 100) / 100,
                                 "targets": targets, "target_options": opts})
             if not act.get("trapped") and not act.get("maybeTrapped"):
                 options.extend({"type": "switch", "species": s} for s in bench)
@@ -428,14 +467,15 @@ def build_turn(request: dict, view: BattleView, side: str) -> tuple[dict, dict]:
                 "instructions": "Submit one action per slot."}
     obs = {
         "phase": "moving", "is_doubles": True, "turn": view.turn, "format": FORMAT,
-        "weather": view.weather or None, "fields": sorted(view.fields),
+        "weather": dict(view.weather), "fields": dict(view.fields),
         "active_pokemon": [summary_of(own_ids[i], True) if i < len(own_ids) else None for i in range(2)],
         "opponent_active_pokemon": [summary(view.mons[foe_side][n], active=True) if n and n in view.mons[foe_side] else None
                                     for n in foe_names],
         "team": {f"{side}: {sid}": summary_of(sid, i < 2) for i, sid in enumerate(own_ids)},
         "opponent_team": {f"{foe_side}: {sid}": summary(m, active=sid in foe_names) for sid, m in view.mons[foe_side].items()},
-        "side_conditions": sorted(view.sides[side]), "opponent_side_conditions": sorted(view.sides[foe_side]),
-        "force_switch": [bool(force and force[i]) for i in range(2)],
+        "side_conditions": dict(view.sides[side]), "opponent_side_conditions": dict(view.sides[foe_side]),
+        "force_switch": [bool(force and force[i]) for i in range(2)], "can_tera": [False, False],
+        "clock": {"decision_seconds_left": 55, "bank_seconds_left": 420},
     }
     return obs, template
 
@@ -520,7 +560,8 @@ class Result:
 def play_game(agent_factories: list[Callable[[], Any]], seed: int, showdown: Showdown, cards: list[dict]) -> Result:
     rng = random.Random(seed)
     seats = [Seat(agent_factories[0](), "agent-a", "p1"), Seat(agent_factories[1](), "agent-b", "p2")]
-    pool = draw_pool(cards, rng)
+    # A list of 18 is a whole pool (the live one), dealt as it is; a bigger list is drawn from.
+    pool = rng.sample(cards, len(cards)) if len(cards) <= 18 else draw_pool(cards, rng)
     first = seed % 2
     run_draft(seats, pool, first, rng)
     orders = [run_preview(seats[0], seats[1], rng), run_preview(seats[1], seats[0], rng)]
@@ -627,9 +668,9 @@ def _bst_drafting_bot() -> Any:
     return BstDraft(log=False)
 
 
-def _worker(args: tuple[str, str, list[int]]) -> list[tuple[int, Result | str]]:
-    a, b, seeds = args
-    cards = load_cards()
+def _worker(args: tuple[str, str, list[int], str]) -> list[tuple[int, Result | str]]:
+    a, b, seeds, card_pool = args
+    cards = load_cards(card_pool)
     sd = Showdown()
     out = []
     try:
@@ -652,14 +693,14 @@ def _worker(args: tuple[str, str, list[int]]) -> list[tuple[int, Result | str]]:
     return out
 
 
-def run(a: str, b: str, games: int, seed: int, workers: int) -> dict:
+def run(a: str, b: str, games: int, seed: int, workers: int, card_pool: str = "sim") -> dict:
     seeds = [seed + i for i in range(games)]
     chunks = [seeds[k::workers] for k in range(workers)]
     if workers > 1:
         with Pool(workers) as pool:
-            parts = pool.map(_worker, [(a, b, c) for c in chunks])
+            parts = pool.map(_worker, [(a, b, c, card_pool) for c in chunks])
     else:
-        parts = [_worker((a, b, seeds))]
+        parts = [_worker((a, b, seeds, card_pool))]
     results = [r for part in parts for r in part]
     played = [(s, r) for s, r in results if isinstance(r, Result)]
     failed = [(s, r) for s, r in results if not isinstance(r, Result)]
@@ -668,7 +709,7 @@ def run(a: str, b: str, games: int, seed: int, workers: int) -> dict:
     ties = len(played) - wins - losses
     dec = sum(r.decisions[0] for _, r in played) or 1
     summary_ = {
-        "a": a, "b": b, "games": len(played), "failed": len(failed), "wins": wins, "losses": losses, "ties": ties,
+        "a": a, "b": b, "pool": card_pool, "games": len(played), "failed": len(failed), "wins": wins, "losses": losses, "ties": ties,
         "win_rate": round(wins / max(1, len(played)), 3),
         "win_rate_first_drafter": _rate([r for _, r in played if r.first == 0]),
         "win_rate_second_drafter": _rate([r for _, r in played if r.first == 1]),
@@ -695,9 +736,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--games", type=int, default=20)
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--workers", type=int, default=1)
+    p.add_argument("--pool", choices=("sim", "live"), default="sim",
+                   help="sim: 18 of data/sim_cards.json's 447; live: the 18 cards of the live test match")
     args = p.parse_args(argv)
     start = time.time()
-    out = run(args.a, args.b, args.games, args.seed, args.workers)
+    out = run(args.a, args.b, args.games, args.seed, args.workers, args.pool)
     out["wall_seconds"] = round(time.time() - start, 1)
     print(json.dumps(out, indent=1))
     return 0

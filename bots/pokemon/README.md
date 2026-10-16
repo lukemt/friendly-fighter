@@ -74,6 +74,9 @@ docker exec -u dev -w /workspace friendly-fighter-pokemon-dev-workspace-1 .venv/
 - `harness/sim_server.js` runs `BattleStream`s for Python.
 - `harness/harness.py`:
   - deals an 18-card pool, with distinct species and items, from `data/sim_cards.json`;
+  - builds each observation in the live payload's own shapes (see "The live match" below):
+    poke-env's condition maps (`{"GRASSY_TERRAIN": 0}`), statuses as `"BRN"`/`"FNT"`, the
+    opponent's HP in percent with `"unknown_item"`;
   - runs the snake draft `A B B A A B B A A B B A` with the Item Clause;
   - runs Team Preview;
   - battles in `gen9vgc2025regi`, building each side's observation and `doubles_turn` template
@@ -87,6 +90,7 @@ docker exec -u dev -w /workspace friendly-fighter-pokemon-dev-workspace-1 .venv/
 # Showdown for the harness (once, in the container):
 mkdir -p ~/showdown && cd ~/showdown && npm init -y && npm install pokemon-showdown@0.11.11
 .venv/bin/python -m bots.pokemon.harness.harness --a bot --opponent maxdamage --games 200 --workers 2 --seed 1000
+.venv/bin/python -m bots.pokemon.harness.harness --a bot --opponent maxdamage --games 200 --workers 2 --seed 1000 --pool live
 ```
 
 Baselines (`harness/baselines.py`):
@@ -99,31 +103,77 @@ Baselines (`harness/baselines.py`):
 
 ## Results
 
-All results are on harness seeds 1000-1199: 200 games each, seats alternating.
+On the harness's stand-in pool (seeds 1000-1199, 200 games each, seats alternating):
 
 | Bot | Opponent | Games | Wins | Losses | Win rate | Refused answers |
 |---|---|---|---|---|---|---|
 | bot | random | 100 | 100 | 0 | 100% | 0 |
-| bot | maxdamage | 200 | 149 | 51 | 74.5% | 0 |
+| bot | maxdamage | 200 | 156 | 44 | 78% | 0 |
 | bot+bstdraft (battle alone) | maxdamage | 200 | 130 | 70 | 65% | 0 |
 | bot+bstdraft (battle alone) | random | 200 | 200 | 0 | 100% | 0 |
 
+The max-damage row is from the build after the live match; the release `b4ec5f0` won 149 of the
+same 200. The other rows are `b4ec5f0`'s.
+
+On the live match's 18 cards (`--pool live`, seeds 1000-1199):
+
+| Bot | Opponent | Games | Wins | Losses | Win rate | Refused answers |
+|---|---|---|---|---|---|---|
+| bot | maxdamage | 200 | 195 | 5 | 97.5% | 0 |
+| bot+bstdraft (battle alone) | maxdamage | 200 | 150 | 50 | 75% | 0 |
+
+On that pool the bot always drafts Iron Hands, Incineroar, Basculegion and Iron Treads, then
+Gyarados or Dondozo.
+
 - **Speed:** a mean of about 50 ms a decision, with a maximum of 0.5 s (a full draft pick on a
   2-CPU container running two games at once).
-- **Battle length:** about 4 turns. Level-50 random-doubles sets with full attack EVs hit hard.
+- **Battle length:** about 4 turns on the stand-in pool and 6 on the live one. Level-50 sets with
+  full attack EVs hit hard.
+
+## The live match
+
+The first live test match was session `df1f2177` on 2026-10-16: self-play, release `b4ec5f0`.
+- It played all three phases on both seats: 12 picks, 2 lineups, 7 turns.
+- Every answer was accepted, with 0 fallbacks. The player-1 seat won.
+- `harness/replay.py` replays a recording through the bot and prints each decision next to the
+  live one (`--why` lists each slot's best options and their pair scores):
+
+```bash
+.venv/bin/python -m bots.pokemon.harness.replay <recordings>/<session_id>/seat0.jsonl.gz --why
+```
+
+Replaying release `b4ec5f0` gave the same 32 decisions as live. What the payload showed:
+- The draft's `available_cards` carry full sets: item, ability, nature, EVs and moves. `rosters`
+  is keyed by seat id, which is `context.agent_id`.
+- At Team Preview:
+  - `your_roster` has our full sets.
+  - `opponent_roster` has species, types and base stats only: `"unknown_item"`, no ability, no
+    moves, and HP 0.
+  - The bot uses draft memory for both sides, so this costs nothing.
+- In battle:
+  - `team`/`opponent_team` are keyed `"p1: Iron Hands"`.
+  - `current_hp_fraction` is 0..1. The opponent's `current_hp`/`max_hp` are in percent.
+  - Statuses are poke-env's names (`"FNT"`, `"BRN"`).
+  - Spread and self moves list target `[0]`. Ally moves list `[-1]` or `[-2]`, the fixed board
+    positions.
+- **Bug found and fixed:** `fields`, `weather` and the side conditions are poke-env's maps, with
+  the turn a condition started (or its layers) as the value. Rillaboom's Grassy Surge arrives as
+  `{"GRASSY_TERRAIN": 0}`, and the parser dropped falsy values, so `b4ec5f0` missed any condition
+  that started on turn 0. With terrain read correctly, the player-2 seat's first turn changes from
+  Fake Out + Earthquake (halved by Grassy Terrain) to Wood Hammer + Wave Crash into Iron Hands.
+  `tests/data/pokemon_live.json` holds five of the match's states (ids replaced), and the tests
+  play them.
+- The live pool had 18 cards: Thundurus, Iron Valiant, Dondozo, Cresselia, Basculegion, Gyarados,
+  Farigiraf, Incineroar, Wo-Chien, Rillaboom, Archaludon, Lucario, Tyranitar, Iron Hands, Iron
+  Treads, Chien-Pao, Klefki and Grimmsnarl. They are standard VGC sets (Life Orb Timid Thundurus,
+  Assault Vest Iron Hands...).
 
 ## Open questions
 
-- **The live payload.** The observation and template shapes come from the platform guide and the
-  repository's fixtures; no live Pokémon game has been recorded yet. The bot reads every field
-  defensively and falls back to legal play, but a test match (its recording in the runtime's
-  `recordings/`) should be checked:
-  - Do `your_roster`/`opponent_roster` carry moves and items?
-  - Are `team`/`opponent_team` keyed as `"p1: Name"`?
-  - Is `current_hp_fraction` 0..1?
-  - Are weather and field names spelled as the code expects?
-- **The real card pool.** The harness pool is a stand-in. Draft weights (staples, denial 0.45)
-  should be re-tuned on real pools once games are recorded.
+- **The real card pool.** Is the live pool the same 18 cards every match, or drawn from a larger
+  list? More test matches will tell. If it is fixed, the draft can be tuned on exactly those cards
+  (and `data/sim_cards.json` replaced by them). Draft weights (staples, denial 0.45) are untuned so
+  far.
 - **Memory across a worker restart.** If the match's worker restarts mid-battle, the draft memory
   is gone and sets are guessed (252/252 spreads, STAB placeholder moves).
 - **Not modelled yet:**
