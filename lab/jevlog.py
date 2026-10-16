@@ -19,6 +19,19 @@ def log_files(game_id: str | None = None) -> list[Path]:
     return sorted(root.glob(pattern), key=lambda p: p.stat().st_mtime)
 
 
+def spent(within: float = 3600.0, now: float | None = None) -> float:
+    """Dollars of Jev input tokens in the call logs written within the last ``within`` seconds (a log
+    that was still being written then counts whole: an upper bound)."""
+    import time
+
+    now = time.time() if now is None else now
+    tokens = 0
+    for p in log_files():
+        if now - p.stat().st_mtime <= within:
+            tokens += sum(int(r.get("tokens") or 0) for r in read(p))
+    return tokens / 1e6 * PRICE_PER_MTOK
+
+
 def read(path: Path | str) -> list[dict]:
     rows = []
     for line in Path(path).read_text().splitlines():
