@@ -309,6 +309,10 @@ the rows because the family code changed after the run started, so the table is 
   and is the opponent that is left. `jev-a1-v1` is the best of ours against it (4/6, small numbers), the
   riflemen rule alone is not. In the v10 losses the lead holds to 18:00-18:30 (+1.5k, -6.9k, +6.2k) and the fight at
   our base then costs 64-80 units.
+- **The economy against `ext-henry`** (run 204, seed 7301, 20 min, stopped at 8-9 games each; a1 = staging 5 + regroup +
+  riflemen rule): v10 5/9 (+9,139), `jev-a1-v1` 7/9 (+14,706), a1 + `greed_hold` 2 7/8 (+13,063), a1 + refinery
+  schedule up to 5: 6/8 (+10,356), **a1 + refinery schedule up to 8 (`jev-a1m8`): 8/8 (+20,419)**. The economy
+  gap (harvesters ~5 against henry's ~10) is what the schedule closes. Frozen: `jev-a1m8-v1`, `jev-a1g2-v1`.
 - **Focus fire when defending** (`jev-focus`, run 180, same set and rule; `jev-base` again identical to v10 in all 15
   after the module was renamed to `hands.py` for freezing): +1,660 vs control (-4,351..+7,671), better in 6/15,
   W-D-L 7-0-8 against 6-0-9. Nothing; parked.
