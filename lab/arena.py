@@ -250,6 +250,10 @@ class Arena:
             info["snapshot_check"] = "ok" if engine.prefix_diff is None else f"differs from step {engine.prefix_diff}"
         if match.failure_reason:
             info["failure"] = match.log[-3:]
+        host = getattr(engine, "host", None)
+        if host is not None and getattr(host, "proc", None) is not None:
+            # (the engine that hosted it: its size after this game shows whether engines leak, docs/SIMULATOR.md)
+            info["lane"] = {"pid": host.proc.pid, "games": host.games, "rss_mb": round(host.rss_mb())}
         game = {"id": session_id, "run_id": job.run_id, "created": created, "finished": time.time(), "map": match.map_id,
                 "minutes": job.minutes, "seed": job.seed, "time_mode": "virtual",
                 "game_seconds": round(match.game_seconds(), 2), "wall_seconds": round(wall, 2),
