@@ -1,0 +1,209 @@
+{
+ "bots": [
+  {
+   "name": "rush-wave-base",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-a",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "anti_infantry": 0.6
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-b",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "guard_defenses": 3,
+     "guard_infantry": 16
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-c",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "guard_defenses": 3,
+     "guard_infantry": 16,
+     "late_buildings_from": 300
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-d",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "guard_mix": true
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-e",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "guard_mix": true,
+     "guard_infantry": 14,
+     "guard_defenses": 2
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-f",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 9
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-g",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 9,
+     "guard_mix": true
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-h",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "hold",
+     "keep_first": 600,
+     "early_refineries": 0,
+     "boom_until": 0
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-i",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "fortify",
+     "keep_first": 600,
+     "early_refineries": 0,
+     "boom_until": 0
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-k",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 22
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-l",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 28
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-k-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.rush_wave_k_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 22
+    }
+   },
+   "think": 0.005,
+   "description": "frozen rush-wave-k rush-wave-k@fa5ee998 at b533231: ",
+   "tags": [
+    "board",
+    "frozen"
+   ]
+  }
+ ]
+}
