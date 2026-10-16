@@ -289,7 +289,52 @@ paired seeds, maps rotated, seats swapped, a second seed before anything is crow
 | E7 | **Why France and shadowfiend-ii?** | `lab stats --by faction/map` on the losses and draws, `lab watch` the worst 5, `lab curves` by faction | analysis + targeted branches | a fix or a note in STRATEGY.md |
 | E8 | **How much greed against agents?** | the assets tiebreak decides agent mirrors: `greed` 0/1/2/3 × `early_refineries` 1/2 vs `@field` | grid, 8 games per cell | settings for the field |
 | E9 | **Is v10 robust?** (L8) | latency ×1/×2/×4, refused orders, a real-time batch, one platform Testing match | ~60 games | needed before the live switch |
+| E11 | **Does a controlled Tanya pay?** (the user's idea, 2026-10-16; experiment `tanya-sniper`, details below) | a Tanya setting on v10's rules when Allied: build her, keep her behind the army, shoot infantry from range, pull her back from vehicles and turrets | 1a by hand vs ai-rush and ext-henry; 1 on unselected moments (`--kind at`, Allied seats only); 2-3 whole games on 2 seeds | keep it if net gains on Allied seats with no loss elsewhere |
 | E10 | **Switch the live bot?** | gate v10 vs `ff-default` on `@gate` | already clear on `@standard`; confirm on `@field` | user decides |
+
+### E11 in detail: a controlled Tanya
+
+**Idea (the user's):** Tanya under deliberate control instead of not at all. Our bots have never
+built her: v10 is Allied in ~half its lab games (england/france/germany 489 of 986 seats) but
+builds a tech center in 19 games.
+
+**What she can and can't do here** (`~/openra-sim/fork/mods/ra/rules/infantry.yaml` `E7`, weapons
+`smallcaliber.yaml` `Colt45`, the API's attack in `OpenRA.Mods.Common/Traits/Player/ActionHandler.cs`):
+- **Allies only.** Needs a barracks and a tech center (`atek`, 1500, after war factory and radar
+  dome). She costs 1800, one at a time (`BuildLimit: 1`), 100 HP.
+- **No C4 through the API.** Demolishing a building is the engine's `C4` order; our `attack` sends
+  `Attack`, which needs a weapon that can hit the target, and her pistol can't hit buildings
+  (`ValidTargets: Ground, Infantry, Barrel`), so it is refused. Like capture and support powers,
+  the platform offers no way to it. The OpenRA AIs' Tanya can C4 our buildings in the lab; no
+  tournament opponent's can.
+- **A sniper against infantry:** one shot kills any infantry (damage 10000 vs riflemen 5000 HP,
+  rocket soldiers 4500), every 7 ticks (~3.5 kills a second), range 7 cells (riflemen and rocket
+  soldiers shoot from less). Speed 68 against 54 for other infantry: she can back off from
+  infantry. She does nothing against vehicles or buildings and dies to tanks, dogs and turrets.
+- She attacks infantry in range by herself (auto-target); control adds where she stands and
+  when she runs.
+
+**Why it could matter:** the attacks that break us are infantry-heavy. ext-henry's last stand
+at 18:00 is mostly riflemen and rocket soldiers (its losses per game, run 195: 65 riflemen, 28
+rocket soldiers); the Rush AI's waves are ~30 riflemen and rocket soldiers each. 20 infantry
+killed is ~2,000-6,000 of tiebreak for an 1,800 unit.
+
+**Design (a setting on v10's rules, off by default, Allied seats only):**
+1. Tech: a tech center once the economy allows (after the 2nd refinery, war factory and dome).
+2. Tanya: build her once, rebuild when she dies (cap the rebuilds: 1800 each).
+3. Position: 3-5 cells behind our army's front, or at home with the defenders when an attack is
+   on its way (the last stand, a Rush wave).
+4. Targeting: the nearest enemy infantry inside 7 cells; never walk into vehicles, dogs or
+   turrets: when one is within ~5 cells, move her back towards our army or turrets.
+5. Measure: her kills and losses by value (`lab games`/`curves`), and the seat's net against the
+   same seeds without her.
+
+**How to test (the funnel):** 1a by hand first, cheap: `lab human start --moment ID` on an Allied
+seat against ai-rush and ext-henry (macro autopilot, Tanya by hand) to see whether kiting her is
+possible at the API's order rate. Then a probe on unselected moments (`--kind at`, Allied seats,
+ai-rush, ai-normal, ext-henry; the placebo bot alongside), then whole games on 2 seeds.
+**Open questions:** whether the tech center (1500) costs us more than she gains before 10:00;
+whether a seat's decision rate is fast enough to keep her out of reach of jeeps and dogs.
 
 Not worth the games now (STRATEGY.md): more defenses (no effect, run 56), scouting with infantry
 (costs standoffs), Jev experiments until there are credits.
