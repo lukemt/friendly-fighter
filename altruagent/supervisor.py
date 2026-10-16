@@ -320,6 +320,13 @@ TOURNAMENT = "tournament"
 ALL_KINDS = frozenset({TESTING, TOURNAMENT})
 TEST_MATCH_WAITING_NOTE = "Test match waiting: run with --match to play it"
 
+# Which games a runtime plays, by ``game_type``: several runtimes can share one
+# Official Agent Key, one per game (``--games``/``--skip-games``). Without a
+# filter every runtime races for every seat. ``UNKNOWN_GAME`` stands for an
+# assignment without a game type. A runtime that skips games, rather than
+# naming the ones it plays, also plays every game nobody has named yet.
+UNKNOWN_GAME = "unknown"
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -421,6 +428,27 @@ def assignment_kind(assignment: "OfficialAssignment") -> str:
     return TESTING if context == TESTING else TOURNAMENT
 
 
+def game_name(assignment: "OfficialAssignment") -> str:
+    """The assignment's ``game_type`` as ``--games`` names it: lower case,
+    ``UNKNOWN_GAME`` when the server sent none."""
+    return (assignment.game_type or "").strip().lower() or UNKNOWN_GAME
+
+
+def plays_game(assignment: "OfficialAssignment", games: Collection[str] | None,
+               skip_games: Collection[str] = ()) -> bool:
+    """Whether this runtime plays the assignment's game: one of ``games``
+    (every game when None) and none of ``skip_games``."""
+    game = game_name(assignment)
+    return (games is None or game in games) and game not in skip_games
+
+
+def other_game_note(assignment: "OfficialAssignment") -> str:
+    """Said once per game this runtime leaves to another one (``plays_game``)."""
+    game = game_name(assignment)
+    return (f"A {game} game is waiting{_kind_label(assignment)}: this runtime doesn't play {game} "
+            "(--games/--skip-games); another runtime with your key must")
+
+
 def tournament_waiting_warning(assignment: "OfficialAssignment") -> str:
     """The warning a ``--match``-only runtime prints (once per game) for a
     tournament game it won't play. Names the tournament and round when the
@@ -514,12 +542,23 @@ def _note_other_kind(assignment: "OfficialAssignment", state: TournamentState, l
         log(TEST_MATCH_WAITING_NOTE)
 
 
+def _note_other_game(assignment: "OfficialAssignment", state: TournamentState, log: Callable[[str], None]) -> None:
+    """Say once per game that a game another runtime plays is waiting."""
+    game = assignment.match_id or assignment.seat_id
+    if game in state.noted_games:
+        return
+    state.noted_games.add(game)
+    log(other_game_note(assignment))
+
+
 def run_tournament_once(
     official: "OfficialAgentClient",
     state: TournamentState,
     *,
     agent_spec: str,
     kinds: Collection[str] = ALL_KINDS,
+    games: Collection[str] | None = None,
+    skip_games: Collection[str] = (),
     now: Callable[[], float] = time.monotonic,
     cooldown_seconds: float = DEFAULT_COOLDOWN_SECONDS,
     shutdown_join_timeout: float = DEFAULT_SHUTDOWN_JOIN_TIMEOUT_SECONDS,
@@ -563,11 +602,14 @@ def run_tournament_once(
        and isn't cooling down, logging what was picked up
        (``describe_assignment``, once per match however many of its players
        start). A game of another kind is not played; it gets one warning or
-       note per game (``_note_other_kind``).
+       note per game (``_note_other_kind``). So is a game ``plays_game``
+       leaves to another runtime (``games``/``skip_games``,
+       ``_note_other_game``).
     4. Stop workers whose seat has left the list for
        ``MISSING_POLLS_BEFORE_STOP`` consecutive listings. Every listed seat
-       counts here, whatever its kind: ``kinds`` only decides which games
-       are started, never stops one already being played.
+       counts here, whatever its kind or game: ``kinds``, ``games`` and
+       ``skip_games`` only decide which games are started, never stop one
+       already being played.
     """
     current_time = now()
     # Several of a match's players can be played by this runtime (self-play):
@@ -728,6 +770,9 @@ def run_tournament_once(
         if assignment_kind(assignment) not in kinds:
             _note_other_kind(assignment, state, log)
             continue
+        if not plays_game(assignment, games, skip_games):
+            _note_other_game(assignment, state, log)
+            continue
         window = (assignment.match_id, assignment.connect_deadline_at)
         if state.connect_by.get(seat_id, (None, 0.0))[0] != window:
             state.connect_by[seat_id] = (window, _connect_by(assignment, current_time, wall_now()))
@@ -775,6 +820,8 @@ def run_tournament_forever(
     *,
     agent_spec: str,
     kinds: Collection[str] = ALL_KINDS,
+    games: Collection[str] | None = None,
+    skip_games: Collection[str] = (),
     poll_interval: float = DEFAULT_TOURNAMENT_POLL_SECONDS,
     cooldown_seconds: float = DEFAULT_COOLDOWN_SECONDS,
     shutdown_join_timeout: float = DEFAULT_SHUTDOWN_JOIN_TIMEOUT_SECONDS,
@@ -785,8 +832,8 @@ def run_tournament_forever(
     max_iterations: int | None = None,
 ) -> None:
     """Keep one worker per active official assignment of a kind in ``kinds``
-    (``TESTING``, ``TOURNAMENT`` or both; see ``run_tournament_once``) until
-    interrupted. Between polls it only sleeps: waiting costs no AI tokens.
+    (``TESTING``, ``TOURNAMENT`` or both) and a game ``plays_game`` picks (see
+    ``run_tournament_once``) until interrupted. Between polls it only sleeps: waiting costs no AI tokens.
     Never exits just because there are no assignments, nor on a temporary
     control-plane or sign-in problem, nor on an incomplete registration (it
     says what to do and keeps trying). A game's worker finding the key refused
@@ -800,8 +847,9 @@ def run_tournament_forever(
     try:
         while max_iterations is None or ticks < max_iterations:
             run_tournament_once(
-                official, state, agent_spec=agent_spec, kinds=kinds, now=now, cooldown_seconds=cooldown_seconds,
-                shutdown_join_timeout=shutdown_join_timeout, process_factory=process_factory, log=log,
+                official, state, agent_spec=agent_spec, kinds=kinds, games=games, skip_games=skip_games, now=now,
+                cooldown_seconds=cooldown_seconds, shutdown_join_timeout=shutdown_join_timeout,
+                process_factory=process_factory, log=log,
             )
             ticks += 1
             sleep(poll_interval)

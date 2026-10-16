@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from lab import batch
 
 
@@ -16,6 +18,22 @@ def test_lab_runs_switch_paid_jev_off_unless_asked(monkeypatch):
     monkeypatch.setenv(batch.PAID_JEV, "4")
     batch.lab_env()
     assert jev_bot._key() == "a-real-key" and batch.paid_jev_allowed() == 4
+
+
+def test_a_paid_run_exports_the_main_checkouts_key_for_frozen_clients(tmp_path, monkeypatch):
+    (tmp_path / ".env").write_text("JEV_URL=\nTYPESAFE_API_KEY=key-from-main\n")
+    monkeypatch.setattr(batch, "MAIN_ROOT", tmp_path)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "x")
+    monkeypatch.delenv("TYPESAFE_API_KEY")
+    monkeypatch.setenv(batch.PAID_JEV, "2")
+    batch.lab_env()
+    assert os.environ["TYPESAFE_API_KEY"] == "key-from-main"
+    monkeypatch.setenv("TYPESAFE_API_KEY", "set-by-hand")
+    batch.lab_env()
+    assert os.environ["TYPESAFE_API_KEY"] == "set-by-hand"  # (the environment wins)
+    monkeypatch.delenv(batch.PAID_JEV)
+    batch.lab_env()
+    assert os.environ["TYPESAFE_API_KEY"] == "off"  # (and no paid run, no key)
 
 
 def test_a_local_server_needs_no_key(monkeypatch):

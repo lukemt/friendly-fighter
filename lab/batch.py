@@ -25,7 +25,7 @@ import time
 import traceback
 from pathlib import Path
 
-from . import FAMILY, LAB_DIR
+from . import FAMILY, LAB_DIR, MAIN_ROOT
 
 LOG_DIR = LAB_DIR / "logs"
 SLOTS_DIR = LAB_DIR / "slots"
@@ -233,6 +233,24 @@ def lab_env() -> None:
         # frozen copies too, reads the key from the environment first. "off" is no key (a frozen client
         # sends it and is refused, for free). A local server (JEV_URL) needs no key and isn't affected.
         os.environ["TYPESAFE_API_KEY"] = "off"
+    elif not os.environ.get("TYPESAFE_API_KEY"):
+        # A run that asked for paid Jev: the key for every client. Frozen copies of older clients look only
+        # in the environment and their own checkout's .env, and a family's worktree has no key there: they
+        # played on with no answers and no error (the jev family, lab note 96). The main checkout's .env has it.
+        key = _env_file_setting(MAIN_ROOT / ".env", "TYPESAFE_API_KEY")
+        if key:
+            os.environ["TYPESAFE_API_KEY"] = key
+
+
+def _env_file_setting(path: Path, name: str) -> str | None:
+    """A line ``NAME=value`` in a ``.env`` file (None when there is none)."""
+    try:
+        for line in path.read_text().splitlines():
+            if line.startswith(name + "="):
+                return line.split("=", 1)[1].strip() or None
+    except OSError:
+        pass
+    return None
 
 
 PAID_JEV = "FF_LAB_PAID_JEV"
