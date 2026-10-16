@@ -138,6 +138,10 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
   - Autopilot `macro` runs the economy and leaves the army to you. `lab h note` records what you did.
   - A manual result is 1-3 games: it shows something *can* work, never that it's better. Write
     down the tactic as an idea card, code it as a setting, and probe it as a bot.
+- **Probes on moments chosen by a bad outcome need a placebo** (`@rush-wave`, `@normal-fight`,
+  `@late-rush`): any change beats a control that replays the selected bad outcome. Add
+  `ff-council-champ-v10-placebo` as a variant and compare against it (docs/LAB.md, "Moments and
+  probes"), and confirm with whole games.
 - Put the champion first in `lab compare`: the first bot is the reference.
 - Pass `--experiment <family>-<topic> --note "..."` on every run.
 - Freeze a candidate before you report its numbers: `lab bots freeze <family>-a --as <family>-a-v1`.

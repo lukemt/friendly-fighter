@@ -1159,6 +1159,27 @@
     "external",
     "field"
    ]
+  },
+  {
+   "name": "ff-council-champ-v10-placebo",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_council_champ_v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.045,
+   "description": "placebo for probes: v10 exactly, but each decision lands one tick later (think 45 ms instead of 5): a different trajectory with no strategic change. On moments selected for bad outcomes, compare variants to this, not to the control (jev's run 185)",
+   "tags": [
+    "council",
+    "frozen",
+    "rules",
+    "placebo"
+   ]
   }
  ]
 }
