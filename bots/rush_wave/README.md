@@ -182,6 +182,28 @@ seen lately is mostly infantry.
   across 9 / 16 / 22 / 28 is not monotonic, so 22 may be a lucky draw: more games on the new engine
   (no superweapons) decide it.
 
+- **Freeze, and a trap in `lab bots freeze`** (lab note 68): `freeze` always writes the shared
+  `agent/redalert_bot.py` into the frozen package and skips a family's own copy, so the first
+  `rush-wave-k-v1` crashed on every decision (`TypeError: Knobs.__init__() got an unexpected keyword
+  argument 'guard_defenses'`, run 191: 40 games, all `agent_error`; that "0/16" is not a result). Fixed in the
+  package by copying the family's `redalert_bot.py` in (it had played no valid game). **Verified:** run 193
+  replays seed 7006 and reproduces `rush-wave-k` in all 24 scenarios (same net, result and length): 19/24
+  against v10's 13/24, net +14,006 (CI +5,421..+22,592), points +0.25 (CI +0.04..+0.46).
+- **Stage 3, the fast suite** (run 194, `rush-wave-k-v1` against v10, `@ais,@exploiters`, 8 games each,
+  seed 6100, 20 minutes): 34/40 against 33/40, +0.03 points a game (CI -0.09..+0.14), net +2,348 (CI -3,339..+8,034):
+  no regression.
+
+  | opponent | v10 | rush-wave-k-v1 |
+  |---|---|---|
+  | ai-normal | 4/8 (+7,688) | 5/8 (+14,544) |
+  | ai-rush | 7/8 (+19,656) | 8/8 (+36,225) |
+  | ai-turtle | 8/8 (+22,556) | 8/8 (+26,044) |
+  | exploit-eco-waves | 8/8 (+27,288) | 8/8 (+22,494) |
+  | exploit-eco-tanks | 6/8 (+3,362) | 5/8 (-7,019) |
+
+  exploit-eco-tanks (waves of tanks) is the one place it could pay for leaving the defenses earlier:
+  a second seed follows (below).
+
 ## Core changes
 
 (Every change to shared code, rule 8: the file, what it adds, that it is off by default, its test.)
