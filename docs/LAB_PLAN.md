@@ -143,6 +143,35 @@ outputs to the council, each one with rules-based defaults so the `rules` oracle
 
 This turns the "current intent" store of ROADMAP.md into code.
 
+### L4b. Codex as an advisor — built 2026-10-16 (the user's idea)
+
+`bots/codex_advisor.py` (docs/LAB.md, "Codex as a bot's advisor"): a scripted desk that asks
+`codex app-server` on the user's ChatGPT login. GPT-6-Luna at low effort; never Astra (the user's call).
+Opt-in `FF_LAB_CODEX=1`. The first use is `ext-henry-codex`: henry with its own advisor on, Codex in
+Claude's place (an approximation of henry with its real advisor).
+
+**Trial, run 224** (v10 vs henry, seed 8100, 2 games, 20 minutes; the plain henry's games from run 220
+on the same maps and seeds):
+
+| map | v10 vs plain henry | v10 vs henry + Codex |
+|---|---|---|
+| trapped | win, +17,750 | **loss, -1,900** |
+| sidestep | win, +1,850 | win, +17,200 |
+
+- **Results:** one game better for henry by ~19,600 and one worse by ~15,400: no verdict from 2 games.
+  This needs 8+ games before anything is said.
+- **The desk works:**
+  - 77 questions, none skipped and none outside the schema;
+  - latency median 6.2 s, p90 7.6 s, max 15.4 s; 2 of 77 over henry's 10-s platform deadline;
+  - ~18,800 tokens a question; ~8 minutes of wall time a game (henry alone: ~3 minutes);
+  - henry's log shows each answer applied within one decision. The first answer, at 0:00, comes 90
+    game seconds late on henry's own thread.
+- **Quota:** 2 games used ~2% of the ChatGPT Plus 5-hour window (0% of the week). So ~1% a game:
+  a 16-game run is ~16% of a window.
+
+**Next, if the user agrees:** 8 games each on 2 seeds vs v10 and vs `jev-combo-v1` (~16-32% of a
+window). Does henry with an advisor beat our candidates, and do our henry fixes (late hold) still hold?
+
 ### L5. Measure decisions at the points where advisors disagree
 
 - **What it does:** a command that takes the moments where two oracles disagreed (Claude vs
