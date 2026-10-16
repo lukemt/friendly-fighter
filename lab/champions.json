@@ -36,6 +36,12 @@
    "since": "2026-10-15",
    "run": 64,
    "why": "the council's loops answered by code rules + a second refinery before the war factory; no API. 86% (run 63, +0.15 vs greedy turtle) and 95% (run 64, +0.19, CI +0.09..+0.29); exploiters 32/32"
+  },
+  {
+   "bot": "rush-wave-k-v1",
+   "since": "2026-10-16",
+   "run": 212,
+   "why": "v10 with the army defending out to 22 cells (rush-wave family): +0.064 points a game over v10 pooled over 235 paired games (CI +0.017..+0.111), margin score +0.093 (+0.029..+0.158); on seeds after the find (2027, 4711: 77 pairs) the same +0.065; no opponent worse on points; seed 2027 alone +0.12 (CI +0.01..+0.24, run 212). The crown rule: better clearly, no worse anywhere. The live bot stays v10 (the user's call)."
   }
  ]
 }
