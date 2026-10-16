@@ -136,6 +136,9 @@ test before relying on them.
     when judging bots. Since 2026-10-16 the lab plays without superweapons (docs/LAB.md), and
     `lab superweapons` lists the older games a nuke likely decided: for v10, 9 of 44 games against
     Normal, 5 of 24 against Turtle, 9 of 104 against Rush.
+  - **The board without superweapons (run 177):** v10 83% (was 73%): Normal 6/8 (was 3/8), Turtle
+    8/8 (5/8), Rush 3/8 (4/8), the exploiters and ext-ryan unchanged. The Rush AI is now clearly v10's
+    weak spot; the greedy turtle 79% (-0.04, even), ff-default 19%.
   - **Selling books no loss:** a sold building isn't counted in losses, pays 50% of its value
     (times its health) and gives infantry worth 40%. A player is out only with no building and no
     MCV (jev runs 148-149). The jev family is testing "bank the lead": sell before the nuke while
