@@ -4,7 +4,12 @@ A survey made on 2026-10-15 of OpenRA / Red Alert bots and AltruAgent tournament
 could be downloaded and connected to our simulator and lab (docs/SIMULATOR.md, docs/LAB.md).
 Each entry is a lead to explore in detail, one at a time; tick it off in the checklist at the end
 when done. **Wired in so far (2026-10-15):** #3 as `ext-ryan` (and `ext-ryan-claude`, Claude as its
-advisor) and #4 (`ai-beginner`, `ai-easy`, `ai-medium`).
+advisor) and #4 (`ai-beginner`, `ai-easy`, `ai-medium`). **2026-10-16:** #1 as `ext-henry` (advisor, analyst
+and squad leads off) with its sparring archetypes `ext-henry-rusher` and `ext-henry-yuriko`
+(`RA_SPARRING`, active through its practice-disguise switch: `RA_SPARRING_AGAINST=lab`), and #2 as
+`ext-pakled` (`subdir: src`; its local model is unreachable here, so its script plays). Suite
+`@field2` = ext-ryan plus these four. Smoke run 184 (20 min, trapped, seed 5150): v10 won all four
+(+10,200, +10,100, +21,600, +5,000); every bot fought (ext-henry: 77 units lost, 182 killed).
 
 ## Summary
 
@@ -290,8 +295,8 @@ missing. With a GitHub token, code search for `altruagent`, `red_alert` + `choos
 - [x] 3. ryanxxhuang: clone to `sim/external/`, register, smoke game, v10 vs it (run 73); advisor desk
 - [x] 3b. advised games vs v10 (runs 75-77: 2 wins, 1 loss on assets, against 0/3 unadvised)
 - [ ] 3c. advised games vs the Rush AI and the Turtle AI
-- [ ] 1. henrysue: same, advisor off; also its `rusher` / `yuriko` sparring modes
-- [ ] 2. PakledAgent: same, models off; read the matchup research against docs/STRATEGY.md
+- [x] 1. henrysue: same, advisor off; also its `rusher` / `yuriko` sparring modes (run 184)
+- [x] 2. PakledAgent: same, models off (run 184); [ ] read the matchup research against docs/STRATEGY.md (the jev family uses it)
 - [ ] 5. Khuongtdm: wrapper; default and one aggressive `params.json`
 - [ ] 6. Riffo: decide whether a fallback-only run is meaningful
 - [ ] 8. FransBots: get the zip, check the file types, port to the fork, corpus check

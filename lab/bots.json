@@ -1046,6 +1046,119 @@
     "council",
     "rules"
    ]
+  },
+  {
+   "name": "ext-henry",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ADVISOR": "off",
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry/logs"
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "contestant henrysue/ucla-steve-nash-equilibrium @6856a69 (2026-10-15): large rules RA bot tuned for the 20-min tiebreak; Claude advisor, analyst and squad leads off",
+   "tags": [
+    "external",
+    "field"
+   ]
+  },
+  {
+   "name": "ext-henry-rusher",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry-rusher",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ADVISOR": "off",
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "RA_SPARRING": "rusher",
+      "RA_SPARRING_AGAINST": "lab",
+      "REDALERT_OPPONENT": "lab",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry-rusher/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry-rusher/logs"
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "henrysue's sparring archetype 'rusher' (agent/redalert/sparring.py: scripted from real tournament replays), @6856a69, models off",
+   "tags": [
+    "external",
+    "field",
+    "archetype"
+   ]
+  },
+  {
+   "name": "ext-henry-yuriko",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry-yuriko",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ADVISOR": "off",
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "RA_SPARRING": "yuriko",
+      "RA_SPARRING_AGAINST": "lab",
+      "REDALERT_OPPONENT": "lab",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry-yuriko/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry-yuriko/logs"
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "henrysue's sparring archetype 'yuriko' (agent/redalert/sparring.py: scripted from real tournament replays), @6856a69, models off",
+   "tags": [
+    "external",
+    "field",
+    "archetype"
+   ]
+  },
+  {
+   "name": "ext-pakled",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "SirLinhart-PakledAgent",
+     "url": "https://github.com/SirLinhart/PakledAgent",
+     "commit": "2232a0e641e4",
+     "name": "ext-pakled",
+     "subdir": "src",
+     "packages": [
+      "agent",
+      "ucla_agent"
+     ]
+    }
+   },
+   "think": 0.005,
+   "description": "contestant SirLinhart/PakledAgent @2232a0e (2026-10-13): very large scripted RA core; its local JevK5-9B model unreachable here, so the script plays every choice",
+   "tags": [
+    "external",
+    "field"
+   ]
   }
  ]
 }
