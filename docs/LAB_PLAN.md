@@ -318,6 +318,24 @@ executor, squads, an economy schedule, per-opponent profiles in `opponents.py`).
 | A5 | **Decisions learned from branches** (search offline, rules online): at sampled moments play each option for 60-180 s (the probes do this by hand), label the best, train a small classifier for that decision | The platform gives no forward model live, but the lab's engine is deterministic and branches are cheap (~34 s) | medium, and CPU: ~N options x branches per label | one decision (attack now / wait) at unselected moments |
 | A6 | Deep RL, one network for everything | microRTS: won only with very many games | not here | no |
 
+**A4, first look** (2026-10-16, experiment `arch-value-model`; logistic regression in numpy on
+the differences between the seats: net, army value, assets, harvesters, buildings, combat units).
+Only ~630 whole 20-minute games have both seats' timeline (the lab records it for agent seats,
+not for OpenRA AIs), 189 held out:
+
+| state at | accuracy | sign of net alone | 97%+ sure | of those right |
+|---|---|---|---|---|
+| 6:00 | 86.8% | 83.7% | 24% | 100% |
+| 10:00 | 91.5% | 86.0% | 53% | 97.0% |
+| 12:00 | 94.7% | 86.0% | 63% | 97.5% |
+| 15:00 | 95.8% | 87.8% | 66% | 98.4% |
+
+Army value and assets count beside the score. For the lab, ending a game the model is 97% sure of
+at 12:00 would save about a quarter of a whole game's time; but the 2-3% it calls wrong are the
+comebacks (ext-henry's 18:00 last stand), which late-game ideas are about. So: opt-in for screens
+of early ideas only, never for gates. Next: record AI seats' timeline too, more games, then one
+bot decision by it.
+
 **Order:** A1 with A2 first (cheapest, uses what we have, proven in StarCraft); A4 alongside (a
 tool for the selector and for the lab's speed); A3 if A1 shows that the economy and army
 structure, not the plan, is what loses to ext-henry; A5 for the decisions the others leave open.
