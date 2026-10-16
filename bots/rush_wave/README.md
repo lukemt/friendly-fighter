@@ -187,3 +187,10 @@ seen lately is mostly infantry.
 (Every change to shared code, rule 8: the file, what it adds, that it is off by default, its test.)
 
 ## Open questions and next steps
+
+- **Idea 1 against the jev family's riflemen rule** (coordinator's request): both trigger on 60%+ of the enemy
+  units seen recently being infantry. Mine (`anti_infantry`): a 240 s window, 10+ units seen, from 5:00,
+  and it trains flamethrowers, grenadiers and riflemen (artillery, no V2s); no effect in 16 full games (runs
+  137, 139). Theirs: riflemen only, a 90 s window; a gain on 10:00 moments (run 190), whole games pending
+  (run 192). If theirs gains in whole games, the difference to test is the unit (riflemen vs flamers and
+  grenadiers) and the window (90 s vs 240 s: mine stayed on from 5:00 to the end in every game).
