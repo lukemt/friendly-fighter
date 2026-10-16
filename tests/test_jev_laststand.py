@@ -128,8 +128,10 @@ def test_a_branch_that_starts_late_still_learns_its_home():
     assert bot.spawn_home == (66, 72)
 
 
-def test_jev_decides_the_bank_and_code_keeps_its_gates(monkeypatch):
+def test_jev_decides_the_bank_and_code_keeps_its_gates(monkeypatch, tmp_path):
     from bots.jev.laststand_jev import LastStandJevBot
+
+    monkeypatch.setenv("FF_JEV_LOG", str(tmp_path))  # (the test's call logs stay out of the lab's shared ones)
 
     bot = LastStandJevBot(plan="boom", keep_first=240, early_refineries=1, cashout_net=2000, ask_from=840.0)
     assert bot.cashout_at is None

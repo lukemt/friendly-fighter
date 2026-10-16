@@ -170,13 +170,20 @@ def _key() -> str | None:
     key = os.environ.get("TYPESAFE_API_KEY")
     if key:
         return key
-    env = _root() / ".env"
+    roots = [_root()]
     try:
-        for line in env.read_text().splitlines():
-            if line.startswith("TYPESAFE_API_KEY="):
-                return line.split("=", 1)[1].strip() or None
-    except OSError:
+        from lab import MAIN_ROOT  # (a family's worktree has no key of its own: the main checkout's .env, as bots/jev_bot.py reads it)
+
+        roots.append(MAIN_ROOT)
+    except ImportError:
         pass
+    for root in roots:
+        try:
+            for line in (root / ".env").read_text().splitlines():
+                if line.startswith("TYPESAFE_API_KEY=") and line.split("=", 1)[1].strip():
+                    return line.split("=", 1)[1].strip()
+        except OSError:
+            pass
     return None
 
 
@@ -287,7 +294,7 @@ class JevBot:
                  commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True,
                  force: str | None = None, economy: str | int = "off", guard_end: float | None = None,
                  greed_floor: int = 0, defenses: int = 2, early_refineries: int = 0,
-                 stage_cells: float = 0.0, regroup: bool = False, focus: bool = False, snipe: bool = False, macro: int = 0) -> None:
+                 stage_cells: float = 0.0, regroup: bool = False, focus: bool = False, snipe: bool = False, macro: int = 0, defend_radius: int = 16) -> None:
         """``force``: a posture held whatever Jev says and past every rail (for the coach: what would
         each posture have scored from this moment?)."""
         self.push = push
@@ -300,6 +307,7 @@ class JevBot:
         self.greed_floor = greed_floor  # Jev's "greedy" only with at least this many combat units
         self.defenses = defenses        # the scripted bot's cap on defenses
         self.macro = macro  # (jev family: refineries on a schedule up to this many; 0 = v10)
+        self.defend_radius = defend_radius  # (rush-wave's setting, ported: how far out an enemy pulls the army off its post; v10: 16)
         self.stage_cells, self.regroup, self.focus, self.snipe = stage_cells, regroup, focus, snipe  # (jev family: where the army waits, how it fires; off = v10)
         self.early_refineries = early_refineries  # refineries before the war factory beyond the first
         self.scout = scout
@@ -310,7 +318,7 @@ class JevBot:
         self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60,
                                            greed=economy if isinstance(economy, int) else 2 if economy == "read" else 0,
                                            defenses=defenses, early_refineries=early_refineries,
-                                           stage_cells=stage_cells, regroup=regroup, focus=focus, snipe=snipe, macro=macro),
+                                           stage_cells=stage_cells, regroup=regroup, focus=focus, snipe=snipe, macro=macro, defend_radius=defend_radius),
                                log=lambda line: None)
         self.jev = Jev(model=model)
         if not use_jev:  # (the control: the same bot with the decisions frozen at the start)
@@ -743,6 +751,7 @@ class JevBot:
             focus=self.focus,
             snipe=self.snipe,
             macro=self.macro,
+            defend_radius=self.defend_radius,
             note=self.posture,
         )
         self.bot.set_knobs(knobs)
