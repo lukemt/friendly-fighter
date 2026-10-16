@@ -37,9 +37,11 @@ import types
 from functools import lru_cache
 from pathlib import Path
 
+from lab import LAB_DIR, MAIN_ROOT  # (shared by every session: AGENTS.md)
+
 ROOT = Path(__file__).resolve().parents[1]
-EXTERNAL_DIR = ROOT / "sim" / "external"
-LOG_DIR = ROOT / "sim" / "lab" / "external"
+EXTERNAL_DIR = MAIN_ROOT / "sim" / "external"
+LOG_DIR = LAB_DIR / "external"
 TICKS_PER_SECOND = 25
 KEEP_COPIES = 8  # loaded copies kept in sys.modules per process (a game has two seats; older ones go)
 

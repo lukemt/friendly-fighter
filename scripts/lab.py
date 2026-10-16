@@ -62,13 +62,9 @@ def _command() -> str:
 
 
 def _quota() -> int:
-    try:
-        quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()[:2]
-        if quota != "max":
-            return max(1, int(int(quota) / int(period)))
-    except (OSError, ValueError):
-        pass
-    return os.cpu_count() or 1
+    from lab.batch import slot_count
+
+    return slot_count()  # (more workers than the machine's game slots would only wait)
 
 
 def _split(text: str) -> list[str]:
@@ -180,10 +176,16 @@ def cmd_bots(a, db) -> int:
         elif a.kind == "ai":
             params = {"type": a.type}
         think = a.think if a.think in ("measured", "paused") else float(a.think)
+        try:
+            source = registry.owner(a.name)
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        if a.name in table and table[a.name].source != source:
+            raise SystemExit(f"{a.name} is registered in {table[a.name].source or 'lab/bots.json'}: replace it there")
         table[a.name] = registry.Bot(name=a.name, kind=a.kind, params=params, think=think, description=a.desc or "",
-                                     tags=[t for t in (a.tags or "").split(",") if t])
+                                     tags=[t for t in (a.tags or "").split(",") if t], source=source)
         registry.save(table)
-        print(f"added {a.name}: {table[a.name].version()}")
+        print(f"added {a.name} to {f'lab/bots.d/{source}.json' if source else 'lab/bots.json'}: {table[a.name].version()}")
         return 0
     if a.action == "freeze":
         if not a.as_name:
@@ -196,7 +198,10 @@ def cmd_bots(a, db) -> int:
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True,
                                 cwd=ROOT).stdout.strip()
         dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=ROOT).stdout.strip()
-        frozen = registry.freeze(table, a.name, a.as_name, commit=commit + ("+changes" if dirty else ""))
+        try:
+            frozen = registry.freeze(table, a.name, a.as_name, commit=commit + ("+changes" if dirty else ""))
+        except ValueError as exc:
+            raise SystemExit(str(exc))
         registry.save(table)
         print(f"froze {a.name} as {a.as_name}: {frozen.params['factory']} ({frozen.version()})")
         return 0
@@ -630,7 +635,10 @@ def cmd_runs(a, db) -> int:
 
 def cmd_note(a, db) -> int:
     game = db.find_game(a.game)["id"] if a.game else None
-    nid = db.add_note(" ".join(a.text), game_id=game, run_id=a.run, experiment=a.experiment, author=a.author)
+    from lab import FAMILY
+
+    nid = db.add_note(" ".join(a.text), game_id=game, run_id=a.run, experiment=a.experiment,
+                      author=a.author or FAMILY or "main")
     print(f"note {nid} saved")
     return 0
 
@@ -683,11 +691,20 @@ def cmd_replay(a, db) -> int:
 
 def cmd_forget(a, db) -> int:
     """Remove games from the database (a test run, a run with a bug): their rows and traces."""
+    from lab import FAMILY
+
     if a.run is not None:
         ids = [r["id"] for r in db.q("SELECT id FROM games WHERE run_id = ?", a.run)]
     else:
         g = db.find_game(a.game) if a.game else None
         ids = [g["id"]] if g else []
+    if FAMILY and ids:  # (a family session forgets only its own runs' games: the lab is everyone's, AGENTS.md)
+        rows = db.q(f"SELECT g.id, g.run_id, json_extract(r.params, '$.family') AS family FROM games g "
+                    f"LEFT JOIN runs r ON r.id = g.run_id WHERE g.id IN ({','.join('?' * len(ids))})", *ids)
+        theirs = sorted({str(r["run_id"]) for r in rows if r["family"] != FAMILY})
+        if theirs:
+            raise SystemExit(f"the {FAMILY} family forgets only games of its own runs (AGENTS.md): "
+                             f"run(s) {', '.join(theirs)} aren't (ask the coordinator)")
     if not ids:
         print("nothing to forget")
         return 1
@@ -823,6 +840,21 @@ def cmd_status(a, db) -> int:
         print(f"human session: {human.SESSION_FILE.read_text()}")
     for pid in live_runtimes():
         print(f"the live tournament runtime is running (pid {pid}): lab games run at a lower priority (nice 10)")
+    from lab import FAMILY, MAIN_ROOT
+    from lab.batch import slot_count, slots_in_use
+
+    print(f"this session: {'family ' + FAMILY if FAMILY else 'the main checkout'} ({ROOT}); lab shared at {LAB_DIR}"
+          + (f" (main checkout {MAIN_ROOT})" if MAIN_ROOT != ROOT else ""))
+    held = slots_in_use()
+    print(f"game slots: {len(held)} of {slot_count()} in use" + ("" if held else " (all free)"))
+    for h in held:
+        since = f"{(time.time() - h['since']) / 60:.0f} min" if h.get("since") else "?"
+        print(f"  slot {h['slot']}: {h.get('family', '?')}, run {h.get('run')}, {h.get('label', '')[:50]} (pid {h.get('pid')}, {since})")
+    notes = db.q("SELECT * FROM notes ORDER BY id DESC LIMIT 5")
+    if notes:
+        print("recent notes (lab note; every session's):")
+        for n in notes[::-1]:
+            print(f"  {report._when(n['created'])} {n['author'] or '?'}: {(n['text'] or '')[:110]}")
     return 0
 
 
@@ -1184,7 +1216,7 @@ def main() -> int:
     s.add_argument("--game")
     s.add_argument("--run", type=int)
     s.add_argument("--experiment")
-    s.add_argument("--author", default="claude")
+    s.add_argument("--author", help="who writes (default: the session: its family, or main)")
 
     s = sub.add_parser("experiment", help="experiments: new / close / show / list")
     s.add_argument("action", choices=["new", "close", "show", "list"])

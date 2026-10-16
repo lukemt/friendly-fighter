@@ -1,6 +1,9 @@
 # Secrets — never commit
 .env
 
+# Family sessions' git worktrees (scripts/session.py, AGENTS.md)
+.worktrees/
+
 # Leftover backup from an abnormally terminated scripts/smoke_game.py
 # --concurrent run (it swaps agent/agent.py's contents temporarily and
 # restores from this backup — see that script's own docstring).

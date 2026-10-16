@@ -116,7 +116,10 @@ class LabDB:
     # -- runs ---------------------------------------------------------------------------
 
     def start_run(self, kind: str, command: str, params: dict, *, note: str = "", experiment: str = "") -> int:
+        from . import FAMILY
+
         commit, dirty = git_state()
+        params = {**params, "family": FAMILY or "main"}  # (the session that ran it: AGENTS.md)
         cur = self.conn.execute(
             "INSERT INTO runs (started, kind, command, git_commit, git_dirty, params, note, experiment, status) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running')",
@@ -245,12 +248,12 @@ def git_state() -> tuple[str, bool]:
     if _GIT is None:
         import subprocess
 
-        from . import ROOT
+        from . import MAIN_ROOT, ROOT
 
         def git(*args: str) -> str:
             try:
-                return subprocess.run(["git", "-c", f"safe.directory={ROOT}", *args], cwd=ROOT, capture_output=True,
-                                      text=True, timeout=10).stdout.strip()
+                return subprocess.run(["git", "-c", f"safe.directory={ROOT}", "-c", f"safe.directory={MAIN_ROOT}", *args],
+                                      cwd=ROOT, capture_output=True, text=True, timeout=10).stdout.strip()
             except (OSError, subprocess.SubprocessError):
                 return ""
 

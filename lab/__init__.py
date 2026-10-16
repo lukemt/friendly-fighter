@@ -19,4 +19,23 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-LAB_DIR = Path(os.environ.get("FF_LAB_DIR") or ROOT / "sim" / "lab")
+
+
+def _main_checkout(root: Path) -> Path:
+    """The repository's main checkout: ``root`` itself, or, in a linked git worktree (a family
+    session, AGENTS.md), the checkout its ``.git`` file points into."""
+    git = root / ".git"
+    if git.is_file():
+        text = git.read_text().strip()
+        if text.startswith("gitdir:"):
+            gitdir = Path(text[7:].strip())  # <main>/.git/worktrees/<name>
+            if gitdir.parent.name == "worktrees" and gitdir.parent.parent.name == ".git":
+                return gitdir.parent.parent.parent
+    return root
+
+
+MAIN_ROOT = _main_checkout(ROOT)
+# Every session shares one lab (database, traces, moment sets, notes): the main checkout's sim/lab.
+LAB_DIR = Path(os.environ.get("FF_LAB_DIR") or MAIN_ROOT / "sim" / "lab")
+# A family session's name: its worktree's folder under .worktrees/ (AGENTS.md); None in the main checkout.
+FAMILY = os.environ.get("FF_FAMILY") or (ROOT.name if ROOT != MAIN_ROOT and ROOT.parent.name == ".worktrees" else None)

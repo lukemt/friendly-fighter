@@ -144,6 +144,17 @@ def _root() -> Path:
     return next((p for p in here.parents if (p / "lab").is_dir() and (p / "bots").is_dir()), here.parents[1])
 
 
+def _lab_dir() -> Path:
+    """The lab's directory, shared by every session (lab.LAB_DIR); the repository's sim/lab if the
+    lab package can't be imported."""
+    try:
+        from lab import LAB_DIR
+
+        return LAB_DIR
+    except ImportError:
+        return _root() / "sim" / "lab"
+
+
 def load_questions(variant: str | None) -> dict[str, dict[str, Any]]:
     """The questions, with a variant's playbook / criteria / question text swapped in (a JSON file,
     relative to the repository: see bots/jev_variants/ and ``lab jev eval --questions``)."""
@@ -316,8 +327,7 @@ class JevBot:
         self.jev = Jev(model=model)
         if not use_jev:  # (the control: the same bot with the decisions frozen at the start)
             self.jev.key = None
-        self.log_dir = Path(log_dir or os.environ.get("FF_JEV_LOG") or
-                            _root() / "sim" / "lab" / "jev")
+        self.log_dir = Path(log_dir or os.environ.get("FF_JEV_LOG") or _lab_dir() / "jev")
         self.log_path: Path | None = None
         self.posture = "defend"
         self.posture_since = 0.0
