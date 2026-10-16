@@ -14,6 +14,14 @@ contract and upstream's fixtures, checked on a mock platform and an abstract sim
 (see "What the first live games showed"). Release 2 is built on that; release 3 turns off the heal
 skill, which the release-2 games showed doing nothing.
 
+## Releases (cut with `~/infra/bin/ff-release hok`, live via `ff-runtime hok restart` between games)
+
+| Release | Commit | What | Live |
+|---|---|---|---|
+| 1 `20261016-191913-195e798` | `195e798` | First version: safety layer, team policy, routing, runner change | 2026-10-16 19:2x-21:45: won vs warren-test; two platform failures |
+| 2 `20261016-214553-05e5c77` | `05e5c77` | Fixes from the first live game: NoOp hold, no healing retreats, live labels, sim on the live map | 21:46-22:32: won vs Quicksilver and Steve Nash Equilibrium, one self-play |
+| 3 `20261016-223216-1fed360` | `1fed360` | Heal skill off (it didn't heal live) | since 22:33 |
+
 ## The idea
 
 A scripted team controller in the spirit of Red Alert's `agent/redalert_bot.py`: it answers every
@@ -109,8 +117,9 @@ server:
   lags, and cools down refused orders instead of resending them every tick.
 - The tiebreak play: Red Alert stops attacking when ahead late; here, ahead on structure damage in
   the last minute, the team protects instead of pushing.
-- STRATEGY.md's "attacking into defenses loses" and "a unit that dies costs its full price": the
-  no-dive and evade rules.
+- STRATEGY.md's "attacking into defenses loses": the no-dive rule. Its other lesson, "a unit that
+  dies costs its full price", did **not** carry over: live, a hero revives in 5-25 s at full HP while
+  healing at home takes minutes, so release 2 stopped retreating to heal.
 - The lab's discipline for comparisons: paired seeds, both sides, a second seed range before calling
   anything better ("one seed fooled us"), and the same scripted opponents every time.
 - `agent/commander.py`'s pattern for the optional planner (below): slow, in a background thread,
