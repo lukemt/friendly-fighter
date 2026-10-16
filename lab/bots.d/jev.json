@@ -352,7 +352,7 @@
    "name": "jev-sjs",
    "kind": "module",
    "params": {
-    "factory": "bots.jev.splitjev:create_agent",
+    "factory": "bots.jev.v10.bot:create_split_agent",
     "kwargs": {
      "plan": "boom",
      "keep_first": 240,
@@ -372,7 +372,7 @@
    "name": "jev-sjj",
    "kind": "module",
    "params": {
-    "factory": "bots.jev.splitjev:create_agent",
+    "factory": "bots.jev.v10.bot:create_split_agent",
     "kwargs": {
      "plan": "boom",
      "keep_first": 240,
@@ -640,7 +640,7 @@
    "name": "jev-sjj-m",
    "kind": "module",
    "params": {
-    "factory": "bots.jev.splitjev:create_agent",
+    "factory": "bots.jev.v10.bot:create_split_agent",
     "kwargs": {
      "plan": "boom",
      "keep_first": 240,
@@ -661,7 +661,7 @@
    "name": "jev-sjs-m",
    "kind": "module",
    "params": {
-    "factory": "bots.jev.splitjev:create_agent",
+    "factory": "bots.jev.v10.bot:create_split_agent",
     "kwargs": {
      "plan": "boom",
      "keep_first": 240,
@@ -970,6 +970,71 @@
     "frozen",
     "jev",
     "rules"
+   ]
+  },
+  {
+   "name": "jev-rifr-v2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_rifr_v2.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-rifr jev-rifr@1a62cf87 at 679dc78+changes: jev-rifb + riflemen when 60%+ of the enemy units seen in the last 90 s are infantry, rocket soldiers when 35%- (and vehicles seen), else mixed",
+   "tags": [
+    "composition",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-sjj-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_sjj_v1.bot:create_split_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "jev"
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-sjj jev-sjj@58e10717 at 679dc78+changes: jev-rifr (rules) with the quartermaster question also asked of Jev: jev (shadow: the rules decide, Jev logged; jev: Jev decides at p>=0.55)",
+   "tags": [
+    "composition",
+    "council",
+    "frozen",
+    "jev"
+   ]
+  },
+  {
+   "name": "jev-sjs-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_sjs_v1.bot:create_split_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "shadow"
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-sjs jev-sjs@65e21bae at 679dc78+changes: jev-rifr (rules) with the quartermaster question also asked of Jev: shadow (shadow: the rules decide, Jev logged; jev: Jev decides at p>=0.55)",
+   "tags": [
+    "composition",
+    "council",
+    "frozen",
+    "jev"
    ]
   }
  ]

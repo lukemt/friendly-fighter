@@ -170,13 +170,20 @@ def _key() -> str | None:
     key = os.environ.get("TYPESAFE_API_KEY")
     if key:
         return key
-    env = _root() / ".env"
+    roots = [_root()]
     try:
-        for line in env.read_text().splitlines():
-            if line.startswith("TYPESAFE_API_KEY="):
-                return line.split("=", 1)[1].strip() or None
-    except OSError:
+        from lab import MAIN_ROOT  # (a family's worktree has no key of its own: the main checkout's .env, as bots/jev_bot.py reads it)
+
+        roots.append(MAIN_ROOT)
+    except ImportError:
         pass
+    for root in roots:
+        try:
+            for line in (root / ".env").read_text().splitlines():
+                if line.startswith("TYPESAFE_API_KEY=") and line.split("=", 1)[1].strip():
+                    return line.split("=", 1)[1].strip()
+        except OSError:
+            pass
     return None
 
 

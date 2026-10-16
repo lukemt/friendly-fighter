@@ -112,8 +112,10 @@ def test_focus_fire_gives_each_kind_of_unit_its_own_target():
     assert not bot._focus_defend(add, combat, {1, 2, 3, 4}, {"visible_enemies": []}, (26, 32), 600.0) and not sent
 
 
-def test_split_jev_shadows_or_decides_the_production(monkeypatch):
+def test_split_jev_shadows_or_decides_the_production(monkeypatch, tmp_path):
     from bots.jev.splitjev import SplitJevBot
+
+    monkeypatch.setenv("FF_JEV_LOG", str(tmp_path))  # (the test's call logs stay out of the lab's shared ones)
 
     def run(mode, jev_pick):
         bot = SplitJevBot(plan="boom", keep_first=240, early_refineries=1, supply_mode=mode)
@@ -203,3 +205,22 @@ def test_defend_radius_widens_what_counts_as_a_threat():
     assert bot._threats(obs, (26, 32)) == [(26, 40)]  # 16: the one at 20 cells is no threat
     assert sorted(bot._threats(obs, (26, 32), 22)) == [(26, 40), (26, 52)]
     assert Knobs().defend_radius == 16
+
+
+def test_split_jev_leaves_the_opening_to_the_rules(monkeypatch, tmp_path):
+    """No Jev call (and no paid token) before ``supply_from``: the opening question is the rules'."""
+    from bots.jev.splitjev import SplitJevBot
+    from bots.jev.v10.bot import loop_request
+
+    monkeypatch.setenv("FF_JEV_LOG", str(tmp_path))
+    bot = SplitJevBot(plan="boom", keep_first=240, early_refineries=1, supply_mode="jev")
+    called = []
+    monkeypatch.setattr(bot.supply_jev, "ask_counted", lambda s, q: called.append(1) or ({}, 500))
+    facts, raw = {"threat": False}, {"observation": {"economy": {"cash": 0}}}
+    for now, rifles in ((100.0, False), (239.0, False), (240.0, True)):
+        bot._now = (facts, now, raw)
+        state, questions = loop_request("supply", {"clock": "x", "enemy_mix": "none seen"}, seconds=now, plan="hold", rifles=rifles,
+                                        supply_brief=bot.supply_brief)
+        answers, tokens = bot._ask(state, questions)
+        assert (tokens == 0) == (now < 240.0), now
+    assert len(called) == 1  # only the call at 4:00
