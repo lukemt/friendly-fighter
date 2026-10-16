@@ -204,6 +204,15 @@ seen lately is mostly infantry.
   exploit-eco-tanks (waves of tanks) is the one place it could pay for leaving the defenses earlier:
   a second seed follows (below).
 
+- **ext-henry** (rules only; the coordinator's request; run 205, `--baselines ext-henry --games 8 --seed 8100`):
+  `rush-wave-k-v1` 4/8 (+3,894) against v10's 3/8 (-1,756): +0.12 points a game (CI -0.12..+0.37), net +5,650
+  (CI -3,203..+14,503): the right direction, not significant. Exploiters and `ext-henry-rusher`
+  (run 196, seed 6200, 12 games each): 35/36 for both, net -272 (CI -3,518..+2,973): no cost.
+- **The board** (run 199, `lab board play`, 6 opponents x 8 games, seed 2026, 20 min): `rush-wave-k-v1` 88%
+  (first), v10 83%: +0.04 points a game (CI -0.04..+0.12), "even". By opponent (k-v1 / v10): ai-normal 7/8 / 6/8,
+  **ai-rush 5/8 / 3/8**, ai-turtle 8/8 / 8/8, exploit-eco-waves 8/8 / 8/8, exploit-eco-tanks 6/8 / 7/8,
+  ext-ryan 8/8 / 8/8. A second seed of the board's schedule is run 212.
+
 ## Core changes
 
 (Every change to shared code, rule 8: the file, what it adds, that it is off by default, its test.)
