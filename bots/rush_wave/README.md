@@ -92,6 +92,9 @@ seen lately is mostly infantry.
 | `rush-wave-e` | d + `guard_infantry=14`, `guard_defenses=2`. | Worse: 2/16 (seed 990: net -25,600, CI -46,277..-4,923) |
 | `rush-wave-f` | Base + `defend_radius=9` (the army only leaves the towers for enemies within 9 cells, v10: 16). | 3 Rush maps (run 162): 2/12 vs v10's 5/12, no clear difference (-0.25, CI -0.51..+0.01) |
 | `rush-wave-g` | f + `guard_mix`. | Run 162: 2/12 (-0.25, CI -0.60..+0.10) |
+| `rush-wave-h` | Oracle test: knows Rush is coming. `plan=hold`, no early refineries, no boom (a safe opening). | Run 164: 3/12 vs v10's 7/12 (-0.33, CI -0.70..+0.04) |
+| `rush-wave-i` | Oracle test: the same with `plan=fortify`. | Run 164: identical to h (3/12) |
+| `rush-wave-k`, `-l` | Base + `defend_radius` 22 and 28. | Screening |
 
 ## Results
 
@@ -148,6 +151,21 @@ seen lately is mostly infantry.
   way. They differ in the first fight: by 6:00 the losses have lost 11.0 units (trapped; 5.2 in wins)
   and killed 12.7 (14.8). So the first fight at the base decides most games, and it is close to even
   for the same opening: a bigger guard or another stance is a coin flip around that fight, not a fix.
+
+- **Detecting Rush early is worth nothing** (oracle test, experiment `rush-wave-opener`, run 164, 3 Rush
+  maps, 12 games, seed 7001): an opening that knows Rush is coming and plays safe (h: hold, i: fortify; no
+  greed, no early refineries) went 3/12 against v10's boom at 7/12, net -14,242 (CI -29,470..+987). v10's
+  economy-first opening is better even against Rush. (`STRATEGY.md`: "pick the opening by opponent" is
+  not supported against Rush.)
+- **The database, deduplicated** (80 v10 vs `ai-rush` games = 56 distinct scenarios, deterministic: no repeat
+  differed; v10 wins 28: trapped 10/28, sidestep 12/16, shadowfiend-ii 6/12):
+  - **Nukes are a minor cause against Rush** (lab note 51): 4 of its 40 losses show a nuke-like burst, all
+    at 18.8-19.8 min. 17 losses end before 12:00 (most on trapped, 8.4-9.1 min, after a lost first fight).
+  - **The late losses (21 scenarios, >= 12 min) are attrition at home, not our attacks.** Wins and late losses are
+    equal at 3:00-4:00; by 8:00 the late losses have 23 units (wins 33) and 15.0k of army (18.5k); by 10:00 23
+    against 37 units. They lose twice the units per two minutes (9.0 against 4.5 at 6-8 min, 12.9 against
+    7.1 at 8-10 min) and build about the same from 8:00. The bot is in the defend posture 90-97% of the time
+    from 6:00 to 12:00 in both groups, with no attack waves (14 games with logs).
 
 ## Core changes
 

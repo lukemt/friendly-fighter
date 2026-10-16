@@ -124,6 +124,66 @@
     }
    },
    "think": 0.005
+  },
+  {
+   "name": "rush-wave-h",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "hold",
+     "keep_first": 600,
+     "early_refineries": 0,
+     "boom_until": 0
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-i",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "fortify",
+     "keep_first": 600,
+     "early_refineries": 0,
+     "boom_until": 0
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-k",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 22
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-l",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 28
+    }
+   },
+   "think": 0.005
   }
  ]
 }
