@@ -864,6 +864,60 @@
     "combo",
     "economy"
    ]
+  },
+  {
+   "name": "jev-a1m8-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_a1m8_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 8
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-a1m8 jev-a1m8@8580b146 at ca99c04: jev-a1 (staging 5 + riflemen rule) + the refinery schedule up to 8",
+   "tags": [
+    "combo",
+    "economy",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-a1g2-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_a1g2_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "greed_hold": 2
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-a1g2 jev-a1g2@6e9a2c07 at ca99c04+changes: jev-a1 (staging 5 + riflemen rule) + greed 2 outside fortify",
+   "tags": [
+    "combo",
+    "economy",
+    "frozen",
+    "jev",
+    "rules"
+   ]
   }
  ]
 }
