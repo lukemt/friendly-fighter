@@ -85,10 +85,23 @@ waits: a 1.2 s answer is 30 ticks of game the bot plays on old decisions.
 
 | Bot | What it is | Status |
 |---|---|---|
+| `jev-council-m` | `ff-jev-council` (`bots.jev_council:create_agent`) with `--think measured` | registered; local-server check failed (below) |
 
 ## Results
 
 (Each claim with its evidence: run ids, `lab probe` / `lab compare` output, games to look at.)
+
+**2026-10-16, local Jev check: FAILED, the server does not answer.** Run 138
+(`lab compare jev-council-m --baselines ai-normal --games 1 --seed 7`, game a03112ee, 19:37 game
+time, lost, 758 s wall): every one of the 247 requests got no answer (latency median 6094 ms, p95
+6145 ms = the client's 6 s timeout, `TIMEOUT_SECONDS` in `bots/jev_bot.py`), so the bot played on
+frozen decisions and the game counts for nothing. Checked by hand afterwards: `GET
+http://100.93.0.5:8090/` answers 404 in 0.14 s (host up), but `POST /v1/systemone` with a one-word
+state hangs for 60 s with no reply, for model `jevk5-9b-v0.3.3` and for `jev-1.13.0`. So the model
+behind the server is not loaded or is stuck, or the server is busy. Not measured yet: whether
+`--think measured` charges latency to the game clock (needs a working server). Also to check once
+it works: the council pins `MODEL = "jev-1.13.0"`, but the local model is `jevk5-9b-v0.3.3`, and
+the client's 6 s timeout is above the ~1.2 s expected but would drop the first ~7 s call.
 
 ## Core changes
 

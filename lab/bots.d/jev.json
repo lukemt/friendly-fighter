@@ -1,3 +1,18 @@
 {
- "bots": []
+ "bots": [
+  {
+   "name": "jev-council-m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent"
+   },
+   "think": "measured",
+   "description": "ff-jev-council with real decision time charged to the game clock (local Jev server)",
+   "tags": [
+    "jev",
+    "council",
+    "latency"
+   ]
+  }
+ ]
 }
