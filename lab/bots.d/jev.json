@@ -53,6 +53,75 @@
     "jev",
     "test"
    ]
+  },
+  {
+   "name": "jev-ls1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 630,
+     "sell_mode": "overrun"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + an insurance MCV from 10:30 (hides on the map) + sells the whole base when it is overrun while the score is ahead",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 630,
+     "cashout_at": 1080,
+     "cashout_net": 2000
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 10:30 + banks the lead: sells the whole base at 18:00 when ahead by 2000+ (army stays)",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls2h",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 630,
+     "cashout_at": 1080,
+     "cashout_net": 2000,
+     "stand_army": "hide"
+    }
+   },
+   "think": 0.005,
+   "description": "jev-ls2 with the army going to the MCV's hiding place after the sale",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
   }
  ]
 }

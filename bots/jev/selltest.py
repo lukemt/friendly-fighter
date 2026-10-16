@@ -27,6 +27,7 @@ class SellTest(CouncilBot):
         self.sold_at: float | None = None
         self.trace: list[dict] = []
         self.last_trace = -1e9
+        self.last_move = -1e9
 
     def choose_action(self, state, context):
         move = super().choose_action(state, context)
@@ -58,10 +59,29 @@ class SellTest(CouncilBot):
             if path:
                 with Path(path).open("a") as f:
                     f.write(json.dumps({"game": getattr(context, "session_id", None), **self.trace[-1]}) + "\n")
-        if not mine:
-            return move
         inner = list(move.action.get("orders") or []) if isinstance(move, WithReasoning) else []
+        if self.sold_at is not None:
+            # (after the sale: no rebuilding, no deploying the MCV; it runs for the corner away from the enemy)
+            inner = [o for o in inner if o.get("cmd") not in ("deploy", "build", "place", "train")]
+            legal = raw.get("legal_actions") or {}
+            enemy = legal.get("enemy_base")
+            home = obs.get("base_center") or {}
+            if mcvs and isinstance(enemy, dict) and isinstance(home, dict) and now - self.last_move >= 8:
+                self.last_move = now
+                hx, hy, ex, ey = home.get("x", 0), home.get("y", 0), enemy.get("x", 0), enemy.get("y", 0)
+                dx, dy = hx - ex, hy - ey
+                n = max(1.0, (dx * dx + dy * dy) ** 0.5)
+                to = [int(hx + dx / n * 30), int(hy + dy / n * 30)]
+                bounds = (raw.get("map") or {}).get("bounds")
+                if isinstance(bounds, list) and len(bounds) == 4:
+                    x, y, w, h = (int(v) for v in bounds)
+                    to = [min(max(to[0], x + 1), x + w - 2), min(max(to[1], y + 1), y + h - 2)]
+                mine.append({"cmd": "move", "units": [u["id"] for u in mcvs], "to": to})
+        if not mine and inner == (list(move.action.get("orders") or []) if isinstance(move, WithReasoning) else []):
+            return move
         orders = inner[:MAX_ORDERS - len(mine[:MAX_ORDERS])] + mine[:MAX_ORDERS]
+        if not orders:
+            return WAIT
         return WithReasoning({"type": "orders", "orders": orders}, (getattr(move, "reasoning_summary", "") or "")[:200] + " [selltest]")
 
 
