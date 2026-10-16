@@ -187,7 +187,10 @@ probes: same branches, same scores).
 | `jev-rifb` | `jev-base`, riflemen only while the enemy army is unseen after 5:00 (`blind_production="rifles"`) | registered |
 | `jev-rifr` | `jev-rifb` + riflemen at 60%+ infantry among the enemy seen, rockets at 35%- (`rifle_rule`) | registered; the rules side of the Jev test |
 | `jev-focus` | `jev-base` + focus fire when defending (`focus`) | registered |
-| `jev-sjs`, `jev-sjj` | `jev-rifr` with the quartermaster question also asked of Jev: `s` shadow (rules decide, Jev logged), `j` Jev decides | `bots/jev/splitjev.py`, unit-tested, not played |
+| `jev-sjs`, `jev-sjj` | `jev-rifr` with the quartermaster question also asked of Jev from 4:00 (`supply_from`): `s` shadow (rules decide, Jev logged), `j` Jev decides when it is 55% sure | code at the end of `bots/jev/v10/bot.py` (so it can be frozen); frozen as `jev-sjs-v1`, `jev-sjj-v1`; J2 |
+| `jev-a1m8`, `jev-a1g2` | `jev-a1` (staging 5 + regroup + riflemen rule) + the refinery schedule up to 8 (`macro`) / + `greed_hold` 2 | run 204; frozen `jev-a1m8-v1`, `jev-a1g2-v1` |
+| `jev-combo` | `jev-a1m8` + `defend_radius` 22 (rush-wave's setting, ported, off by default) = the champion `rush-wave-k-v1`'s change on top of everything the family found | frozen `jev-combo-v1`; run 221 against `rush-wave-k-v1` |
+| `jev-rifr-v2` | a fresh frozen copy of `jev-rifr` from the current family code: the rules control for J2 | frozen |
 
 ## Results
 
@@ -350,7 +353,8 @@ end of the game, and `@jev-ls-holds`: 24 games v10 did not lose by a wipe; exper
 
 ## Core changes
 
-
-(Every change to shared code, rule 8: the file, what it adds, that it is off by default, its test.)
+None. Everything is in this family's copy of v10 (`bots/jev/v10/`), opt-in and off by default, with tests in
+`tests/test_jev_stage.py` and `tests/test_jev_laststand.py` (the Jev tests keep their call logs in a temporary
+directory, not the lab's shared `sim/lab/jev`).
 
 ## Open questions and next steps
