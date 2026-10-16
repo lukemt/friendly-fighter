@@ -205,6 +205,22 @@ def cmd_bots(a, db) -> int:
         registry.save(table)
         print(f"froze {a.name} as {a.as_name}: {frozen.params['factory']} ({frozen.version()})")
         return 0
+    if a.action == "tag":
+        table = registry.load()
+        if a.name not in table:
+            raise SystemExit(f"no bot {a.name!r} in the registry")
+        bot = table[a.name]
+        from lab import FAMILY
+
+        if FAMILY and bot.source != FAMILY:
+            raise SystemExit(f"{a.name} isn't the {FAMILY} family's (AGENTS.md): tag your own bots")
+        tags = set(bot.tags)
+        for t in _split(a.tags or ""):
+            (tags.discard if t.startswith("-") else tags.add)(t.lstrip("+-"))
+        bot.tags = sorted(tags)
+        registry.save(table)
+        print(f"{a.name}: tags {', '.join(bot.tags) or '(none)'}")
+        return 0
     if a.action == "show":
         b = registry.get(a.name)
         print(json.dumps({**b.spec(), "name": b.name, "version": b.version(), "description": b.description,
@@ -427,6 +443,61 @@ def cmd_probe(a, db) -> int:
         alive, m, rnd = keep, min(len(order), m * 2), rnd + 1
     print()
     print(moments.probe_report(db, name, dropped=dropped, **rule))
+    return 0
+
+
+def cmd_board(a, db) -> int:
+    """The board: every family's entries against the champion on one schedule (lab/board.py)."""
+    from lab import FAMILY, board
+
+    cfg = board.config()
+    if a.action == "show":
+        print(board.report(db, cfg))
+        return 0
+    if a.action == "history":
+        print(board.history(db, a.bot))
+        return 0
+    if a.action == "play":
+        try:
+            bots = _split(a.entries) if a.entries else board.entries(registry.load(), cfg)
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        if not bots:
+            print(f"no board entries in {'the ' + FAMILY + ' family' if FAMILY else 'this checkout'} "
+                  f"(tag a frozen bot 'board': lab bots add ... --tags board, or freeze one)")
+            return 0
+        _check_bots(bots + cfg["baselines"])
+        jobs, reused = board.plan(db, bots, cfg)
+        print(f"[board] {', '.join(bots)}: {len(jobs)} game(s) to play, {reused} recorded already", flush=True)
+        if jobs:
+            _play(db, jobs, a, "board", {"entries": bots, "board": cfg})
+        return 0
+    # run: the coordinator plays the main checkout's entries, then each family's from its worktree.
+    if FAMILY:
+        raise SystemExit("lab board run is the coordinator's (AGENTS.md); a family plays its entries with lab board play")
+    import subprocess
+
+    from lab import MAIN_ROOT
+
+    a.action = "play"
+    a.entries = None
+    cmd_board(a, db)
+    worktrees = MAIN_ROOT / ".worktrees"
+    for wt in sorted(worktrees.iterdir()) if worktrees.exists() else []:
+        if not (wt / "scripts" / "lab.py").exists():
+            continue
+        print(f"[board] family {wt.name}:", flush=True)
+        args = [sys.executable, str(wt / "scripts" / "lab.py"), "board", "play", "--note", a.note or "board run"]
+        if a.workers:
+            args += ["--workers", str(a.workers)]
+        subprocess.run(args, cwd=wt, check=False)
+    print()
+    print(board.report(db, cfg))
+    n = board.save_snapshot(db, cfg)
+    top = board.standings(db, cfg)[:3]
+    db.add_note("board: " + "; ".join(f"{r['bot']} {100 * r['points']:.0f}%" + (f" ({r['diff']:+.2f} vs ref)" if r["diff"] is not None else "")
+                                      for r in top), author="main")
+    print(f"(saved a snapshot of {n} entries: lab board history; the top 3 are in a lab note)")
     return 0
 
 
@@ -1048,7 +1119,7 @@ def main() -> int:
         sp.add_argument("--record", action="store_true", help="also write our agent's recordings (recordings/)")
 
     s = sub.add_parser("bots", help="the bot registry")
-    s.add_argument("action", nargs="?", default="list", choices=["list", "add", "show", "freeze"])
+    s.add_argument("action", nargs="?", default="list", choices=["list", "add", "show", "freeze", "tag"])
     s.add_argument("--as", dest="as_name", help="freeze: the name of the frozen copy")
     s.add_argument("name", nargs="?")
     s.add_argument("--kind", default="ff", choices=registry.KINDS)
@@ -1154,6 +1225,15 @@ def main() -> int:
     s.add_argument("--report", action="store_true", help="print the report of what was played, play nothing")
     s.add_argument("--runs", help="--report: only these probe runs")
     playing(s)
+
+    s = sub.add_parser("board", help="the board: every family's entries against the champion (show, play, run, history)")
+    s.add_argument("action", nargs="?", default="show", choices=["show", "play", "run", "history"])
+    s.add_argument("bot", nargs="?", help="history: one bot's")
+    s.add_argument("--entries", help="play: these bots instead of this checkout's entries")
+    s.add_argument("--workers", type=int, default=None)
+    s.add_argument("--note", default="")
+    s.add_argument("--experiment", default="board")
+    s.add_argument("--record", action="store_true")
 
     s = sub.add_parser("look", help="the board at a moment of a recorded game")
     s.add_argument("game")
@@ -1298,7 +1378,7 @@ def main() -> int:
 
     a = p.parse_args()
     db = LabDB()
-    handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch, "moments": cmd_moments, "probe": cmd_probe,
+    handlers = {"bots": cmd_bots, "play": cmd_play, "league": cmd_league, "gate": cmd_gate, "compare": cmd_compare, "exploit": cmd_exploit, "coach": cmd_coach, "branch": cmd_branch, "moments": cmd_moments, "probe": cmd_probe, "board": cmd_board,
                 "look": cmd_look, "watch": cmd_watch, "replay": cmd_replay, "games": cmd_games, "show": cmd_show, "stats": cmd_stats,
                 "h2h": cmd_h2h, "ratings": cmd_ratings, "report": cmd_report, "branches": cmd_branches,
                 "runs": cmd_runs, "note": cmd_note, "import": cmd_import, "status": cmd_status, "forget": cmd_forget, "dashboard": cmd_dashboard, "curves": cmd_curves, "champion": cmd_champion, "jev": cmd_jev, "experiment": cmd_experiment, "sql": cmd_sql, "human": cmd_human,

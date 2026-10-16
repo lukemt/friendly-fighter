@@ -134,6 +134,17 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
 - Use `lab note --experiment ...` for findings. Notes are shared and show in `lab status`.
 - Commit often on `family/<family>`. That branch is your only branch: never commit to `main`.
 
+**The board** (`lab board`) ranks every family's entries against the champion on one fixed
+schedule: 6 opponents (the AIs, the exploiters, the contestant `ext-ryan`) × 8 games, 20 minutes.
+- **Entering:** freeze a module bot, then tag the copy:
+  `lab bots freeze <family>-a --as <family>-a-v1`, then `lab bots tag <family>-a-v1 --tags +board`.
+  A knobs bot (kind `ff`) can't be frozen and is tagged as is. At most 2 entries per family, and
+  module bots only when frozen (*enforced*).
+- **Playing:** `lab board play` plays your entries' games now (48 per entry, ~10 minutes). Games
+  already played the same way are reused. Otherwise the coordinator's `lab board run` plays them.
+- **Reading:** `lab board` shows the standings and `lab board history` the snapshots. An entry's
+  "vs reference" is its points a game minus the champion's on the same games.
+
 **Handing work back.**
 1. When a bot passes stage 3, write it up in the README.
 2. Leave a `lab note`.
@@ -142,16 +153,46 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
 
 ## The coordinator's duties
 
-- **Merge** a family with `git merge --no-ff family/<family>` from `main`. Before merging:
-  - the tests pass (`.venv/bin/python -m pytest -q`),
-  - the README is current,
-  - shared code changes are reviewed against rule 8.
-- **Run gates, keep the champion** (`lab champion set`) and keep `docs/STRATEGY.md`, which
-  collects the families' findings.
-- **Handle the engine and the shared moment sets and suites.** Announce changes with `lab note`
-  (and by message to other Claude sessions on this machine, where possible).
-- **Change the live bot only on the user's go.**
-- **Keep this file true.** When a rule changes, change it here first.
+The coordinator keeps what the sessions share coherent, and does whatever is risky. It doesn't
+build bots itself while families run: it would compete with them for slots, and its own changes
+to shared code are the ones the rules are there to keep careful.
+
+1. **The live bot.** Run the tournament runtime (start, stop, `agent/champion.py`) and protect
+   `recordings/`. Change the live bot only on the user's go. Import platform games
+   (`lab import`) after each live match.
+2. **The champion.** Run the gates (stage 4) when a family reports a candidate, crown champions
+   (`lab champion set`), and keep the champion history.
+3. **Merging.** Merge a family with `git merge --no-ff family/<family>` from `main`. Before merging:
+   - the tests pass (`.venv/bin/python -m pytest -q`),
+   - the family's README is current,
+   - shared code changes are reviewed against rule 8.
+
+   Resolve conflicts between families.
+4. **Shared infrastructure.** The engine (rule 3), the lab's code, the suites (`lab/suites.json`),
+   the shared moment sets, and the board's settings (`lab/board.json`).
+5. **Shared knowledge.** Keep `docs/STRATEGY.md`, which collects the families' findings, and this
+   file. When a rule changes, change it here first.
+6. **Announcements.** Post engine rebuilds, champion changes and board results as `lab note`s,
+   which every session sees in `lab status`. Message Claude sessions directly as well; Codex can't
+   receive messages.
+7. **Briefs.** Start each family with a written brief in its README's first section: its idea,
+   the weakness it targets (with evidence), the moment sets and baselines to start from, and what
+   counts as done. Two families never chase the same idea.
+8. **A fair share of the machine.** The slots prevent overload, but not one family taking every
+   slot all day. Set priorities: big runs (leagues, long sweeps) overnight or by arrangement, one
+   big run per family at a time. Watch `lab status`.
+9. **The board** (`lab board`, docs/LAB.md). Run it after merges, new entries, or a champion change:
+   `lab board run`, then post the standings as a note. Families enter frozen bots by tagging
+   them `board`.
+10. **Health checks**, about every few hours while families work:
+    - `lab status`: stuck runs, slots held for hours;
+    - `scripts/session.py list`: families with uncommitted work, branches far behind `main`
+      (ask them to `git merge main`), sessions gone quiet.
+11. **Closing a family** when it is done or stuck: merge what is useful, write its result into
+    `docs/STRATEGY.md`, `scripts/session.py remove <family>`. The branch stays.
+12. **Reporting to the user.** Tell the user what each family does and has shown, what looks
+    promising, and the decisions that are theirs: switching the live bot, pushing, spending
+    money, closing a family.
 
 ## The machine
 

@@ -211,7 +211,7 @@ This turns the "current intent" store of ROADMAP.md into code.
 - **Measured and dropped:** replaying with OpenRA's AI asleep (as a save game loads,
   `ModularBot.cs`): the AI thinks ~1.2 of ~21 s in a 17-minute replay (`RL_BOT_TIMING=1`), ~6%.
 
-### L11. Reuse games already played — built for probe branches 2026-10-16; whole games next
+### L11. Reuse games already played — built for probe branches and the board 2026-10-16 (whole games verified deterministic, runs 126-127); compare/gate next
 
 Before a run, skip every job whose game is already in the database with the same bot versions,
 map, seed, length (and, for a branch, origin, tick and stop): the result is the one recorded.
@@ -236,6 +236,13 @@ Replay a moment once and branch every variant from the engine's saved world, ins
 the game for each branch. OpenRA has no world copy; options are a save/restore of the world state in
 the fork, or checkpointing the engine process (CRIU). Worth it once probes are the main workload:
 a 13-moment, 5-variant late probe replays ~17 minutes 78 times today.
+
+### L15. The board — built 2026-10-16
+
+`lab board` (lab/board.py, lab/board.json): every family's frozen entries against the champion on
+one fixed schedule (6 baselines × 8 games, 20 min), played from each family's worktree into the
+shared lab, whole games reused when played the same way (verified, runs 126-127), standings paired
+with the reference, snapshots over time. The coordinator runs it (AGENTS.md, duty 9).
 
 ---
 

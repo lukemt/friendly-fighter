@@ -487,6 +487,31 @@ lab probe NAME --report [--stop-after 300] [--stop-quiet 45] [--runs 119,120]
   situations an idea is for, reuse, halving and early stops; engine snapshots would change the rest
   (LAB_PLAN L14).
 
+## The board: every family against the champion
+
+```bash
+lab board                      # the standings
+lab board play                 # play this checkout's entries (a family: its own; main: reference and fixed)
+lab board run                  # the coordinator: main's entries, then every family's from its worktree; saves a snapshot
+lab board history [BOT]        # the snapshots over time
+lab bots tag BOT --tags +board # enter a frozen bot (a family: at most 2)
+```
+
+- **One schedule** (`lab/board.json`, the coordinator's): every entry plays each baseline (`ai-normal`,
+  `ai-rush`, `ai-turtle`, the two exploiters, `ext-ryan`) 8 times, maps rotating and seats
+  swapped, on the board's seeds, at 20 minutes: 48 games an entry. Every entry plays the same games,
+  so any two are compared game by game.
+- **Entries:** the reference (`ff-council-champ-v10`) and the fixed bots (`ff-greedy-turtle-eco`,
+  `ff-default`) from the main checkout. Each family's bots tagged `board` (module bots frozen) are played
+  from the family's own worktree, since its code exists only on its branch until merged.
+- **Played once:** lab games are deterministic, so a game already played the same way (the same
+  versions in the same seats, map, seed, length, engine build) is reused. Checked on 2026-10-16:
+  two games played twice gave identical scores, lengths, timelines and events (runs 126-127).
+  Rerunning the board plays only new entries and new versions. A new engine build plays everything again.
+- **Standings:** per entry, its latest version's games: points, the paired difference to the
+  reference (points a game, 95% interval: a verdict once it clears 0), mean net, points by baseline.
+  `lab board run` saves a snapshot and posts the top 3 as a `lab note`.
+
 ## Several sessions at once
 
 Bot families are built by separate agent sessions (Claude Code, Codex), each in a git worktree

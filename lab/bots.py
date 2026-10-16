@@ -151,7 +151,7 @@ def freeze(table: dict, name: str, new_name: str, *, commit: str = "") -> "Bot":
         params["kwargs"] = kwargs
     frozen = Bot(name=new_name, kind="module", params=params,
                  think=bot.think, description=f"frozen {name} {bot.version()}" + (f" at {commit}" if commit else "")
-                 + f": {bot.description}", tags=sorted(set(bot.tags) | {"frozen"}), source=family)
+                 + f": {bot.description}", tags=sorted((set(bot.tags) - {"board"}) | {"frozen"}), source=family)
     table[new_name] = frozen
     return frozen
 
