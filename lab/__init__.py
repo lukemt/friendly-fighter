@@ -39,3 +39,10 @@ MAIN_ROOT = _main_checkout(ROOT)
 LAB_DIR = Path(os.environ.get("FF_LAB_DIR") or MAIN_ROOT / "sim" / "lab")
 # A family session's name: its worktree's folder under .worktrees/ (AGENTS.md); None in the main checkout.
 FAMILY = os.environ.get("FF_FAMILY") or (ROOT.name if ROOT != MAIN_ROOT and ROOT.parent.name == ".worktrees" else None)
+
+# Lobby options every new lab game is played with, on top of ffsim's DEFAULT_LOBBY (2026-10-16):
+# superweapons off. No player on the platform can fire support powers (the API has no such order),
+# so the OpenRA AIs' nukes (and iron curtain, chronosphere) are a lab artifact. A branch keeps the
+# lobby of the game it branches from. Part of the engine id (lab/bots.py _engine_hash), so games
+# played otherwise are never reused for these.
+LAB_LOBBY = {"techlevel": "nosuperweapons"}

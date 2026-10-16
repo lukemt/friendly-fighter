@@ -255,6 +255,21 @@ Never reused: bots whose games don't replay (Jev bots, language-model and adviso
 `think: measured`), branches and probes (they have their own reuse), and anything with
 `--no-reuse`. A version or engine change means new games, as it should.
 
+**No superweapons** (`LAB_LOBBY` in `lab/__init__.py`, 2026-10-16). No player on the platform
+can fire support powers (the API has no such order), so lab games are played with the tech level
+"no superweapons": no missile silo, iron curtain or chronosphere, so the OpenRA AIs can't nuke. The
+AIs' airfield powers stay (paratroopers, Ukraine's parabombs, the spy plane): they would need a change
+to the engine's rules. The lobby is part of the engine id, so a game played with superweapons is
+never reused for one without; a branch keeps the lobby of the game it branches from (so old
+moment sets still replay). The board counts only games of the current engine id: it starts over.
+
+**Games a superweapon decided** (`lab/superweapons.py`). `lab superweapons [--bot B] [--decided]`
+lists games where an agent seat lost 5+ buildings within 3 s against an OpenRA AI, with its net
+just before and at the end; "decided" means it was level or ahead before and lost. Each game is
+flagged in `info.superweapon` (`--flag` checks older games; new games are checked when saved,
+since parabombs remain). On 2026-10-16: 91 whole games flagged, 68 likely decided. For v10 in 20-minute
+games: Rush 9 of 104 games, Normal 9 of 44, Turtle 5 of 24 (repeats of the same game included).
+
 **Cost.**
 - **Time:** games are 20 minutes by default, the platform's length (tournament games are 20;
   pass `--minutes 10` for quick checks). A 10-minute game takes 15-25 s in a worker, a

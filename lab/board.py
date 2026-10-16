@@ -102,13 +102,16 @@ def _slots(cfg: dict) -> set:
 
 
 def results(db, cfg: dict) -> dict[str, dict]:
-    """Each entry's latest version's board games: ``{bot: {"version", "family", "games": {slot: (points, net)}}}``."""
+    """Each entry's latest version's board games: ``{bot: {"version", "family", "games": {slot: (points, net)}}}``,
+    on the current engine build and lab lobby (lab/bots.py _engine_hash)."""
+    from .moments import _engine
+
     slots = _slots(cfg)
     rows = db.q("SELECT g.id, g.map, g.seed, g.finished, json_extract(g.info, '$.board') AS entry, "
                 "json_extract(g.info, '$.baseline') AS baseline, json_extract(r.params, '$.family') AS family "
                 "FROM games g LEFT JOIN runs r ON r.id = g.run_id WHERE json_extract(g.info, '$.label') = ? "
-                "AND g.minutes = ? AND g.branch_of IS NULL AND g.outcome != 'no_result' ORDER BY g.finished",
-                LABEL, cfg["minutes"])
+                "AND g.minutes = ? AND g.branch_of IS NULL AND g.outcome != 'no_result' AND g.engine = ? "
+                "ORDER BY g.finished", LABEL, cfg["minutes"], _engine())
     by_version: dict[tuple[str, str], dict] = {}
     latest: dict[str, tuple[float, str]] = {}
     for g in rows:

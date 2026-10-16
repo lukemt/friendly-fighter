@@ -127,7 +127,15 @@ test before relying on them.
     `lowpower || powerdown`; the silo draws 150). So killing its power plants stops the clock, and
     killing the silo (2,500) ends it. Both are within V2 range (10) of the outside of its
     defenses (tesla 7).
-  - **We have no support powers through the platform** (no such order), so we can't nuke back.
+  - **Against the Rush AI the nuke is a minor cause** (rush-wave family, 75 games of v10 vs Rush =
+    56 distinct games): 4 of v10's 40 losses show a nuke-like burst, all at 18.8-19.8 min. 17 end
+    before 12:00, mostly on trapped at 8.4-9.1 min, after a lost first fight at 4:55-5:10.
+  - **No player on the platform has support powers** (the API's command list, skill/redalert, has
+    no such order), so we can't nuke back, and **no tournament opponent can nuke us**. Only the
+    OpenRA AIs in the lab do. Don't build defenses against it; count these late wipes as lab noise
+    when judging bots. Since 2026-10-16 the lab plays without superweapons (docs/LAB.md), and
+    `lab superweapons` lists the older games a nuke likely decided: for v10, 9 of 44 games against
+    Normal, 5 of 24 against Turtle, 9 of 104 against Rush.
   - **Selling books no loss:** a sold building isn't counted in losses, pays 50% of its value
     (times its health) and gives infantry worth 40%. A player is out only with no building and no
     MCV (jev runs 148-149). The jev family is testing "bank the lead": sell before the nuke while
