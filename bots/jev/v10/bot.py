@@ -148,7 +148,7 @@ class CouncilBot(JevBot):
                  plan: str = "hold", gate: float = 0.55, attack_gate: float = 0.6, use_jev: bool = True,
                  boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev",
                  blind_production: str = "rockets", rifle_rule: bool = False, rifle_hi: float = 0.6, rifle_lo: float = 0.35,
-                 **kwargs) -> None:
+                 tanya_rule: bool = False, **kwargs) -> None:
         """``gate``: the probability a new plan needs; ``attack_gate``: the same for attack and boom.
         ``boom_until``: no boom from this time; ``keep_first``: the first plan stands until then unless
         the base is raided or an attack is expected (for experiments). ``oracle="rules"``: code answers
@@ -159,6 +159,7 @@ class CouncilBot(JevBot):
         self.supply_brief: list[str] | None = None  # (jev family: another briefing for the quartermaster, see bots/jev/splitjev.py)
         self.blind_production = blind_production  # (jev family: what the rules train while the enemy army is unseen; v10: rockets)
         self.rifle_rule, self.rifle_hi, self.rifle_lo = rifle_rule, rifle_hi, rifle_lo
+        self.tanya_rule = tanya_rule  # (jev family: Tanya seen -> tanks, which she cannot hurt)
         self.plan = plan
         self.plan_since = 0.0
         self.gate, self.attack_gate = gate, attack_gate
@@ -395,6 +396,8 @@ class Rules:
         seen = self._seen()
         if now < 240:
             return "infantry" if b.raids else "mixed"
+        if b.tanya_rule and "e7" in seen:
+            return "vehicles"
         if b.rifle_rule:
             share = self._infantry_share(now)
             if share is not None:

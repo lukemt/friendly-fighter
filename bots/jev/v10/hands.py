@@ -132,6 +132,7 @@ class Knobs:
     stage_cells: float = 0.0         # (jev family) the staging point this many cells from home toward the enemy; 0: a fifth of the way (v10)
     regroup: bool = False            # (jev family) idle combat units walk to the staging point even in the defend posture
     focus: bool = False              # (jev family) defending: each kind of unit attacks the enemy it hurts most (an `attack` order with a target)
+    snipe: bool = False              # (jev family) defending: while Tanya (e7) is in sight every combat unit attacks her
 
 
 @dataclass
@@ -579,11 +580,34 @@ class RedAlertBot:
             if (near_home(u) or not self._wave_active)
             and now - self._unit_ordered.get(u["id"], -1e9) >= DEFEND_REORDER_SECONDS
         ]
+        if knobs is not None and knobs.snipe and obs is not None and self._snipe_defend(add, combat, set(helpers), obs, home, now):
+            notes.append(f"defend base vs {len(threats)} enemies: everyone on Tanya")
+            return
         if knobs is not None and knobs.focus and obs is not None and self._focus_defend(add, combat, set(helpers), obs, home, now):
             notes.append(f"defend base vs {len(threats)} enemies: focus fire")
             return
         if self._order_units(add, "attack_move", helpers, target, now):
             notes.append(f"defend base vs {len(threats)} enemies at {list(target)}")
+
+    def _snipe_defend(self, add, combat, helper_ids, obs, home, now) -> bool:
+        """Tanya (e7) does 35,714 DPS to infantry and nothing to vehicles (PakledAgent's matchup model) and dies
+        in seconds to a crowd: while she is in sight every unit that can fight attacks her."""
+        tanyas = [e for e in _list(obs.get("visible_enemies")) if str(e.get("type") or "").lower() == "e7" and not e.get("wreck")
+                  and isinstance(e.get("id"), int) and (c := _cell(e)) and _dist(c, home) <= DEFEND_RADIUS + 8]
+        units = [u for u in combat if u["id"] in helper_ids]
+        if not tanyas or not units:
+            return False
+        centre = _centroid([c for u in units if (c := _cell(u))]) or home
+        target = min(tanyas, key=lambda e: _dist(_cell(e), centre))
+        ids = [u["id"] for u in units]
+        sent = False
+        for start in range(0, len(ids), MAX_UNITS_PER_ORDER):
+            chunk = ids[start:start + MAX_UNITS_PER_ORDER]
+            if add({"cmd": "attack", "units": chunk, "target": target["id"]}):
+                for uid in chunk:
+                    self._unit_ordered[uid] = now
+                sent = True
+        return sent
 
     def _focus_defend(self, add, combat, helper_ids, obs, home, now) -> bool:
         """Each kind of unit attacks the nearest enemy of the kind it hurts most (PakledAgent's matchup model:

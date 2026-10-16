@@ -135,3 +135,30 @@ def test_split_jev_shadows_or_decides_the_production(monkeypatch):
     assert pick == "rockets"  # Jev decides
     bot, pick, _ = run("jev", "rifles")
     assert pick == "rifles" and bot.agreement() == (1, 1)
+
+
+def test_snipe_sends_everyone_at_tanya_and_the_tanya_rule_switches_to_tanks():
+    from bots.jev.v10.bot import CouncilBot
+
+    bot = RedAlertBot(knobs=Knobs(posture="defend", snipe=True), log=lambda line: None)
+    sent = []
+
+    def add(order, note=None):
+        sent.append(order)
+        return True
+
+    combat = [{"id": i, "type": t, "x": 30, "y": 36, "idle": True} for i, t in enumerate(["e1", "e3", "3tnk", "v2rl"], start=1)]
+    obs = {"visible_enemies": [{"id": 50, "type": "e1", "x": 34, "y": 38}, {"id": 51, "type": "e7", "x": 36, "y": 40}]}
+    assert bot._snipe_defend(add, combat, {1, 2, 3, 4}, obs, (26, 32), 800.0)
+    assert [(o["cmd"], sorted(o["units"]), o["target"]) for o in sent] == [("attack", [1, 2, 3, 4], 51)]
+    sent.clear()
+    assert not bot._snipe_defend(add, combat, {1, 2, 3, 4}, {"visible_enemies": [{"id": 50, "type": "e1", "x": 34, "y": 38}]}, (26, 32), 800.0)
+
+    def production(rule):
+        b = CouncilBot(oracle="rules", plan="boom", keep_first=240, early_refineries=1, tanya_rule=rule)
+        b.enemy_seen = {1: ("e7", 790.0), 2: ("e1", 790.0)}
+        facts, raw = {"threat": False}, {"observation": {"economy": {"cash": 0}}}
+        b._now = (facts, 800.0, raw)
+        return b.jev.production(facts, 800.0, raw)
+
+    assert production(True) == "vehicles" and production(False) == "rockets"  # (v10: blind-or-vehicles rule)

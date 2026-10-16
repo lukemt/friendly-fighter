@@ -148,7 +148,11 @@ probes: same branches, same scores).
    riflemen.
 3. **How the army fires** (`focus`). The same model: "targeting is worth as much as composition".
    Defending, each kind of unit gets an `attack` order on the nearest enemy of the kind it hurts most.
-4. **Measured on the way:** v10's `choose_action` costs 0.53 ms mean per view (p95 0.8 ms, max 13 ms,
+4. **Tanya** (`snipe`, `tanya_rule`; experiment `jev-tanya`). Against the Allied Normal AIs she is seen in 25 of 25
+   v10 games (first ~13.5 min, with the big wave); v10 loses 13 of them. `snipe`: while she is in sight every
+   combat unit attacks her; `tanya_rule`: tanks only once she has been seen (she does nothing to vehicles).
+   Tested on unselected moments (13:00 of v10's 21 games against Allied Normal AIs, any outcome), with a placebo.
+5. **Measured on the way:** v10's `choose_action` costs 0.53 ms mean per view (p95 0.8 ms, max 13 ms,
    3,500 calls of a 20-minute game, run 168), so the platform's view interval (~0.24 s) is not
    threatened by the champion's own code, and the lab's fixed 5 ms think is 10 times conservative.
 
@@ -166,6 +170,8 @@ probes: same branches, same scores).
 | `jev-lsj` code: `laststand_jev.py` | Jev decides when to bank (asks every 15 s from 14:00) | written and unit-tested, never played; **parked** |
 | `jev-timed` | v10 timing every `choose_action` (wall and CPU) | run 168: 0.53 ms mean per view |
 | `jev-st5`, `jev-st8` | `jev-base`, the army waits 5 / 8 cells from home (`stage_cells`) and idle units regroup there | probe run 170; `jev-st5` in full games: run 181; frozen as `jev-st5-v1` |
+| `jev-tan1`, `jev-tan2`, `jev-tan3` | `jev-base` + `snipe` (Tanya) / + `tanya_rule` (tanks once she is seen) / both | probe run 187 (`@jev-tanya-13`) |
+| `jev-plc` | the PLACEBO: `jev-base` with only `regroup` (idle units walk to v10's own staging point) | runs 185, 187 |
 | `jev-a1`, `jev-a2` | `jev-st5` + the riflemen rule (`a1`); + focus fire (`a2`) | registered |
 | `jev-rifb` | `jev-base`, riflemen only while the enemy army is unseen after 5:00 (`blind_production="rifles"`) | registered |
 | `jev-rifr` | `jev-rifb` + riflemen at 60%+ infantry among the enemy seen, rockets at 35%- (`rifle_rule`) | registered; the rules side of the Jev test |
@@ -216,7 +222,7 @@ the rows because the family code changed after the run started, so the table is 
     staging point, which should change nothing) gains **+3,383** vs the control (-2,024..+8,791), better in
     10/15, W-D-L 12-0-3 against 6-0-9. The set is chosen by v10's bad fights, so the control replays a selected-bad
     outcome and any perturbation regresses toward the mean. `jev-st5` is about +4,000 over the placebo: not significant.
-    **Every probe on selected moments needs a placebo variant, and the comparison is to it** (lab note 63).
+    **Every probe on selected moments needs a placebo variant, and the comparison is to it** (lab note 64).
   - *Whole games* (run 183, `jev-st5-v1`, 20 min, no superweapons, seed 5101, 16 games each vs `ai-normal` and
     `exploit-ryan-plan`): v10 10/16 (+6,828) and 14/16 (+17,556); `jev-st5-v1` 9/16 (+6,416) and 15/16 (+14,562);
     together 24/32 each, **+0.00 points a game (CI -0.20..+0.20), net -1,703 (CI -11,008..+7,602)**: no difference.
@@ -228,6 +234,24 @@ the rows because the family code changed after the run started, so the table is 
     falls 16:19-17:35. Against the Allied Normal AIs **Tanya (`e7`) is seen in 25 of 25 v10 games, first at
     ~13.5 min, and v10 loses 13 of them** (Soviet Normal AIs have none). She does 35,714 DPS against infantry and
     nothing against vehicles (PakledAgent's table), and v10's army is 60% infantry.
+- **Tanya** (run 187, `@jev-tanya-13`: 21 moments at 13:00 of v10's games against Allied Normal AIs, chosen with no
+  regard to the outcome; 240 s; experiment `jev-tanya`):
+
+  | bot | branches | score change | vs control (95% CI) | better in | W-D-L at the stop |
+  |---|---|---|---|---|---|
+  | control (v10) | 21 | +617 | | | 15-0-6 |
+  | `jev-plc` (regroup only) | 21 | +5,836 | **+5,219 (+838..+9,600) BETTER** | 15/21 | 16-0-5 |
+  | `jev-tan1` (everyone attacks Tanya while she is in sight) | 21 | +1,790 | +1,174 (-3,370..+5,717) | 4/21 | 15-0-6 |
+  | `jev-tan2` (tanks only once she has been seen) | 21 | +1,257 | +640 (-2,377..+3,658) | 9/21 | 15-0-6 |
+  | `jev-tan3` (both) | 21 | +1,686 | +1,069 (-2,436..+4,574) | 10/21 | 16-0-5 |
+
+  Neither answer to Tanya is measurable: it is the 13-15 minute wave, not she, that costs the army.
+  **Surprise: the "placebo" is a real change.** Regroup alone (idle units walk back to v10's own staging
+  point) beats the control on unselected moments. In v10, units that chased something during a defence stay
+  where they ended; regrouping keeps the army in one piece for the next wave. A neutral placebo has to be of the
+  kind the coordinator makes (v10 with every decision a tick later). Whole games (run 183) had regroup together
+  with the 5-cell staging and showed nothing, so the test on unselected moments across seven kinds of
+  opponent, to the end of the game, is run 190.
 - **Focus fire when defending** (`jev-focus`, run 180, same set and rule; `jev-base` again identical to v10 in all 15
   after the module was renamed to `hands.py` for freezing): +1,660 vs control (-4,351..+7,671), better in 6/15,
   W-D-L 7-0-8 against 6-0-9. Nothing; parked.

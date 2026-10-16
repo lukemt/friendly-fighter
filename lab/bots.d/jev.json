@@ -480,6 +480,70 @@
     "rules",
     "placebo"
    ]
+  },
+  {
+   "name": "jev-tan1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "snipe": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + Tanya answers (snipe=true): snipe = while Tanya (e7) is in sight every combat unit attacks her; tanya_rule = tanks only once she has been seen",
+   "tags": [
+    "jev",
+    "rules",
+    "tanya"
+   ]
+  },
+  {
+   "name": "jev-tan2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "tanya_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + Tanya answers (tanya_rule=true): snipe = while Tanya (e7) is in sight every combat unit attacks her; tanya_rule = tanks only once she has been seen",
+   "tags": [
+    "jev",
+    "rules",
+    "tanya"
+   ]
+  },
+  {
+   "name": "jev-tan3",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "snipe": true,
+     "tanya_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + Tanya answers (snipe=true,tanya_rule=true): snipe = while Tanya (e7) is in sight every combat unit attacks her; tanya_rule = tanks only once she has been seen",
+   "tags": [
+    "jev",
+    "rules",
+    "tanya"
+   ]
   }
  ]
 }
