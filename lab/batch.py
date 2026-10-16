@@ -123,6 +123,22 @@ def lab_env() -> None:
     os.environ.pop("FF_KNOBS", None)
     if not os.environ.get("FF_SIM_OPENAI"):
         os.environ["OPENAI_API_KEY"] = ""  # no LLM commander in lab games unless FF_SIM_OPENAI=1
+    if not paid_jev_allowed():
+        # Paid Jev (TypeSafe's API, real credits) only for a run that asks for it: every Jev client,
+        # frozen copies too, reads the key from the environment first. "off" is no key (a frozen client
+        # sends it and is refused, for free). A local server (JEV_URL) needs no key and isn't affected.
+        os.environ["TYPESAFE_API_KEY"] = "off"
+
+
+PAID_JEV = "FF_LAB_PAID_JEV"
+
+
+def paid_jev_allowed() -> int:
+    """How many games a lab run may play on paid Jev: ``FF_LAB_PAID_JEV=N`` on the command (default 0)."""
+    try:
+        return max(0, int(os.environ.get(PAID_JEV) or 0))
+    except ValueError:
+        return 0
 
 
 NICE = 10  # lab games yield the CPU to anything else (the live tournament runtime above all)

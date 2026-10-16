@@ -199,7 +199,8 @@ def _setting(name: str) -> str | None:
 
 
 def _key() -> str | None:
-    return _setting("TYPESAFE_API_KEY")
+    key = _setting("TYPESAFE_API_KEY")
+    return None if key == "off" else key  # ("off": paid Jev switched off, e.g. in lab runs that didn't ask for it)
 
 
 def _url() -> str:

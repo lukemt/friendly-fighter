@@ -78,6 +78,12 @@ Several sessions may work at once, each in its own folder. There are two roles:
    `sim/lab/`.
 10. **Ask before anything irreversible or outward-facing**: deleting what you didn't create,
     anything that leaves this machine, spending money (API credits), changing the live bot.
+11. **Paid Jev only where the experiment needs its answers.** TypeSafe's Jev costs real credits
+    (about 250 calls a Jev seat in a 20-minute game). Lab runs get no key unless they ask for a
+    number of games: `FF_LAB_PAID_JEV=N lab ...` (*enforced: a run with more Jev games is refused*).
+    Spend them on a probe of a few moments or a handful of games that test what Jev decides, never
+    on suites, boards, reruns or controls that don't ask Jev (`--oracle rules`). A local server
+    (`JEV_URL` in your worktree's `.env`) is free and needs no opt-in.
 
 ## Starting a family session
 
