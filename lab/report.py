@@ -40,8 +40,11 @@ def where_games(f: dict, alias: str = "g") -> tuple[str, list]:
     if not f.get("branches"):
         conds.append(f"{alias}.branch_of IS NULL")
     if f.get("run") is not None:
-        conds.append(f"{alias}.run_id = ?")
-        args.append(int(f["run"]))
+        from .reuse import run_clause
+
+        clause, more = run_clause(alias, [int(f["run"])])  # (its own games and those reused into it)
+        conds.append(clause)
+        args += more
     if f.get("map"):
         conds.append(f"{alias}.map = ?")
         args.append(f["map"])
@@ -655,8 +658,11 @@ def curves(db, runs: list[int] | None = None, bots: list[str] | None = None, min
     averaged over its games (from the 5 s timeline)."""
     where, args = ["g.branch_of IS NULL"], []
     if runs:
-        where.append(f"g.run_id IN ({','.join('?' * len(runs))})")
-        args += runs
+        from .reuse import run_clause
+
+        clause, more = run_clause("g", runs)
+        where.append(clause)
+        args += more
     if bots:
         where.append(f"s.bot IN ({','.join('?' * len(bots))})")
         args += bots

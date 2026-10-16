@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS runs (
   started REAL, ended REAL, kind TEXT, command TEXT, git_commit TEXT, git_dirty INTEGER,
   params TEXT, note TEXT, experiment TEXT, games INTEGER DEFAULT 0, status TEXT
 );
+CREATE TABLE IF NOT EXISTS run_games (run_id INTEGER, game_id TEXT, PRIMARY KEY (run_id, game_id));
 CREATE TABLE IF NOT EXISTS bot_versions (
   version TEXT PRIMARY KEY, bot TEXT, kind TEXT, spec TEXT, code_hash TEXT, git_commit TEXT, first_seen REAL
 );
@@ -127,9 +128,14 @@ class LabDB:
         return int(cur.lastrowid)
 
     def end_run(self, run_id: int, status: str = "done") -> None:
-        n = self.one("SELECT COUNT(*) AS n FROM games WHERE run_id = ?", run_id)["n"]
+        n = self.run_games(run_id)
         self.conn.execute("UPDATE runs SET ended = ?, status = ?, games = ? WHERE id = ?",
                           (time.time(), status, n, run_id))
+
+    def run_games(self, run_id: int) -> int:
+        """The run's games: played in it, or reused into it (lab/reuse.py)."""
+        return self.one("SELECT (SELECT COUNT(*) FROM games WHERE run_id = ?) + "
+                        "(SELECT COUNT(*) FROM run_games WHERE run_id = ?) AS n", run_id, run_id)["n"]
 
     # -- bots ---------------------------------------------------------------------------
 

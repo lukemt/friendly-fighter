@@ -245,6 +245,16 @@ goes through the virtual clock and JSON, as on the wire. Checked against the rea
 - **Self-play:** the lab gave the same result 3 times out of 3, and one of two runtime runs
   matched it exactly. The runtime's processes can drift a little; the lab doesn't.
 
+**Played once** (`lab/reuse.py`, 2026-10-16). Since every game replays the same way, `play`,
+`compare`, `league`, `gate` and `exploit` don't play a game again that the database already has:
+the same bot versions in the same seats, map, seed, length and engine build, ended normally
+(no bot errors, no stop rule). The run links it (table `run_games`) and its report counts it as
+its own; the run's start says how many were reused. Every family puts the champion first in
+`compare`, so its reference games on the usual seeds now cost nothing after the first time.
+Never reused: bots whose games don't replay (Jev bots, language-model and advisor bots,
+`think: measured`), branches and probes (they have their own reuse), and anything with
+`--no-reuse`. A version or engine change means new games, as it should.
+
 **Cost.**
 - **Time:** games are 20 minutes by default, the platform's length (tournament games are 20;
   pass `--minutes 10` for quick checks). A 10-minute game takes 15-25 s in a worker, a
