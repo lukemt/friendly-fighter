@@ -136,6 +136,7 @@ class Knobs:
     regroup: bool = False            # (jev family) idle combat units walk to the staging point even in the defend posture
     focus: bool = False              # (jev family) defending: each kind of unit attacks the enemy it hurts most (an `attack` order with a target)
     snipe: bool = False              # (jev family) defending: while Tanya (e7) is in sight every combat unit attacks her
+    defend_radius: int = DEFEND_RADIUS  # (rush-wave's setting, ported) enemies this close to home pull the army out to fight: 16 in v10, rush-wave-k 22
     macro: int = 0                   # (jev family) up to this many refineries on a time schedule (4 by 5:00 ... 8 by 11:00), harvesters = refineries + 2; 0: v10
 
 
@@ -392,7 +393,7 @@ class RedAlertBot:
 
         # 6. Army production. (The guard opening, attacked at home with a small army: infantry from
         # whatever money there is, before anything else.)
-        if knobs.opening == "guard" and self._threats(obs, home) and \
+        if knobs.opening == "guard" and self._threats(obs, home, knobs.defend_radius) and \
                 sum(1 for u in units if is_combat(u)) < GUARD_EMERGENCY_ARMY:
             infantry = [i for i in INFANTRY_PRIORITY if i in available]
             if infantry and queued["Infantry"] == 0 and cash >= self._costs.get(infantry[0], 100):
@@ -437,7 +438,7 @@ class RedAlertBot:
 
         # 8. Defend, else attack.
         combat = [u for u in units if is_combat(u)]
-        threats = self._threats(obs, home)
+        threats = self._threats(obs, home, knobs.defend_radius)
         if threats:
             self._defend(add, combat, threats, home, now, notes, obs=obs, knobs=knobs)
         else:
@@ -571,12 +572,12 @@ class RedAlertBot:
                     self._mark("train", pick, now)
                     self._vehicles_ordered += count
 
-    def _threats(self, obs, home) -> list[tuple[int, int]]:
+    def _threats(self, obs, home, radius: int = DEFEND_RADIUS) -> list[tuple[int, int]]:
         cells = []
         for enemy in _list(obs.get("visible_enemies")):
             cell = _cell(enemy)
             if cell and not enemy.get("wreck") and not str(enemy.get("type") or "").endswith("husk"):
-                if _dist(cell, home) <= DEFEND_RADIUS:
+                if _dist(cell, home) <= radius:
                     cells.append(cell)
         return cells
 

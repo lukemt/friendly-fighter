@@ -918,6 +918,59 @@
     "jev",
     "rules"
    ]
+  },
+  {
+   "name": "jev-combo",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 8,
+     "defend_radius": 22
+    }
+   },
+   "think": 0.005,
+   "description": "v11 candidate: jev-a1m8 (staging 5 + regroup + riflemen rule + refinery schedule 8) + rush-wave-k's defend_radius 22",
+   "tags": [
+    "jev",
+    "rules",
+    "combo"
+   ]
+  },
+  {
+   "name": "jev-combo-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_combo_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 8,
+     "defend_radius": 22
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-combo jev-combo@f295ab5c at 2bdd54f+changes: v11 candidate: jev-a1m8 (staging 5 + regroup + riflemen rule + refinery schedule 8) + rush-wave-k's defend_radius 22",
+   "tags": [
+    "combo",
+    "frozen",
+    "jev",
+    "rules"
+   ]
   }
  ]
 }

@@ -195,3 +195,11 @@ def test_macro_wants_more_refineries_on_a_schedule_and_harvesters_follow():
     assert pick(500.0, 6, n_proc=5) == "proc"   # 6 by 8:00
     assert pick(500.0, 6, n_proc=6) != "proc"   # capped at macro=6
     assert pick(310.0, 0, n_proc=3) != "proc"   # v10: not asked
+
+
+def test_defend_radius_widens_what_counts_as_a_threat():
+    bot = RedAlertBot(knobs=Knobs(posture="defend"), log=lambda line: None)
+    obs = {"visible_enemies": [{"id": 1, "type": "e1", "x": 26, "y": 52}, {"id": 2, "type": "e1", "x": 26, "y": 40}]}
+    assert bot._threats(obs, (26, 32)) == [(26, 40)]  # 16: the one at 20 cells is no threat
+    assert sorted(bot._threats(obs, (26, 32), 22)) == [(26, 40), (26, 52)]
+    assert Knobs().defend_radius == 16
