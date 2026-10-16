@@ -98,7 +98,7 @@ def test_a_desk_needs_the_opt_in(monkeypatch):
 
 
 def test_never_astra():
-    for cls in (ca.CodexDesk, ca.HenryCodexDesk, ca.HenryCodexSol):
+    for cls in (ca.CodexDesk, ca.HenryCodexDesk, ca.HenryCodexSol, ca.HenryCodexTuned):
         assert "astra" not in cls.MODEL
     assert ca.CodexDesk.MODEL == "gpt-6-luna" and ca.HenryCodexDesk.MODEL == "gpt-6-luna"
 
@@ -118,6 +118,17 @@ def test_codex_answers_a_question_with_the_bots_own_prompt_and_schema(fake, monk
     assert row["tokens"] == {"totalTokens": 1234} and row["answer"] == answer and row["asked_by"] == "claude-x"
     logged = [json.loads(line) for f in ca.CODEX_DIR.glob("*.jsonl") for line in f.read_text().splitlines()]
     assert len(logged) == 1 and "latency" in logged[0]
+
+
+def test_the_tuned_henry_appends_our_notes_to_its_own_prompt_and_records_the_payload(fake):
+    desk = _desk(fake, cls=ca.HenryCodexTuned)
+    desk.ask(system="HENRY'S OWN PROMPT", payload={"t": 1000}, schema=SCHEMA)
+    echo = fake.echo()
+    assert echo["dev"] == "HENRY'S OWN PROMPT\n\n" + ca.HENRY_NOTES and echo["effort"] == "medium"
+    assert echo["model"] == "gpt-6-luna" and desk.records[-1]["payload"] == {"t": 1000}
+    plain = _desk(fake, cls=ca.HenryCodexDesk)
+    plain.ask(system="HENRY'S OWN PROMPT", payload={}, schema=SCHEMA)
+    assert fake.echo()["dev"] == "HENRY'S OWN PROMPT"  # (the untuned one sends henry's prompt as it is)
 
 
 def test_an_answer_that_does_not_fit_the_schema_is_skipped(fake):
@@ -217,6 +228,9 @@ def test_the_registered_codex_henry_is_never_reused_and_leaves_ext_henry_alone()
     assert kw["env"]["REDALERT_PROFILE_DIR"] != plain.params["kwargs"]["env"]["REDALERT_PROFILE_DIR"]
     assert not reuse.replays(b, lambda name: False)
     assert plain.params["kwargs"]["env"]["REDALERT_ADVISOR"] == "off"  # (the plain henry plays as before)
+    tuned = table["ext-henry-codex-t"]
+    assert tuned.params["kwargs"]["advisor"] == "bots.codex_advisor:HenryCodexTuned" and not reuse.replays(tuned, lambda n: False)
+    assert tuned.version() != b.version()
 
 
 HENRY = ca.LAB_DIR.parent / "external" / "henrysue-ucla-steve-nash-equilibrium"

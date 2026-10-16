@@ -240,6 +240,7 @@ class CodexDesk:
     MODEL = "gpt-6-luna"
     EFFORT = "low"
     TIMEOUT = TIMEOUT_SECONDS
+    ADDENDUM = ""  # (appended to the bot's own system prompt: our notes for the model, e.g. HENRY_NOTES)
 
     def __init__(self, server_factory=None) -> None:
         if not allowed():
@@ -269,7 +270,9 @@ class CodexDesk:
             if self.server is None:
                 self.server = (self._server_factory or start_server)()
             text = payload if isinstance(payload, str) else json.dumps(payload, separators=(",", ":"), default=str)
-            message, info = self.server.ask(instructions=system or "", text=text,
+            row["payload"] = payload
+            brief = (system or "") + ("\n\n" + self.ADDENDUM if self.ADDENDUM else "")
+            message, info = self.server.ask(instructions=brief, text=text,
                                             schema=schema or None, model=self.MODEL, effort=self.EFFORT,
                                             timeout=self.TIMEOUT)
             row.update(info)
@@ -361,6 +364,39 @@ class HenryCodexDesk(CodexDesk):
 
 class HenryCodexSol(HenryCodexDesk):
     MODEL = "gpt-6-sol"
+
+
+# Notes for the model advising henry, after its own system prompt (henry's code and prompt stay as
+# they are). From the first trial (run 224, 77 answers, docs/LAB_PLAN.md L4b): Luna voted "hold" 46
+# times and "attack" never, never set a route, an army target or (but once) a raid, and read v10 as
+# "aggressive" at 0.99 all game. henry attacks once a game by its rules, the 18:00 all-in; the game it
+# won had twice the army at that push (42,150 vs 21,650 unadvised: "expand now" 30 times), the game
+# it lost had a 7:43 attack at 1.1x that killed 300 for 4,300.
+HENRY_NOTES = """NOTES FOR THIS MATCH (from our games against this kind of opponent; where they are more specific than the guidance above, follow them):
+
+1. HOW WE WIN. Out-grow the enemy, mass, and strike once, hard. Our best game had twice the army at the final push because we expanded early; our worst lost a mid-game attack at even odds (killed 300, lost 4300 at 7:43) and never recovered.
+
+2. ECONOMY. Once our scouts have seen their base, and no enemy army has come at our base in the last 60 s: expand "now" and balance "more_economy" until we have a third refinery and an expansion, then "balanced". "more_army" only while they are attacking us or our army is under 0.7x their estimate. A big bank is a mistake: say so.
+
+3. MID-GAME ATTACKS (before 16:00). Worth it only on a fresh look (enemy_army_last_seen_seconds_ago under 60) at 1.5x or more, or against an expansion away from their army. When the engine sits near an attack bar with less than that: "hold". Never "attack" before 16:00 unless they just lost a big fight (since_last_ask: we killed twice what we lost).
+
+4. NO REFLEX HOLDS. "hold" needs a reason you can name: their army is coming at us now, our look at their army is stale or blind, or a mid-game attack under 1.5x. Without one, answer "default". Never repeat "hold" for the same reason two answers running when nothing has happened.
+
+5. THE FINAL PUSH (from 16:00) decides the game: prepare it. Get a fresh look (if the last sighting is over 60 s old, say so in plan). Pick attack_route: "left" or "right", the side where situation.last_seen_map shows fewer enemy units and turrets; not "center" into their concave. Set army_target to their power plants or war factory on that side. From 17:00, with our army at 1.2x their fresh estimate or more: "attack". From 18:30, if we lead clearly on kills_cost - deaths_cost and our army is not clearly stronger: "hold" and keep the lead.
+
+6. THE READ. "aggressive" only after their army has attacked our base (units at our base, our buildings or harvesters lost at home); not for fights with our scouts or raids, nor their army standing in the middle. After 3 quiet minutes (no attack on us), look again: a held push doesn't make the whole game aggressive.
+
+7. USE THE LEVERS. When enemy.expansions_known lists an expansion with a raid_spot, aim the raid squad there (raid_target_cell at its raid_spot, away from its turrets). Point defense_at to the side their last push came from.
+
+8. Keep plan and reasoning to one short sentence each."""
+
+
+class HenryCodexTuned(HenryCodexDesk):
+    """henry with our notes after its own prompt (:data:`HENRY_NOTES`), and Luna at medium effort
+    (a little thinking: ~80 reasoning tokens, ~2 s more an answer, about the same tokens)."""
+
+    EFFORT = "medium"
+    ADDENDUM = HENRY_NOTES
 
 
 def main(argv: list[str]) -> int:
