@@ -245,6 +245,56 @@ one fixed schedule (6 baselines × 8 games, 20 min), played from each family's w
 shared lab, whole games reused when played the same way (verified, runs 126-127), standings paired
 with the reference, snapshots over time. The coordinator runs it (AGENTS.md, duty 9).
 
+### L16. Decide with fewer games (the user's question, 2026-10-16: "test hypotheses and find the next champion in the fastest, most resource-efficient way")
+
+**Where the machine goes** (measured 2026-10-16, experiment `lab-speed`):
+- **The slots are the limit.** Since 06:00 all 5 are busy (4.9 of 5 an hour), the CPUs too (load
+  9.3 on 6). More workers would not help: only fewer games per decision, and cheaper games.
+- **A 20-minute game takes ~60 s** of a slot (15x real time); with ext-henry ~206 s (its Python;
+  ext-henry-rusher 130 s, yuriko 143 s). A branch: ~34 s.
+- **A third of the 20-minute games played in a day were the champion's** (567 of 1,647), mostly
+  on seeds no other run used: each family's own `--seed`, and compare's seeds depended on the
+  baseline's place in `--baselines`.
+- **The noise:** v10 and a candidate on the same game differ in points with sd 0.52 (994 pairs);
+  73% of pairs are equal. A 95% interval of +-0.1 points a game needs ~100 pairs, +-0.05 ~400.
+  The board (48) sees +-0.15. The improvements we find are 0.05-0.2 (rush-wave-k-v1 +0.07,
+  jev-st5-v1 +0.10, jev-rifr-v1 +0.19).
+- **Games that tell nothing:** against ext-henry-rusher, ext-henry-yuriko, chaotic, counter (100%
+  of pairs equal), ff-turtle (94%), ext-ryan (83%) every good bot wins.
+- **Net (kills minus losses) is a slightly sharper measure than points**: its t-value was higher
+  for 5 of 7 candidates (median x1.17, ~1.4x fewer games for the same certainty), and it predicts
+  the points on held-out games as well (r 0.92 vs 0.93). Points stay the decision (the tournament
+  counts wins); net can screen.
+
+**Built (2026-10-16):**
+1. **The same seeds everywhere** (`league.game_seed`): the champion's game against an opponent on a
+   seed is played once, then reused by every compare, gate and the board. Screen on seed 2026 (the
+   board's): the reference's games are already there, so a compare plays only the candidate's. With
+   one candidate that halves the games.
+2. **`lab compare --sprt`** (lab/sprt.py): the sequential test chess engines are tested with
+   (Fishtest, OpenBench). Simulated on our pairs: a +0.1 candidate called better 78% of the time
+   (a fixed 56-pair compare: 31%), a no-gain one 4%; clearly worse ones stop after 20-50 pairs.
+   `--games` is the cap.
+3. **`@screen`** (the opponents where bots differ) and **`@smoke`** (2 games each where they
+   don't: catches breakage).
+
+**The funnel with these** (stages 2-3 of Part 0): `lab compare ff-council-champ-v10,X --baselines
+@screen --seed 2026 --games 40 --sprt`, plus `--baselines @smoke --games 2`. A BETTER goes to the gate on
+a fresh seed (the holdout: many families screening on one seed will find its lucky games, and
+a fresh seed doesn't share them).
+
+**Next, by expected gain:**
+- **`--sprt` for gates** (the h2h and the baselines as one test; non-regression bounds
+  `-0.05,0` for a change aimed at one opponent: "no worse elsewhere", Fishtest's second test).
+- **Engine snapshots** (L14): a late-game idea (the Tanya, the last stand, salvage) branches at
+  15:00 from saved states instead of replaying 15 minutes (~2/3 of a branch's time).
+- **Profile ext-henry's 206 s** (our wrapper or theirs: `bots/external.py` copies, logs, clocks).
+  It is the opponent we most need to play.
+- **Tune numbers with SPSA** (Fishtest's tuner): for a knob bot, nudge all settings at once by
+  random +-steps, 2 games per step, move towards the better side. Many settings in the games one
+  hand-made variant takes now.
+- **A screen on net**: `--sprt` on net (in thousands) for stage 2, points for the gate.
+
 ---
 
 ## Part 2: bots to add
@@ -289,7 +339,69 @@ paired seeds, maps rotated, seats swapped, a second seed before anything is crow
 | E7 | **Why France and shadowfiend-ii?** | `lab stats --by faction/map` on the losses and draws, `lab watch` the worst 5, `lab curves` by faction | analysis + targeted branches | a fix or a note in STRATEGY.md |
 | E8 | **How much greed against agents?** | the assets tiebreak decides agent mirrors: `greed` 0/1/2/3 × `early_refineries` 1/2 vs `@field` | grid, 8 games per cell | settings for the field |
 | E9 | **Is v10 robust?** (L8) | latency ×1/×2/×4, refused orders, a real-time batch, one platform Testing match | ~60 games | needed before the live switch |
+| E11 | **Does a controlled Tanya pay?** (the user's idea, 2026-10-16; experiment `tanya-sniper`, details below) | a Tanya setting on v10's rules when Allied: build her, keep her behind the army, shoot infantry from range, pull her back from vehicles and turrets | 1a by hand vs ai-rush and ext-henry; 1 on unselected moments (`--kind at`, Allied seats only); 2-3 whole games on 2 seeds | keep it if net gains on Allied seats with no loss elsewhere |
 | E10 | **Switch the live bot?** | gate v10 vs `ff-default` on `@gate` | already clear on `@standard`; confirm on `@field` | user decides |
+
+### Jev experiments, with the budget (2026-10-16)
+
+The user allows paid Jev at $1 an hour (AGENTS.md rule 11): ~$0.005 a Jev seat in a 20-minute
+game, so the money no longer limits these. What does: one paid run per family at a time, and
+`think: measured` (Jev's ~230 ms a call is charged to the game clock, as on the platform). In
+order:
+
+| # | Question | Design | Cost |
+|---|---|---|---|
+| J1 | **Does Jev answering beat the rules on the same loops?** The question v10 left open (Jev council = v7 = the rules council, runs 59-60, before the economy fix). | `ff-council-champ-v10-jev` (v10's frozen code, `oracle: jev`) vs `ff-council-champ-v10`: `lab compare ff-council-champ-v10,ff-council-champ-v10-jev --baselines @ais,@exploiters,ext-ryan,ext-henry --games 8`, 2 seeds | 64 Jev seats a seed, ~$0.35 |
+| J2 | **One decision at a time:** where does Jev beat a rule? | the jev family's split bots: `jev-sjj` (Jev decides the quartermaster) vs `jev-sjs` (shadow: the rules decide, Jev's answer logged) vs `jev-rifr`; the shadow logs give the disagreements | as J1 |
+| J3 | **The decisions the rules get wrong:** boom or hold after a raid (v10 locks greed 0 after one raid: the jev family, run 195), and hold or fight when outnumbered in the last 3 minutes (ext-henry's last stand at 18:00) | a Jev question for each, against the rule and the jev family's coded fixes (`greed_hold`, `macro`); probe at unselected moments, then whole games vs ext-henry and @ais | a probe ~$0.05; whole games as J1 |
+| J4 | **At the disagreements:** branch every point where Jev's shadow answer differs from the rule (L5), play both | `jev-sjs` logs, `lab branch` | ~100 short branches, <$0.10 |
+
+J1 decides whether the live bot should ask Jev at all: if v10-jev wins on 2 seeds (and `lab jev`
+shows answers in every game, none frozen), it goes to a gate, and the switch is the user's call.
+
+### E11 in detail: a controlled Tanya
+
+**Idea (the user's):** Tanya under deliberate control instead of not at all. Our bots have never
+built her: v10 is Allied in ~half its lab games (england/france/germany 489 of 986 seats) but
+builds a tech center in 19 games.
+
+**What she can and can't do here** (`~/openra-sim/fork/mods/ra/rules/infantry.yaml` `E7`, weapons
+`smallcaliber.yaml` `Colt45`, the API's attack in `OpenRA.Mods.Common/Traits/Player/ActionHandler.cs`):
+- **Allies only.** Needs a barracks and a tech center (`atek`, 1500, after war factory and radar
+  dome). She costs 1800, one at a time (`BuildLimit: 1`), 100 HP.
+- **No C4 through the API.** Demolishing a building is the engine's `C4` order; our `attack` sends
+  `Attack`, which needs a weapon that can hit the target, and her pistol can't hit buildings
+  (`ValidTargets: Ground, Infantry, Barrel`), so it is refused. Like capture and support powers,
+  the platform offers no way to it. The OpenRA AIs' Tanya can C4 our buildings in the lab; no
+  tournament opponent's can.
+- **A sniper against infantry:** one shot kills any infantry (damage 10000 vs riflemen 5000 HP,
+  rocket soldiers 4500), every 7 ticks (~3.5 kills a second), range 7 cells (riflemen and rocket
+  soldiers shoot from less). Speed 68 against 54 for other infantry: she can back off from
+  infantry. She does nothing against vehicles or buildings and dies to tanks, dogs and turrets.
+- She attacks infantry in range by herself (auto-target); control adds where she stands and
+  when she runs.
+
+**Why it could matter:** the attacks that break us are infantry-heavy. ext-henry's last stand
+at 18:00 is mostly riflemen and rocket soldiers (its losses per game, run 195: 65 riflemen, 28
+rocket soldiers); the Rush AI's waves are ~30 riflemen and rocket soldiers each. 20 infantry
+killed is ~2,000-6,000 of tiebreak for an 1,800 unit.
+
+**Design (a setting on v10's rules, off by default, Allied seats only):**
+1. Tech: a tech center once the economy allows (after the 2nd refinery, war factory and dome).
+2. Tanya: build her once, rebuild when she dies (cap the rebuilds: 1800 each).
+3. Position: 3-5 cells behind our army's front, or at home with the defenders when an attack is
+   on its way (the last stand, a Rush wave).
+4. Targeting: the nearest enemy infantry inside 7 cells; never walk into vehicles, dogs or
+   turrets: when one is within ~5 cells, move her back towards our army or turrets.
+5. Measure: her kills and losses by value (`lab games`/`curves`), and the seat's net against the
+   same seeds without her.
+
+**How to test (the funnel):** 1a by hand first, cheap: `lab human start --moment ID` on an Allied
+seat against ai-rush and ext-henry (macro autopilot, Tanya by hand) to see whether kiting her is
+possible at the API's order rate. Then a probe on unselected moments (`--kind at`, Allied seats,
+ai-rush, ai-normal, ext-henry; the placebo bot alongside), then whole games on 2 seeds.
+**Open questions:** whether the tech center (1500) costs us more than she gains before 10:00;
+whether a seat's decision rate is fast enough to keep her out of reach of jeeps and dogs.
 
 Not worth the games now (STRATEGY.md): more defenses (no effect, run 56), scouting with infantry
 (costs standoffs), Jev experiments until there are credits.

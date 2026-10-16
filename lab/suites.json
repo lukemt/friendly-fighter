@@ -63,5 +63,18 @@
   "ext-henry-rusher",
   "ext-henry-yuriko",
   "ext-pakled"
+ ],
+ "screen": [
+  "ai-normal",
+  "ai-rush",
+  "ai-turtle",
+  "exploit-eco-tanks",
+  "exploit-ryan-plan",
+  "ext-henry"
+ ],
+ "smoke": [
+  "exploit-eco-waves",
+  "ext-ryan",
+  "ext-henry-rusher"
  ]
 }

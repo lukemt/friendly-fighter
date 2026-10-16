@@ -78,12 +78,15 @@ Several sessions may work at once, each in its own folder. There are two roles:
    `sim/lab/`.
 10. **Ask before anything irreversible or outward-facing**: deleting what you didn't create,
     anything that leaves this machine, spending money (API credits), changing the live bot.
-11. **Paid Jev only where the experiment needs its answers.** TypeSafe's Jev costs real credits
-    (about 250 calls a Jev seat in a 20-minute game). Lab runs get no key unless they ask for a
-    number of games: `FF_LAB_PAID_JEV=N lab ...` (*enforced: a run with more Jev games is refused*).
-    Spend them on a probe of a few moments or a handful of games that test what Jev decides, never
-    on suites, boards, reruns or controls that don't ask Jev (`--oracle rules`). A local server
-    (`JEV_URL` in your worktree's `.env`) is free and needs no opt-in.
+11. **Paid Jev where the experiment needs its answers, within $1 an hour.** TypeSafe's Jev costs
+    real credits, but little: about $0.005 a Jev seat in a 20-minute game (run 151), so the user's
+    budget of $1 an hour, all sessions together, pays for ~150 Jev seats an hour. Use it: whole
+    games and suites that test what Jev decides are fine now. Lab runs get no key unless they ask
+    for a number of games: `FF_LAB_PAID_JEV=N lab ...` (*enforced: a run with more Jev games is
+    refused, and so is a run that would take the last hour's spend over the budget*). Don't spend
+    it on games that don't need Jev's answers: reruns of games already played, controls that don't
+    ask Jev (`--oracle rules`). A local server (`JEV_URL` in your worktree's `.env`) is free and
+    needs no opt-in.
 
 ## Starting a family session
 
@@ -127,8 +130,8 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
 | 0. Idea card | `lab experiment new <family>-<topic> --hypothesis "..."` | nothing |
 | 1a. Play it by hand | `lab human start --moment ID --stop-after 180 --stop-quiet 45`, then `lab h ...` (the game waits between commands) | your time, almost no CPU |
 | 1. Probe the situation | `lab probe @rush-wave --variants <family>-a,<family>-b --halving --stop-after 180 --stop-quiet 45` | 5-15 min |
-| 2. Targeted screen | `lab compare ff-council-champ-v10,<family>-a --baselines ai-rush --games 8 --seed N` | 5-15 min |
-| 3. Fast suite | `lab compare ff-council-champ-v10,<family>-a --baselines @ais,@exploiters --games 8 --seed N` | 15-25 min |
+| 2. Targeted screen | `lab compare ff-council-champ-v10,<family>-a --baselines ai-rush --games 40 --seed 2026 --sprt` | stops when clear, 5-15 min |
+| 3. Fast suite | `lab compare ff-council-champ-v10,<family>-a --baselines @screen --games 40 --seed 2026 --sprt`, then `--baselines @smoke --games 2` | 15-30 min |
 | 4. Gate | ask the coordinator (`lab note "<family>-a: ready for a gate, runs ..."`) | about an hour |
 
 - **Manual play (stage 1a)** tries a tactic before anyone codes it, or finds out why a bot loses.
@@ -143,6 +146,10 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
   `ff-council-champ-v10-placebo` as a variant and compare against it (docs/LAB.md, "Moments and
   probes"), and confirm with whole games.
 - Put the champion first in `lab compare`: the first bot is the reference.
+- **Screen on seed 2026 with `--sprt`** (docs/LAB.md, "Stop when clear"): the champion's games on
+  that seed are already played and get reused, so a compare plays only your bot's games, and
+  `--sprt` stops each candidate as soon as its answer is clear. A screen's BETTER is checked on
+  a fresh seed (the gate): many sessions screening on one seed will find its lucky games.
 - Pass `--experiment <family>-<topic> --note "..."` on every run.
 - Freeze a candidate before you report its numbers: `lab bots freeze <family>-a --as <family>-a-v1`.
 - Run one big run at a time. Check `lab status` first.

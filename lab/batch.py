@@ -55,28 +55,48 @@ class GameSlot:
         self.run_id, self.label, self.poll, self.log, self.on_wait = run_id, label, poll, log, on_wait
         self.fd: int | None = None
 
+    def _me(self) -> bytes:
+        return json.dumps({"pid": os.getpid(), "family": FAMILY or "main", "run": self.run_id, "label": self.label,
+                           "since": time.time()}).encode()
+
+    def _take(self) -> bool:
+        for k in range(slot_count()):
+            fd = os.open(SLOTS_DIR / f"slot-{k}", os.O_RDWR | os.O_CREAT, 0o644)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                os.close(fd)
+                continue
+            os.ftruncate(fd, 0)
+            os.write(fd, self._me())
+            self.fd = fd
+            return True
+        return False
+
     def __enter__(self) -> "GameSlot":
+        """First come, first served: with nobody waiting, a free slot is taken at once; otherwise the
+        worker queues (``waiting()``) and takes a slot when its turn comes. (Before 2026-10-16 every
+        waiter polled the slots, and a worker that had just finished a game took its slot back for the
+        next within milliseconds: runs holding slots kept them, and others waited for hours.)"""
         SLOTS_DIR.mkdir(parents=True, exist_ok=True)
-        waited = False
-        while True:
-            for k in range(slot_count()):
-                fd = os.open(SLOTS_DIR / f"slot-{k}", os.O_RDWR | os.O_CREAT, 0o644)
-                try:
-                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                except BlockingIOError:
-                    os.close(fd)
-                    continue
-                os.ftruncate(fd, 0)
-                os.write(fd, json.dumps({"pid": os.getpid(), "family": FAMILY or "main", "run": self.run_id,
-                                         "label": self.label, "since": time.time()}).encode())
-                self.fd = fd
-                return self
-            if not waited:
-                self.log(f"[lab] all {slot_count()} game slots are taken (lab status): waiting", flush=True)
-                waited = True
-                if self.on_wait is not None:
-                    self.on_wait()
-            time.sleep(self.poll)
+        if not _live_tickets() and self._take():
+            return self
+        ticket = _Ticket(self._me())
+        try:
+            waited = False
+            while True:
+                if ticket.first() and self._take():
+                    return self
+                if not waited:
+                    ahead = ticket.ahead()
+                    self.log(f"[lab] all {slot_count()} game slots are taken (lab status): waiting"
+                             + (f", {ahead} ahead in the queue" if ahead else ""), flush=True)
+                    waited = True
+                    if self.on_wait is not None:
+                        self.on_wait()
+                time.sleep(min(self.poll, 0.25))
+        finally:
+            ticket.close()
 
     def __exit__(self, *exc) -> None:
         if self.fd is not None:
@@ -84,6 +104,85 @@ class GameSlot:
             fcntl.flock(self.fd, fcntl.LOCK_UN)
             os.close(self.fd)
             self.fd = None
+
+
+QUEUE_DIR_NAME = "queue"
+
+
+def _queue_dir() -> Path:
+    return SLOTS_DIR / QUEUE_DIR_NAME
+
+
+class _Ticket:
+    """A place in the queue for a slot: a file in ``sim/lab/slots/queue/`` named by when it was taken,
+    locked by its owner while it waits (a dead owner's ticket is unlocked, and dropped by whoever
+    sees it)."""
+
+    def __init__(self, info: bytes) -> None:
+        q = _queue_dir()
+        q.mkdir(parents=True, exist_ok=True)
+        tmp = q / f".new-{os.getpid()}-{id(self)}"
+        self.fd = os.open(tmp, os.O_RDWR | os.O_CREAT | os.O_TRUNC, 0o644)
+        fcntl.flock(self.fd, fcntl.LOCK_EX)
+        os.write(self.fd, info)
+        self.name = f"{time.time_ns():020d}-{os.getpid()}-{id(self)}"
+        os.rename(tmp, q / self.name)  # (locked before it is visible: never taken for a dead one's)
+
+    def ahead(self) -> int:
+        return sum(1 for name in _live_tickets() if name < self.name)
+
+    def first(self) -> bool:
+        live = _live_tickets()
+        return not live or live[0] == self.name
+
+    def close(self) -> None:
+        if self.fd is not None:
+            try:
+                os.unlink(_queue_dir() / self.name)
+            except FileNotFoundError:
+                pass
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd)
+            self.fd = None
+
+
+def _live_tickets() -> list[str]:
+    """The queue's tickets in order; a dead owner's are removed."""
+    q = _queue_dir()
+    try:
+        names = sorted(n for n in os.listdir(q) if not n.startswith("."))
+    except FileNotFoundError:
+        return []
+    live = []
+    for name in names:
+        try:
+            fd = os.open(q / name, os.O_RDONLY)
+        except FileNotFoundError:
+            continue
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            live.append(name)  # (its owner holds it: waiting)
+        else:
+            try:
+                os.unlink(q / name)  # (nobody holds it: its owner died)
+            except FileNotFoundError:
+                pass
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        finally:
+            os.close(fd)
+    return live
+
+
+def waiting() -> list[dict]:
+    """Who waits for a slot, first first (for lab status)."""
+    out = []
+    for name in _live_tickets():
+        try:
+            out.append(json.loads((_queue_dir() / name).read_text() or "{}"))
+        except (OSError, ValueError):
+            out.append({})
+    return out
 
 
 def slots_in_use() -> list[dict]:
@@ -144,6 +243,27 @@ def paid_jev_allowed() -> int:
         return 0
 
 
+# The user's budget for paid Jev: $1 an hour, all lab sessions together (2026-10-16). A run is refused
+# when its estimate and the last hour's spend (lab/jevlog.py: the tokens in call logs written within
+# the hour) go over it. The estimate is per seat-minute: run 151 measured $0.0023 a 10-minute seat
+# (52 calls, 53,855 input tokens); rounded up, about $0.006 a 20-minute seat.
+JEV_BUDGET = "FF_LAB_JEV_BUDGET"
+JEV_USD_PER_SEAT_MINUTE = 0.0003
+
+
+def jev_budget_per_hour() -> float:
+    try:
+        return max(0.0, float(os.environ.get(JEV_BUDGET) or 1.0))
+    except ValueError:
+        return 1.0
+
+
+def jev_estimate(jobs: list[dict], uses_jev) -> tuple[int, float]:
+    """Paid Jev seats in ``jobs`` and what they would cost at most (dollars)."""
+    seats = [(n, j.get("minutes", 20)) for j in jobs for n in j["bots"] if uses_jev(n)]
+    return len(seats), sum(m for _, m in seats) * JEV_USD_PER_SEAT_MINUTE
+
+
 NICE = 10  # lab games yield the CPU to anything else (the live tournament runtime above all)
 
 
@@ -186,18 +306,44 @@ def _brief(game: dict) -> dict:
                       for s in game["seats"]]}
 
 
+class Feed:
+    """Hands ``jobs`` to the workers' queue in order, ``count`` at a time, skipping those ``keep(index)``
+    turns down by then; after the last, one ``None`` a worker (stop)."""
+
+    def __init__(self, jobs: list[dict], keep, put, workers: int, run_id: int) -> None:
+        self.jobs, self.keep, self.put, self.workers, self.run_id = jobs, keep, put, workers, run_id
+        self.pending = list(range(len(jobs)))
+        self.closed = False
+        self.skipped = 0
+
+    def __call__(self, count: int) -> None:
+        while count > 0 and self.pending:
+            i = self.pending.pop(0)
+            if self.keep is None or self.keep(i):
+                self.put({**self.jobs[i], "run_id": self.run_id})
+                count -= 1
+            else:
+                self.skipped += 1
+        if not self.pending and not self.closed:
+            self.closed = True
+            for _ in range(self.workers):
+                self.put(None)
+
+
 def run(jobs: list[dict], *, workers: int, run_id: int, record: bool = False, db_path: str | None = None,
-        on_result=None) -> list[dict]:
-    """Play ``jobs`` (``GameJob`` dicts) on ``workers`` processes; returns the results in the order they end."""
+        on_result=None, keep=None) -> list[dict]:
+    """Play ``jobs`` (``GameJob`` dicts) on ``workers`` processes; returns the results in the order they end.
+
+    ``keep(index)``: the jobs are handed out one at a time, in order, as workers free up, and a job
+    is played only if ``keep`` still says so then (a sequential test stops what is decided). Without
+    it every job is queued at the start."""
     lab_env()
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     ctx = mp.get_context("spawn")
     job_q, res_q = ctx.Queue(), ctx.Queue()
-    for job in jobs:
-        job_q.put({**job, "run_id": run_id})
     workers = max(1, min(workers, len(jobs)))
-    for _ in range(workers):
-        job_q.put(None)
+    feed = Feed(jobs, keep, job_q.put, workers, run_id)
+    feed(len(jobs) if keep is None else workers)
     procs = [ctx.Process(target=_worker, args=(i, job_q, res_q, str(LOG_DIR / f"run-{run_id}-w{i}.log"), record,
                                                 db_path), name=f"lab-worker-{i}", daemon=False)
              for i in range(workers)]
@@ -219,6 +365,8 @@ def run(jobs: list[dict], *, workers: int, run_id: int, record: bool = False, db
             out.append(msg)
             if on_result is not None:
                 on_result(msg, len(out), len(jobs))
+            if keep is not None:
+                feed(1)
     except KeyboardInterrupt:
         for p in procs:
             p.terminate()

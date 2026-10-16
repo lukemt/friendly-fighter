@@ -184,6 +184,12 @@ more Jev games than that is refused before it starts, and the run's parameters r
 `paid_jev_games`. `lab jev eval` needs `FF_LAB_PAID_JEV=1`. A local server (`JEV_URL`) is free and
 needs none of this.
 
+**The budget: $1 an hour, all sessions together** (the user, 2026-10-16). A paid run is also
+refused when its estimate plus what the call logs show was spent in the last hour goes over it
+(`lab/jevlog.py` `spent`). The estimate is $0.0003 a Jev seat-minute, rounded up from run 151
+($0.0023 a 10-minute seat), so about $0.006 a 20-minute seat: up to ~150 Jev seats in 20-minute
+games an hour. `FF_LAB_JEV_BUDGET` sets another hourly amount. `lab jev` shows the spend.
+
 Jev answers vary by about 0.02 in probability between identical calls, but the choices (and so the
 seeded games) replay the same. `ff-jev-off` is the same code with Jev switched off (a control);
 `ff-jev-v6-measured` charges its real decision time, Jev calls included, as game time, as the
@@ -224,6 +230,39 @@ lab gate CANDIDATE --champion ff-default --baselines ai-normal,ai-rush,ai-turtle
 - **`gate`:** the candidate plays the champion, and both play every baseline on the same seeds
   (paired games). It fails if the candidate doesn't beat the champion head to head, or does
   clearly worse than the champion against any baseline.
+
+**Stop when clear: `lab compare ... --sprt`** (lab/sprt.py; 2026-10-16). After every game, each
+candidate's paired points against the reference go through a sequential probability ratio test, as
+chess engines are tested (Stockfish's Fishtest): H0 "no gain" against H1 "+0.1 points a game"
+(`--bounds 0,0.1`), 5% errors either way (`--alpha`, `--beta`). A candidate stops as soon as one is
+accepted, the reference when the last candidate is decided, and `--games` is only the cap. The games go
+round the baselines (game 1 against each, then game 2), so a stop at any point has seen them all.
+
+```bash
+lab compare ff-council-champ-v10,my-a,my-b --baselines @screen --games 40 --seed 2026 --sprt
+```
+
+Why (measured on 994 pairs of v10 and a candidate on the same game, 2026-10-16): a pair's points
+differ with sd 0.52, and 73% of pairs are equal. So a fixed 8 games x 7 opponents (56 pairs) catches
+a real +0.1 only 31% of the time. Simulated on those pairs, `--sprt` with a cap of 216 catches it 78%
+of the time, calls a no-gain candidate better 4% of the time, and stops a clearly worse one after
+20-50 pairs and a clearly better one after 30-50. Most ideas are no better, so most compares end early.
+`BETTER` here is the screen's answer, not a crown: confirm on a fresh seed (the gate).
+
+**The same seeds for everything.** The `i`-th game of a run on `--seed S` has seed `S x 10007 + i`
+against every opponent, in `play`, `compare`, `gate` and the board (`league.game_seed`). So the
+champion's game against an opponent on a seed is played once and then reused by every run
+(`lab/reuse.py`); a compare on the board's seed (2026) against the board's opponents reuses the
+board's games of the champion, and of any entry on it. (Until 2026-10-16 `compare` and `gate` added
+1000 x the baseline's place in `--baselines`: each list of baselines was its own games, and about a
+third of all games played were the champion's.) Use seed 2026 to screen; a gate's second seed is a
+fresh one, so what many families tuned on the shared seed is checked on games none of them saw.
+
+**`@screen`** (lab/suites.json) is the opponents where good bots' results differ: ai-normal,
+ai-rush, ai-turtle, exploit-eco-tanks, exploit-ryan-plan and ext-henry. Against ext-ryan,
+ext-henry-rusher, ext-henry-yuriko, chaotic, counter and ff-turtle, v10 and every candidate scored
+the same in 83-100% of pairs: a few games there (`@smoke`, 2 each) catch a bot that broke, more
+tell nothing.
 
 `--note TEXT` and `--experiment NAME` label a run. Games are played by worker processes (default:
 the CPU quota, 4 here), each on an engine lane of its own; their bots' log lines go to

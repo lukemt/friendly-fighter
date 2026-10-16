@@ -43,7 +43,8 @@ ROOT = Path(__file__).resolve().parents[1]
 EXTERNAL_DIR = MAIN_ROOT / "sim" / "external"
 LOG_DIR = LAB_DIR / "external"
 TICKS_PER_SECOND = 25
-KEEP_COPIES = 8  # loaded copies kept in sys.modules per process (a game has two seats; older ones go)
+KEEP_COPIES = 2  # loaded copies kept in sys.modules per process: a game has two seats; older ones go (each copy of a
+# big contestant bot holds ~50-100 MB in a lab worker: 8 kept made workers 200-340 MB, 2026-10-16)
 
 _counter = itertools.count(1)
 _copies: collections.deque = collections.deque()
@@ -348,6 +349,9 @@ def _forget(alias: str) -> None:
     for name in [n for n in sys.modules if n == alias or n.startswith(alias + ".")]:
         del sys.modules[name]
     sys.meta_path[:] = [f for f in sys.meta_path if not (isinstance(f, _Finder) and f.seat.alias == alias)]
+    import gc
+
+    gc.collect()  # (a module's functions and globals form cycles: free the copy now, not at some later collection)
 
 
 # -- the agent the lab seats ----------------------------------------------------------------------

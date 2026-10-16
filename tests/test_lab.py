@@ -292,6 +292,36 @@ def test_a_frozen_bot_takes_the_bots_it_builds_on(tmp_path, monkeypatch):
     assert "from .redalert_bot import VERSION" in (package / "base.py").read_text()
 
 
+def test_a_family_copy_of_the_scripted_bot_is_frozen_with_it(tmp_path, monkeypatch):
+    (tmp_path / "agent").mkdir()
+    fam = tmp_path / "bots" / "fam" / "v10"
+    fam.mkdir(parents=True)
+    (tmp_path / "agent" / "redalert_bot.py").write_text("VERSION = 1\n")
+    (fam / "redalert_bot.py").write_text("from .tuning import X\nVERSION = 'family'\n")
+    (fam / "tuning.py").write_text("X = 3\n")
+    (fam / "bot.py").write_text("from .redalert_bot import VERSION\n\ndef create_agent():\n    return VERSION\n")
+    monkeypatch.setattr(registry, "ROOT", tmp_path)
+    table = {"fam-a": registry.Bot(name="fam-a", kind="module", params={"factory": "bots.fam.v10.bot:create_agent"})}
+    registry.freeze(table, "fam-a", "fam-a-v1")
+    package = tmp_path / "bots" / "frozen" / "fam_a_v1"
+    assert "VERSION = 'family'" in (package / "redalert_bot.py").read_text()  # (rush-wave, run 191: not the shared one)
+    assert (package / "tuning.py").read_text() == "X = 3\n"
+
+
+def test_a_bot_with_two_different_scripted_bots_is_not_frozen(tmp_path, monkeypatch):
+    (tmp_path / "agent").mkdir()
+    fam = tmp_path / "bots" / "fam"
+    fam.mkdir(parents=True)
+    (tmp_path / "agent" / "redalert_bot.py").write_text("VERSION = 1\n")
+    (fam / "redalert_bot.py").write_text("VERSION = 2\n")
+    (fam / "bot.py").write_text("from .redalert_bot import VERSION\nfrom agent.redalert_bot import VERSION as V\n")
+    monkeypatch.setattr(registry, "ROOT", tmp_path)
+    table = {"fam-a": registry.Bot(name="fam-a", kind="module", params={"factory": "bots.fam.bot:create_agent"})}
+    with pytest.raises(ValueError, match="two different scripted bots"):
+        registry.freeze(table, "fam-a", "fam-a-v1")
+    assert not (tmp_path / "bots" / "frozen" / "fam_a_v1").exists()
+
+
 def test_the_gate_verdict_weighs_paired_games():
     def paired(diffs, by=None):
         mean, lo, hi = report._mean_ci(diffs)
