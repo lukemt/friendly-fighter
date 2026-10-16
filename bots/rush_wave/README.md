@@ -94,7 +94,8 @@ seen lately is mostly infantry.
 | `rush-wave-g` | f + `guard_mix`. | Run 162: 2/12 (-0.25, CI -0.60..+0.10) |
 | `rush-wave-h` | Oracle test: knows Rush is coming. `plan=hold`, no early refineries, no boom (a safe opening). | Run 164: 3/12 vs v10's 7/12 (-0.33, CI -0.70..+0.04) |
 | `rush-wave-i` | Oracle test: the same with `plan=fortify`. | Run 164: identical to h (3/12) |
-| `rush-wave-k`, `-l` | Base + `defend_radius` 22 and 28. | Screening |
+| `rush-wave-k` | Base + `defend_radius=22` (the army goes out to enemies up to 22 cells from home; v10: 16). | **Lead.** Seeds 7001-7004 (3 Rush maps, 12 games each): 33/48 vs v10's 27/48; net better on 4 of 4 seeds; no single seed's CI excludes 0. Confirming on the new engine |
+| `rush-wave-l` | Base + `defend_radius=28`. | Run 167: 7/12 = v10 (no effect) |
 
 ## Results
 
@@ -166,6 +167,20 @@ seen lately is mostly infantry.
     against 37 units. They lose twice the units per two minutes (9.0 against 4.5 at 6-8 min, 12.9 against
     7.1 at 8-10 min) and build about the same from 8:00. The bot is in the defend posture 90-97% of the time
     from 6:00 to 12:00 in both groups, with no attack waves (14 games with logs).
+
+- **Bigger defend radius** (experiment `rush-wave-reach`; `--map trapped,sidestep,shadowfiend-ii --games 12`;
+  paired against v10 on the same scenarios):
+
+  | seed | run | engine | v10 | k (22) | paired points a game (95% CI) | paired net (95% CI) |
+  |---|---|---|---|---|---|---|
+  | 7001 | 167 | with nukes | 7/12 | 9/12 | +0.17 (-0.16..+0.49) | +7,921 (-7,719..+23,560) |
+  | 7002 | 171 | with nukes | 5/12 | 8/12 | +0.25 (-0.10..+0.60) | +11,621 (-865..+24,107) |
+  | 7003 | 176 | with nukes | 7/12 | 9/12 | +0.17 (-0.16..+0.49) | +10,221 (-7,813..+28,255) |
+  | 7004 | 182 | no superweapons | 8/12 | 7/12 | -0.08 (-0.37..+0.21) | +3,158 (-12,099..+18,416) |
+
+  Radius 28 (l, run 167): 7/12 = v10. Radius 9 (f, run 162): 2/12 against v10's 5/12. The trend
+  across 9 / 16 / 22 / 28 is not monotonic, so 22 may be a lucky draw: more games on the new engine
+  (no superweapons) decide it.
 
 ## Core changes
 
