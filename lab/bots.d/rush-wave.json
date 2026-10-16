@@ -93,6 +93,37 @@
     }
    },
    "think": 0.005
+  },
+  {
+   "name": "rush-wave-f",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 9
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-g",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "defend_radius": 9,
+     "guard_mix": true
+    }
+   },
+   "think": 0.005
   }
  ]
 }

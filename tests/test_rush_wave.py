@@ -64,9 +64,10 @@ def test_switches_on_an_infantry_heavy_enemy_only(tmp_path):
 
 def test_guard_settings_default_to_v10s(tmp_path):
     bot = council(tmp_path)
-    assert bot.guard_settings == {"guard_defenses": 1, "guard_infantry": 10, "late_buildings_from": 0.0, "guard_mix": False}
+    assert bot.guard_settings == {"guard_defenses": 1, "guard_infantry": 10, "late_buildings_from": 0.0, "guard_mix": False,
+                                    "defend_radius": 16}
     k = Knobs()
-    assert (k.guard_defenses, k.guard_infantry, k.late_buildings_from, k.guard_mix) == (1, 10, 0.0, False)
+    assert (k.guard_defenses, k.guard_infantry, k.late_buildings_from, k.guard_mix, k.defend_radius) == (1, 10, 0.0, False, 16)
 
 
 def build_order(**knobs) -> list[str]:
@@ -123,3 +124,12 @@ def test_v10s_guard_trains_only_rifles_and_guard_mix_alternates():
         return items
     assert run(False) == ["e1"] * 8
     assert run(True) == ["e1", "e3"] * 4
+
+
+def test_defend_radius_decides_which_enemies_pull_the_army_out():
+    bot = RedAlertBot(log=lambda _: None, clock=Clock())
+    obs = {"visible_enemies": [{"id": 1, "type": "e1", "x": 50, "y": 50}, {"id": 2, "type": "e1", "x": 50, "y": 62}]}
+    assert len(bot._threats(obs, (50, 50))) == 2                 # v10: 16 cells
+    assert bot._threats(obs, (50, 50), 8) == [(50, 50)]
+    assert bot._threats(obs, (50, 50), 11) == [(50, 50)]
+    assert len(bot._threats(obs, (50, 50), 12)) == 2             # (inclusive: the second one is 12 away)

@@ -34,10 +34,11 @@ from dataclasses import replace
 from typing import Any
 
 from .jev_bot import AIR, GREED, NONCOMBAT, JevBot, _clock
-from .redalert_bot import GUARD_INFANTRY_CAP
+from .redalert_bot import DEFEND_RADIUS, GUARD_INFANTRY_CAP
 
 INFANTRY = frozenset({"e1", "e2", "e3", "e4", "e7", "shok", "dog"})  # (engineers, medics, spies: NONCOMBAT)
-GUARD_DEFAULTS = {"guard_defenses": 1, "guard_infantry": GUARD_INFANTRY_CAP, "late_buildings_from": 0.0, "guard_mix": False}
+GUARD_DEFAULTS = {"guard_defenses": 1, "guard_infantry": GUARD_INFANTRY_CAP, "late_buildings_from": 0.0, "guard_mix": False,
+                  "defend_radius": DEFEND_RADIUS}
 ANTI_INFANTRY_MIN = 10  # enemy combat units seen lately before the share means anything
 
 MODEL = "jev-1.13.0"  # pinned: an alias (jev-latest) moves with new releases and changes answers
@@ -154,7 +155,7 @@ class CouncilBot(JevBot):
                  boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev",
                  anti_infantry: float = 0.0, anti_infantry_from: float = 300.0, anti_infantry_window: float = 240.0,
                  guard_defenses: int = 1, guard_infantry: int = GUARD_INFANTRY_CAP, late_buildings_from: float = 0.0,
-                 guard_mix: bool = False, **kwargs) -> None:
+                 guard_mix: bool = False, defend_radius: int = DEFEND_RADIUS, **kwargs) -> None:
         """``gate``: the probability a new plan needs; ``attack_gate``: the same for attack and boom.
         ``boom_until``: no boom from this time; ``keep_first``: the first plan stands until then unless
         the base is raided or an attack is expected (for experiments). ``oracle="rules"``: code answers
@@ -166,7 +167,8 @@ class CouncilBot(JevBot):
         ``guard_defenses``, ``guard_infantry`` (rush-wave; the defaults are v10's): how many defenses and
         how much infantry the guard opening buys before the economy; ``late_buildings_from``: no service
         depot or radar dome before this many seconds (their money goes to the guard); ``guard_mix``: the
-        guard alternates rifles and rockets (v10's always trains rifles: its orders of 2 pick index 0)."""
+        guard alternates rifles and rockets (v10's always trains rifles: its orders of 2 pick index 0);
+        ``defend_radius``: enemies this close to home pull the army out (16 in v10; smaller: fight at the towers)."""
         super().__init__(log_dir=log_dir, model=model, push=push, scout=scout, use_jev=use_jev, **kwargs)
         if oracle == "rules":
             self.jev = Rules(self)
@@ -179,7 +181,8 @@ class CouncilBot(JevBot):
         self.anti_infantry_from = anti_infantry_from
         self.anti_infantry_window = anti_infantry_window
         self.guard_settings = {"guard_defenses": guard_defenses, "guard_infantry": guard_infantry,
-                               "late_buildings_from": late_buildings_from, "guard_mix": guard_mix}
+                               "late_buildings_from": late_buildings_from, "guard_mix": guard_mix,
+                               "defend_radius": defend_radius}
         self.attack_soon = 0.0
         self.events: list[str] = []
         self.next_due = {"strategy": 0.0, "supply": 0.0, "field": 0.0}

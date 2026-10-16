@@ -88,8 +88,10 @@ seen lately is mostly infantry.
 | `rush-wave-a` | Base + `anti_infantry=0.6` (idea 1): when 60%+ of the enemy combat units seen in the last 240 s are infantry (10+ seen, from 5:00), train flamethrowers, riflemen and grenadiers instead of rocket soldiers; artillery, no V2s. | Screened on 2 seeds (runs 137, 139): no effect |
 | `rush-wave-b` | Base + `guard_defenses=3`, `guard_infantry=16` (idea 3, early). | Trapped screen, seed 990 (run 154): no clear gain |
 | `rush-wave-c` | b + `late_buildings_from=300` (no service depot or dome before 5:00). | Run 154: no gain (3/8) |
-| `rush-wave-d` | Base + `guard_mix` (the guard alternates rifles and rockets). | Screening |
-| `rush-wave-e` | d + `guard_infantry=14`, `guard_defenses=2`. | Screening |
+| `rush-wave-d` | Base + `guard_mix` (the guard alternates rifles and rockets). | Trapped, 2 seeds (runs 157, 158): 7/16 vs v10's 6/16, no clear difference |
+| `rush-wave-e` | d + `guard_infantry=14`, `guard_defenses=2`. | Worse: 2/16 (seed 990: net -25,600, CI -46,277..-4,923) |
+| `rush-wave-f` | Base + `defend_radius=9` (the army only leaves the towers for enemies within 9 cells, v10: 16). | 3 Rush maps (run 162): 2/12 vs v10's 5/12, no clear difference (-0.25, CI -0.51..+0.01) |
+| `rush-wave-g` | f + `guard_mix`. | Run 162: 2/12 (-0.25, CI -0.60..+0.10) |
 
 ## Results
 
@@ -134,6 +136,18 @@ seen lately is mostly infantry.
   leave the defaults alone), b 5/8 (+4,494), c 3/8 (+1,300). Paired against v10: b +0.12 points a game
   (-0.32..+0.57), c -0.12 (-0.57..+0.32): no clear difference. A bigger riflemen-only guard still
   loses the 5:04 fight (b, game `28d5a9f5`: 21 lost, 13 killed).
+
+- **Guard variants d, e** (trapped, 20 min, 8 games each): seed 990 (run 157): v10 4/8, d 3/8, e 1/8;
+  seed 880 (run 158): v10 2/8, d 4/8, e 1/8. `guard_mix` (d) is neutral; a bigger guard (e) is worse:
+  money spent on the early guard costs more than it buys.
+- **Fight at the towers** (`defend_radius=9`, f/g; run 162, `--map trapped,sidestep,shadowfiend-ii --games 12
+  --seed 4242`): v10 5/12, f 2/12, g 2/12; no clear difference, but the direction is negative.
+- **What the database says about v10 vs `ai-rush`** (80 full 20-minute games, version `154ffc3c`; wins/losses
+  on trapped 16/29, sidestep 13/4, shadowfiend-ii 6/7): at 3:00 and 4:00 the wins and the losses look
+  alike (about 10-11 combat units, 4-5 harvesters, 10 buildings); first contact is at ~4:55-5:10 either
+  way. They differ in the first fight: by 6:00 the losses have lost 11.0 units (trapped; 5.2 in wins)
+  and killed 12.7 (14.8). So the first fight at the base decides most games, and it is close to even
+  for the same opening: a bigger guard or another stance is a coin flip around that fight, not a fix.
 
 ## Core changes
 

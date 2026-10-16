@@ -132,6 +132,7 @@ class Knobs:
     guard_infantry: int = GUARD_INFANTRY_CAP  # ...and this many infantry before the war factory (rush-wave)
     late_buildings_from: float = 0.0  # no service depot or radar dome before this game time, seconds (rush-wave)
     guard_mix: bool = False          # the guard alternates rifles and rockets (v10's orders of 2 always pick rifles)
+    defend_radius: int = DEFEND_RADIUS  # enemies this close to home pull the army out to fight (rush-wave: smaller = fight at the towers)
     note: str = ""
 
 
@@ -386,7 +387,7 @@ class RedAlertBot:
 
         # 6. Army production. (The guard opening, attacked at home with a small army: infantry from
         # whatever money there is, before anything else.)
-        if knobs.opening == "guard" and self._threats(obs, home) and \
+        if knobs.opening == "guard" and self._threats(obs, home, knobs.defend_radius) and \
                 sum(1 for u in units if is_combat(u)) < GUARD_EMERGENCY_ARMY:
             infantry = [i for i in INFANTRY_PRIORITY if i in available]
             if infantry and queued["Infantry"] == 0 and cash >= self._costs.get(infantry[0], 100):
@@ -431,7 +432,7 @@ class RedAlertBot:
 
         # 8. Defend, else attack.
         combat = [u for u in units if is_combat(u)]
-        threats = self._threats(obs, home)
+        threats = self._threats(obs, home, knobs.defend_radius)
         if threats:
             self._defend(add, combat, threats, home, now, notes)
         else:
@@ -561,12 +562,12 @@ class RedAlertBot:
                     self._mark("train", pick, now)
                     self._vehicles_ordered += count
 
-    def _threats(self, obs, home) -> list[tuple[int, int]]:
+    def _threats(self, obs, home, radius: int = DEFEND_RADIUS) -> list[tuple[int, int]]:
         cells = []
         for enemy in _list(obs.get("visible_enemies")):
             cell = _cell(enemy)
             if cell and not enemy.get("wreck") and not str(enemy.get("type") or "").endswith("husk"):
-                if _dist(cell, home) <= DEFEND_RADIUS:
+                if _dist(cell, home) <= radius:
                     cells.append(cell)
         return cells
 
