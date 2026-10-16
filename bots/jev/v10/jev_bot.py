@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .redalert_bot import Knobs, RedAlertBot, is_combat
+from .hands import Knobs, RedAlertBot, is_combat
 from altruagent import WAIT, WithReasoning
 
 API_URL = "https://api.typesafe.ai/v1/systemone"
@@ -65,6 +65,7 @@ NAMES = {
 AIR = {"heli", "hind", "mh60", "yak", "mig", "tran", "badr", "u2"}
 DEFENSES = {"tsla", "ftur", "gun", "pbox", "hbox", "sam", "agun"}
 NONCOMBAT = {"harv", "mcv", "e6", "spy", "medi", "mnly", "truk"}
+INFANTRY_UNITS = {"e1", "e2", "e3", "e4", "e6", "e7", "dog", "shok", "spy", "thf", "medi", "mech"}
 
 # What Claude knew while playing (docs/STRATEGY.md), given to Jev with the questions.
 PLAYBOOK = [
@@ -574,6 +575,14 @@ class JevBot:
             state["our_attack"] = (f"our {len(facts['away'])} units out of the base are fighting "
                                    f"{len(facts['near_fight'])} enemy units"
                                    + (f" and {_mix(towers)}" if towers else "") + f": {_ratio(ours_v, theirs_v)}")
+        mix = {"infantry": 0, "vehicles": 0, "aircraft": 0}
+        for t, seen in self.enemy_seen.values():
+            if now - seen <= 90 and t not in NONCOMBAT:
+                mix["aircraft" if t in AIR else "infantry" if t in INFANTRY_UNITS else "vehicles"] += 1
+        total = sum(mix.values())
+        state["enemy_mix"] = (f"of the {total} enemy combat units seen in the last 90 seconds, {mix['infantry']} are infantry, "
+                              f"{mix['vehicles']} are vehicles and {mix['aircraft']} are aircraft" if total else
+                              "no enemy combat unit seen in the last 90 seconds")
         economy = obs.get("economy") or {}
         cash = int(economy.get("cash") or 0) + int(economy.get("ore") or 0)
         harvesters = sum(1 for u in obs.get("units") or [] if str(u.get("type")).lower() == "harv")

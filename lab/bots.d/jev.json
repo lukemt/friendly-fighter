@@ -347,6 +347,46 @@
     "rules",
     "micro"
    ]
+  },
+  {
+   "name": "jev-sjs",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.splitjev:create_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "shadow"
+    }
+   },
+   "think": 0.005,
+   "description": "jev-rifr (rules) with the quartermaster question also asked of Jev: shadow (shadow: the rules decide, Jev logged; jev: Jev decides at p>=0.55)",
+   "tags": [
+    "jev",
+    "council",
+    "composition"
+   ]
+  },
+  {
+   "name": "jev-sjj",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.splitjev:create_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "jev"
+    }
+   },
+   "think": 0.005,
+   "description": "jev-rifr (rules) with the quartermaster question also asked of Jev: jev (shadow: the rules decide, Jev logged; jev: Jev decides at p>=0.55)",
+   "tags": [
+    "jev",
+    "council",
+    "composition"
+   ]
   }
  ]
 }

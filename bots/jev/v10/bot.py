@@ -101,14 +101,14 @@ VIEWS = {
     "strategy": ("clock", "score", "our_army", "enemy_army", "enemy_defenses", "what_we_know_of_the_enemy",
                  "enemy_aircraft", "raids_on_our_base", "now_at_our_base", "economy", "our_past_attacks", "scouting",
                  "our_read_so_far"),
-    "supply": ("clock", "our_army", "enemy_army", "what_we_know_of_the_enemy", "enemy_aircraft", "economy"),
+    "supply": ("clock", "our_army", "enemy_army", "what_we_know_of_the_enemy", "enemy_aircraft", "economy", "enemy_mix"),
     "field": ("clock", "score", "recent_trades", "our_army", "enemy_army", "enemy_defenses", "now_at_our_base",
               "our_current_orders", "our_attack", "our_past_attacks", "scouting", "our_read_so_far"),
 }
 
 
 def loop_request(loop: str, words: dict[str, str], *, seconds: float, plan: str = "hold", events: list[str] | None = None,
-                 read: str | None = None, rifles: bool = False) -> tuple[dict, dict]:
+                 read: str | None = None, rifles: bool = False, supply_brief: list[str] | None = None) -> tuple[dict, dict]:
     """One loop's (state, questions), from the shared description: also used by ``lab jev eval``."""
     state: dict[str, Any] = {k: words[k] for k in VIEWS[loop] if k in words}
     plan_text = f"{plan}: {PLAN[plan].split('. Right')[0].lower()}"
@@ -130,7 +130,7 @@ def loop_request(loop: str, words: dict[str, str], *, seconds: float, plan: str 
                                     "criteria": OPENING}
         return state, questions
     if loop == "supply":
-        state = {"briefing": SUPPLY_BRIEF, **state, "current_plan": plan_text}
+        state = {"briefing": supply_brief or SUPPLY_BRIEF, **state, "current_plan": plan_text}
         options = ("infantry", "rockets", "mixed") if seconds < 240 else ("rockets", "vehicles", "mixed") + (("rifles",) if rifles else ())
         return state, {"production": {"type": "choice", "instructions": "Using `briefing`, what should our factories train now?",
                                       "criteria": {k: PRODUCTION[k] for k in options}}}
@@ -156,6 +156,7 @@ class CouncilBot(JevBot):
         super().__init__(log_dir=log_dir, model=model, push=push, scout=scout, use_jev=use_jev, **kwargs)
         if oracle == "rules":
             self.jev = Rules(self)
+        self.supply_brief: list[str] | None = None  # (jev family: another briefing for the quartermaster, see bots/jev/splitjev.py)
         self.blind_production = blind_production  # (jev family: what the rules train while the enemy army is unseen; v10: rockets)
         self.rifle_rule, self.rifle_hi, self.rifle_lo = rifle_rule, rifle_hi, rifle_lo
         self.plan = plan
@@ -254,7 +255,7 @@ class CouncilBot(JevBot):
         """The loops' requests, all at once (one thread each): the answers together, each loop's
         tokens, the wall time."""
         requests = {loop: loop_request(loop, words, seconds=now, plan=self.plan, events=self.events, read=self._read(),
-                                       rifles=self.rifle_rule or self.blind_production == "rifles")
+                                       rifles=self.rifle_rule or self.blind_production == "rifles", supply_brief=self.supply_brief)
                     for loop in loops}
         start = time.monotonic()
         futures = {loop: self.pool.submit(self._ask, state, questions) for loop, (state, questions) in requests.items()}

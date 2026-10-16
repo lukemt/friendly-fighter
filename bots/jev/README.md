@@ -127,6 +127,31 @@ bots below test it, in parts, on top of a copy of v10 (`bots/jev/v10/`, `jev-bas
 These are decisions of *when*, so they are also what Jev could be asked. The rules version comes
 first; Jev is tried against it afterwards (paid games, a handful: AGENTS.md rule 11).
 
+## New direction (2026-10-16, after the parking): fights and composition, against agents
+
+Nothing here needs a nuke or a support power. Every setting is opt-in in this family's copy of v10
+(`bots/jev/v10/`, no shared code), off by default; `jev-base` plays like v10 (parity checked in the
+probes: same branches, same scores).
+
+1. **Where the army waits** (`stage_cells`, `regroup`; experiment `jev-stage`). v10 stages new units a
+   fifth of the way to the enemy base: 10-11 cells on trapped and sidestep, 17-18 on shadowfiend-ii,
+   while its defenses stand 6 cells out (`_place_spot`). In the fight of `1141b291` (12:30, trapped) the
+   46-unit army stood in a long column at 8-17 cells from the yard, beyond the tower at 8 cells, and
+   lost 41 units in 36 s. Hypothesis: waiting 5-8 cells out puts the fight under the towers.
+2. **What the infantry is** (`blind_production="rifles"`, `rifle_rule`; experiment `jev-comp`).
+   PakledAgent's matchup model (docs/research/red-alert-unit-matchups.md in
+   github.com/SirLinhart/PakledAgent, read only) gives the rifleman 1,056 effective DPS per $100
+   against infantry and 5,000 HP per $100; the rocket soldier 78 against infantry and 833 against
+   heavy armour. v10 trains only rocket soldiers once it has seen any vehicle, or when blind after
+   5:00 (`Rules.production`), so most of its infantry is the worst unit against an infantry swarm
+   (its losses in the wipes above: `e3 x32, e1 x9`). `exploit-ryan-plan` fields 88 units by 10:00, mostly
+   riflemen.
+3. **How the army fires** (`focus`). The same model: "targeting is worth as much as composition".
+   Defending, each kind of unit gets an `attack` order on the nearest enemy of the kind it hurts most.
+4. **Measured on the way:** v10's `choose_action` costs 0.53 ms mean per view (p95 0.8 ms, max 13 ms,
+   3,500 calls of a 20-minute game, run 168), so the platform's view interval (~0.24 s) is not
+   threatened by the champion's own code, and the lab's fixed 5 ms think is 10 times conservative.
+
 ## Bots
 
 | Bot | What it is | Status |
@@ -139,7 +164,12 @@ first; Jev is tried against it afterwards (paid games, a handful: AGENTS.md rule
 | `jev-ls3` | insurance from 12:00 + overrun sale + cash-out at 16:00, the army hides | probe run 163 |
 | `jev-ls4s`, `jev-ls4m`, `jev-ls4t` | no fleeing; cash-out at 17:00; army and harvesters split / with the MCV / stay | run 166, stopped after 5 of 33 games (below) |
 | `jev-lsj` code: `laststand_jev.py` | Jev decides when to bank (asks every 15 s from 14:00) | written and unit-tested, never played; **parked** |
-| `jev-timed` | v10 timing every `choose_action` (wall and CPU) | experiment `jev-think` |
+| `jev-timed` | v10 timing every `choose_action` (wall and CPU) | run 168: 0.53 ms mean per view |
+| `jev-st5`, `jev-st8` | `jev-base`, the army waits 5 / 8 cells from home (`stage_cells`) and idle units regroup there | probe run 170; full games run 178 |
+| `jev-rifb` | `jev-base`, riflemen only while the enemy army is unseen after 5:00 (`blind_production="rifles"`) | registered |
+| `jev-rifr` | `jev-rifb` + riflemen at 60%+ infantry among the enemy seen, rockets at 35%- (`rifle_rule`) | registered; the rules side of the Jev test |
+| `jev-focus` | `jev-base` + focus fire when defending (`focus`) | registered |
+| `jev-sjs`, `jev-sjj` | `jev-rifr` with the quartermaster question also asked of Jev: `s` shadow (rules decide, Jev logged), `j` Jev decides | `bots/jev/splitjev.py`, unit-tested, not played |
 
 ## Results
 
@@ -161,6 +191,31 @@ first; Jev is tried against it afterwards (paid games, a handful: AGENTS.md rule
   sold that too: no building, no MCV, 109 units: defeat at 7:14.
 - Run 149 (`2e110913`): no redeploying. At 7:14 sold 16 buildings: `deaths_cost` 0 before and after,
   cash 6,500, units 34 to 109, the MCV alone left; the game went on to 10:00 (draw against the AI).
+
+**Where the army waits: probe on `@normal-fight`** (experiment `jev-stage`; 15 moments, 30 s before v10's first
+4,000+ score fall against the Normal AI, 8:50-15:20; 180 s or 45 s quiet; run 170; the report drops
+the rows because the family code changed after the run started, so the table is read with
+`current=False`, see `lab/moments.py:outcomes`):
+
+| bot | branches | score change since the moment | vs control (paired, 95% CI) | better in | W-D-L at the stop |
+|---|---|---|---|---|---|
+| control (v10) | 15 | -4,240 | | | 6-0-9 |
+| `jev-base` (parity) | 15 | -4,240 | +0 (+0..+0) | 0/15 | 6-0-9 |
+| `jev-st5` (5 cells) | 15 | +3,167 | **+7,407 (-1,654..+16,467)** | 11/15 | **14-0-1** |
+| `jev-st8` (8 cells) | 15 | +583 | +4,823 (-2,528..+12,175) | 11/15 | 10-1-4 |
+
+- **`jev-base` is v10**: the same score in all 15 branches (the copy and the new knobs at their defaults change
+  nothing).
+- **Waiting under the towers turns the fights**: the interval touches 0, but the sign test (11/15) and the
+  stop result (14 of 15 at net >= 0, against 6) agree. Caveats: a branch, not a whole game; the regroup
+  sends the army back at the start of the branch, which a game with the setting from the start does not need.
+  Next: whole 20-minute games (run 178: `ai-normal` and `exploit-ryan-plan`, 16 games each).
+- **Focus fire when defending** (`jev-focus`, run 180, same set and rule; `jev-base` again identical to v10 in all 15
+  after the module was renamed to `hands.py` for freezing): +1,660 vs control (-4,351..+7,671), better in 6/15,
+  W-D-L 7-0-8 against 6-0-9. Nothing; parked.
+- **Distinct from rush-wave's idea 1** (anti-infantry units from 5:00, no effect against the Rush AI,
+  runs 137/139): the riflemen test below is against other opponents (`exploit-ryan-plan`, `ext-ryan`, the
+  eco exploiters) and changes what the *infantry* is, not an anti-infantry mix.
 
 **Bank the lead, first probes** (moment sets `@jev-ls-wipes`: 11 of v10's late-wipe games at 10:00, to the
 end of the game, and `@jev-ls-holds`: 24 games v10 did not lose by a wipe; experiment `jev-laststand`):

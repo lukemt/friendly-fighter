@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from bots.jev.v10.redalert_bot import Knobs, RedAlertBot
+from bots.jev.v10.hands import Knobs, RedAlertBot
 
 
 def _bot():
@@ -110,3 +110,28 @@ def test_focus_fire_gives_each_kind_of_unit_its_own_target():
     assert 13 not in target_of.values()  # (a harvester is not worth a focus order)
     sent.clear()
     assert not bot._focus_defend(add, combat, {1, 2, 3, 4}, {"visible_enemies": []}, (26, 32), 600.0) and not sent
+
+
+def test_split_jev_shadows_or_decides_the_production(monkeypatch):
+    from bots.jev.splitjev import SplitJevBot
+
+    def run(mode, jev_pick):
+        bot = SplitJevBot(plan="boom", keep_first=240, early_refineries=1, supply_mode=mode)
+        bot.enemy_seen = {i: ("e1", 590.0) for i in range(10)}  # the rules say: rifles
+        facts, raw = {"threat": False}, {"observation": {"economy": {"cash": 0}}}
+        bot._now = (facts, 600.0, raw)
+        state, questions = __import__("bots.jev.v10.bot", fromlist=["loop_request"]).loop_request(
+            "supply", {"clock": "10:00", "enemy_mix": "of the 10 enemy combat units seen, 10 are infantry"}, seconds=600.0,
+            plan="hold", rifles=True, supply_brief=bot.supply_brief)
+        assert "enemy_mix" in state and "rifles" in questions["production"]["criteria"]
+        reply = {"production": {"type": "choice", "choice": jev_pick, "probabilities": {jev_pick: 0.9}}}
+        monkeypatch.setattr(bot.supply_jev, "ask_counted", lambda s, q: (reply, 500))
+        answers, tokens = bot._ask(state, questions)
+        return bot, answers["production"]["choice"], tokens
+
+    bot, pick, tokens = run("shadow", "rockets")
+    assert pick == "rifles" and tokens == 500 and bot.agreement() == (1, 0)  # rules decide; Jev is only logged
+    bot, pick, _ = run("jev", "rockets")
+    assert pick == "rockets"  # Jev decides
+    bot, pick, _ = run("jev", "rifles")
+    assert pick == "rifles" and bot.agreement() == (1, 1)
