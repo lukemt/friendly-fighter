@@ -30,9 +30,13 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from typing import Any
 
 from .jev_bot import AIR, GREED, NONCOMBAT, JevBot, _clock
+
+INFANTRY = frozenset({"e1", "e2", "e3", "e4", "e7", "shok", "dog"})  # (engineers, medics, spies: NONCOMBAT)
+ANTI_INFANTRY_MIN = 10  # enemy combat units seen lately before the share means anything
 
 MODEL = "jev-1.13.0"  # pinned: an alias (jev-latest) moves with new releases and changes answers
 STRATEGY_SECONDS = 30.0
@@ -145,11 +149,17 @@ def loop_request(loop: str, words: dict[str, str], *, seconds: float, plan: str 
 class CouncilBot(JevBot):
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = True, scout: bool = False,
                  plan: str = "hold", gate: float = 0.55, attack_gate: float = 0.6, use_jev: bool = True,
-                 boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev", **kwargs) -> None:
+                 boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev",
+                 anti_infantry: float = 0.0, anti_infantry_from: float = 300.0, anti_infantry_window: float = 240.0,
+                 **kwargs) -> None:
         """``gate``: the probability a new plan needs; ``attack_gate``: the same for attack and boom.
         ``boom_until``: no boom from this time; ``keep_first``: the first plan stands until then unless
         the base is raided or an attack is expected (for experiments). ``oracle="rules"``: code answers
-        the loops' questions (``Rules``), no Jev at all."""
+        the loops' questions (``Rules``), no Jev at all.
+        ``anti_infantry`` (rush-wave; 0 = off, v10 as it was): from ``anti_infantry_from`` seconds, when at
+        least this share of the enemy combat units seen in the last ``anti_infantry_window`` seconds
+        (at least ANTI_INFANTRY_MIN of them) are infantry, the factories train for that (unit_focus
+        "antiinf": flamethrowers, grenadiers, riflemen; artillery, no V2s)."""
         super().__init__(log_dir=log_dir, model=model, push=push, scout=scout, use_jev=use_jev, **kwargs)
         if oracle == "rules":
             self.jev = Rules(self)
@@ -158,6 +168,9 @@ class CouncilBot(JevBot):
         self.gate, self.attack_gate = gate, attack_gate
         self.boom_until = boom_until
         self.keep_first = keep_first
+        self.anti_infantry = anti_infantry
+        self.anti_infantry_from = anti_infantry_from
+        self.anti_infantry_window = anti_infantry_window
         self.attack_soon = 0.0
         self.events: list[str] = []
         self.next_due = {"strategy": 0.0, "supply": 0.0, "field": 0.0}
@@ -295,8 +308,20 @@ class CouncilBot(JevBot):
 
     def _apply(self, answers: dict, facts: dict, now: float, raw: dict) -> list[dict[str, Any]]:
         extra = super()._apply(answers, facts, now, raw)
+        if self._anti_infantry_now(now):
+            self.bot.set_knobs(replace(self.bot.knobs, unit_focus="antiinf"))
+            self.note += " build=antiinf"
         self.note = f"plan={self.plan} " + self.note + (f" soon={self.attack_soon:.2f}" if self.attack_soon else "")
         return extra
+
+    def _anti_infantry_now(self, now: float) -> bool:
+        """Off unless ``anti_infantry`` is set. Then: is the enemy army seen lately mostly infantry?"""
+        if not self.anti_infantry or now < self.anti_infantry_from:
+            return False
+        recent = [t for t, seen in self.enemy_seen.values()
+                  if now - seen <= self.anti_infantry_window and t not in NONCOMBAT]
+        infantry = sum(1 for t in recent if t in INFANTRY)
+        return len(recent) >= ANTI_INFANTRY_MIN and infantry / len(recent) >= self.anti_infantry
 
     def _log_council(self, context, now, words, answers, latency, spent: dict[str, int]) -> None:
         self.jev.last_tokens = sum(spent.values())  # (the row's tokens: every loop's request together)

@@ -75,13 +75,17 @@ the shared moment sets alone.
 
 ## The idea
 
-(What these bots do differently, and why it could beat the champion or a part of the field.)
+v10 trains rocket soldiers whenever it has seen enemy vehicles (`Rules.production`), which the Rush AI
+always has. Its wave is mostly infantry (riflemen and rocket soldiers ~30 each), which rockets are
+poor against. Idea 1 (`anti_infantry`) switches the factories to anti-infantry units when the enemy
+seen lately is mostly infantry.
 
 ## Bots
 
 | Bot | What it is | Status |
 |---|---|---|
-| `rush-wave-base` | Copy of frozen v10 (`bots/rush_wave/v10/`), v10's settings. Every change from here is a keyword argument that is off by default. | Reproduces v10 (run 130) |
+| `rush-wave-base` | Copy of frozen v10 (`bots/rush_wave/v10/`), v10's settings. Every change from here is a keyword argument that is off by default. | Reproduces v10 (runs 130, 133) |
+| `rush-wave-a` | Base + `anti_infantry=0.6` (idea 1): when 60%+ of the enemy combat units seen in the last 240 s are infantry (10+ seen, from 5:00), train flamethrowers, riflemen and grenadiers instead of rocket soldiers; artillery, no V2s. | Probed (inconclusive); screening |
 
 ## Results
 
@@ -89,7 +93,14 @@ the shared moment sets alone.
 
 - **`rush-wave-base` plays exactly like v10** (run 130, `lab play rush-wave-base ai-rush --games 2
   --seed 77 --map trapped`, 2026-10-16): net -24,600 (game `02524faf`, wiped 8:44) and -25,700
-  (game `e197e04a`, wiped 9:06), the same as v10's runs 126-127.
+  (game `e197e04a`, wiped 9:06), the same as v10's runs 126-127. Re-checked after the `anti_infantry`
+  code went in (run 133, games `a21a9a43`, `36825e00`): -24,600 and -25,700 again.
+- **Idea 1, probe: inconclusive** (experiment `rush-wave-antiinf`, runs 135-136, `@rush-wave`, halving,
+  180 s): `rush-wave-a` -5,900 against the control over 6 moments (95% CI -21,097..+9,297), the
+  base -933 over 3. Too few pairs. What it did show: the setting fires (`build=antiinf` in 5 of 5
+  `rush-wave-a` games, never in the 2 base games), but only once the wave is in view (20-51 enemy
+  units seen). **A probe branch starts with an empty memory of the enemy**, so a trigger that reads
+  what was seen earlier is judged unfairly; it needs full 20-minute games (stage 2).
 
 ## Core changes
 

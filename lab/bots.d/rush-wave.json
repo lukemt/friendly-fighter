@@ -13,6 +13,21 @@
     }
    },
    "think": 0.005
+  },
+  {
+   "name": "rush-wave-a",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "anti_infantry": 0.6
+    }
+   },
+   "think": 0.005
   }
  ]
 }

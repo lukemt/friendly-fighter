@@ -51,6 +51,9 @@ VEHICLE_PRIORITY = ("4tnk", "3tnk", "2tnk", "1tnk", "v2rl", "arty", "ftrk", "jee
 SUPPORT_VEHICLES = ("v2rl", "arty")  # one of every SUPPORT_EVERY vehicles, when available
 SUPPORT_EVERY = 4
 INFANTRY_PRIORITY = ("e1", "e3")  # alternated
+# unit_focus "antiinf" (rush-wave): against an infantry-heavy enemy, flamethrowers, grenadiers and
+# riflemen instead of rocket soldiers; artillery as the only support vehicle (V2s are for buildings).
+ANTI_INFANTRY_PRIORITY = ("e4", "e1", "e2")
 # Focus-fire order for enemy buildings: construction yard (no rebuilding), then
 # defenses, then production, then refineries, then the rest. Walls are ignored.
 FOCUS_PRIORITY = (("fact",), DEFENSES, ("weap", "tent", "barr"), ("proc",))
@@ -118,7 +121,7 @@ class Knobs:
 
     posture: str = "attack"          # "eco" | "defend" | "attack"
     attack_threshold: int = 8        # combat units needed to launch a wave
-    unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only)
+    unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only) | "antiinf"
     target: str = "nearest"          # "nearest" | "enemy_base" | "harvesters"
     opening: str = "standard"        # "standard" | "guard": a defense and infantry at home through the rush window
     defenses: int = 2                # at most this many defenses (once the economy is up)
@@ -515,6 +518,8 @@ class RedAlertBot:
         infantry = [i for i in INFANTRY_PRIORITY if i in available]
         if knobs.unit_focus == "rockets" and "e3" in available:  # (against aircraft and armor)
             infantry = ["e3"]
+        if knobs.unit_focus == "antiinf":  # (against an infantry-heavy enemy; falls back to the default mix)
+            infantry = [i for i in ANTI_INFANTRY_PRIORITY if i in available] or infantry
         surplus = free - reserve > SURPLUS_CASH
         want_infantry = knobs.unit_focus != "vehicles" or "weap" not in types or surplus
         if (knobs.opening == "guard" and now < GUARD_SECONDS and infantry and queued["Infantry"] == 0 and has_proc
@@ -540,7 +545,7 @@ class RedAlertBot:
         vehicles = [v for v in VEHICLE_PRIORITY if v in available]
         if vehicles and queued["Vehicle"] == 0 and knobs.unit_focus != "infantry":
             pick = vehicles[0]
-            support = [v for v in SUPPORT_VEHICLES if v in available]
+            support = [v for v in SUPPORT_VEHICLES if v in available and (v == "arty" or knobs.unit_focus != "antiinf")]
             if support and self._vehicles_ordered % SUPPORT_EVERY == SUPPORT_EVERY - 1:
                 pick = support[0]
             cost = self._costs.get(pick, 800)
