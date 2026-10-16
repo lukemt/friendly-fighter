@@ -449,6 +449,12 @@ killed is ~2,000-6,000 of tiebreak for an 1,800 unit.
 seat against ai-rush and ext-henry (macro autopilot, Tanya by hand) to see whether kiting her is
 possible at the API's order rate. Then a probe on unselected moments (`--kind at`, Allied seats,
 ai-rush, ai-normal, ext-henry; the placebo bot alongside), then whole games on 2 seeds.
+**Stage 1a by hand (2026-10-16, experiment `tanya-sniper`), 2 games, both no good:** vs ai-rush from
+7:30 the 3,300 for the tech center and Tanya starved the defense, and the Rush wave killed every
+harvester; vs ext-henry from 13:00 she came out only at ~16:00 (cash 0: v10's economy spends
+everything) and died in her first fight. **Parked:** worth a coded probe only on a bot that keeps
+money in the bank.
+
 **Open questions:** whether the tech center (1500) costs us more than she gains before 10:00;
 whether a seat's decision rate is fast enough to keep her out of reach of jeeps and dogs.
 
