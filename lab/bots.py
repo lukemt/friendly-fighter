@@ -121,9 +121,22 @@ def freeze(table: dict, name: str, new_name: str, *, commit: str = "") -> "Bot":
     for init in (ROOT / "bots" / "frozen" / "__init__.py", package / "__init__.py"):
         if not init.exists():
             init.write_text('"""Frozen bots: copies that never change (lab bots freeze)."""\n' if init.parent.name == "frozen" else "")
+    scripted: list[Path] = []  # (the scripted bot it runs: the shared one, or a family's own copy beside it)
+
+    def uses(file: Path) -> None:
+        if scripted and scripted[0] != file and scripted[0].read_bytes() != file.read_bytes():
+            raise ValueError(f"{name} imports two different scripted bots ({scripted[0].relative_to(ROOT)} and "
+                             f"{file.relative_to(ROOT)}): a frozen copy can hold one")
+        if not scripted:
+            scripted.append(file)
+
     def localize(text: str, here: Path) -> str:
         """Imports of the scripted bot and of other bots/ modules (``bots.x``, ``bots.family.x``, or
         relative ones in the bot's own folder) point into the package, and are copied too."""
+        if re.search(r"^from agent\.redalert_bot import", text, re.M):
+            uses(ROOT / "agent" / "redalert_bot.py")
+        if here != ROOT / "agent" and re.search(r"^from \.redalert_bot import", text, re.M):
+            uses(here / "redalert_bot.py" if (here / "redalert_bot.py").is_file() else ROOT / "agent" / "redalert_bot.py")
         text = text.replace("from agent.redalert_bot import", "from .redalert_bot import")
         for dep in sorted({d for d in re.findall(r"^from bots\.([\w.]+) import", text, re.M) if not d.startswith("frozen")}):
             local = dep.replace(".", "__")
@@ -138,9 +151,18 @@ def freeze(table: dict, name: str, new_name: str, *, commit: str = "") -> "Bot":
         return text
 
     module_file = ROOT / (module.replace(".", "/") + ".py")
-    source = localize(module_file.read_text(), module_file.parent)
+    try:
+        source = localize(module_file.read_text(), module_file.parent)
+    except ValueError:
+        import shutil
+
+        shutil.rmtree(package)  # (nothing half-frozen left behind)
+        raise
     (package / "bot.py").write_text(f"# Frozen from {module} ({name} {bot.version()}) at {commit or 'the working tree'}.\n" + source)
-    (package / "redalert_bot.py").write_text((ROOT / "agent" / "redalert_bot.py").read_text())
+    hands = scripted[0] if scripted else ROOT / "agent" / "redalert_bot.py"
+    # (a family's own copy of the scripted bot is frozen with it, not the shared one: rush-wave, run 191)
+    (package / "redalert_bot.py").write_text(localize(hands.read_text(), hands.parent) if hands.parent != ROOT / "agent"
+                                             else hands.read_text())
     params = {**bot.params, "factory": f"bots.frozen.{safe}.bot:{func or 'create_agent'}"}
     kwargs = dict(params.get("kwargs") or {})
     for key, value in kwargs.items():  # (files the bot reads, such as a playbook variant, are frozen too)
