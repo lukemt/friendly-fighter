@@ -130,6 +130,14 @@ class Arena:
         self.engines[match.session_id] = engine
         return engine
 
+    def release_engines(self) -> None:
+        """Let go of this arena's engine lanes between games (persistent ones keep running for whoever
+        takes them next); the next game takes a lane again."""
+        with self.lock:
+            pool, self.pool = self.pool, None
+        if pool is not None:
+            pool.stop()
+
     def close(self) -> None:
         if self.pool is not None:
             self.pool.stop()
