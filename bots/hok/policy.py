@@ -42,7 +42,7 @@ from collections import deque
 from dataclasses import dataclass, field, fields
 from typing import Any
 
-from .view import HOLD, SKILLS, Hero, Offer, SeatOffers, Structure, TeamView, distance
+from .view import HEAL, HOLD, SKILLS, Hero, Offer, SeatOffers, Structure, TeamView, distance
 
 # Priorities: lower is sent first when several heroes need a new order.
 P_SAVE, P_SKILL_HERO, P_HIT_HERO, P_POSITION, P_ATTACK, P_SKILL_UNIT, P_HOLD, P_ADVANCE = range(8)
@@ -53,25 +53,33 @@ class Knobs:
     """Strategy settings. Distances are in game units (the guide's labels: "4123 away");
     upstream's example fights what is closer than 9000."""
 
-    retreat_hp: float = 0.30          # go home below this share of max HP...
-    return_hp: float = 0.85           # ...and come back only above this
+    retreat_hp: float = 0.25          # below this share of max HP, a threatened hero escapes...
+    calm_s: float = 3.0               # ...until it has been out of danger this long (game seconds)
+    heal_at_home: bool = False        # the old way: walk home below retreat_hp, back at return_hp.
+                                      # Live (e5f159ed): home heals ~0.25%/s, so that took minutes;
+                                      # a death costs a 5-25 s revive and comes back at full HP
+    return_hp: float = 0.60
+    heal_hp: float = 0.40             # the heal summoner skill, when listed, below this share of HP
+                                      # and threatened
     allin_retreat_hp: float = 0.12    # the retreat line when all in
     danger_ttd: float = 2.0           # seconds to death at the current damage rate: evade
     danger_hp: float = 0.6            # ...but only below this share of HP
     evade_seconds: float = 2.0        # an evade lasts this long (game seconds)
-    tower_aggro_rate: float = 0.08    # under an enemy tower, losing this share of max HP a second with
-                                      # no enemy hero near: the tower is on this hero, step out
+    tower_aggro_rate: float = 0.0     # under an enemy tower, losing this share of max HP a second with
+                                      # no enemy hero near: step out (0 = off: on the sim, stepping out
+                                      # cost more push time than it saved heroes)
     tower_aggro_hp: float = 0.75      # ...once below this share of HP
     engage_range: float = 9000.0      # an enemy hero this close is in the fight
     assist_range: float = 13000.0     # heroes this close count for each side's strength
     attack_range: float = 9000.0      # a macro target this close is worth hitting
     skill_range: float = 9000.0
     tower_range: float = 9000.0       # an enemy tower hits what comes this close
-    min_pushers: int = 3              # heroes needed at an enemy tower to hit it
+    min_pushers: int = 2              # heroes needed at an enemy tower to hit it (sim: 2 > 3 > 1)
     low_tower: float = 0.15           # a tower below this share of HP is taken whatever
     outnumber_margin: float = 0.8     # back off when their strength > ours + this
     fog_weight: float = 0.5           # an enemy seen in the last few seconds nearby, now fogged
     skills_on_minions: bool = True
+    attack_monsters: bool = False     # a macro whose label names a jungle monster or boss isn't used
     hold: bool = True                 # the do-nothing button to wait (else keep advancing)
     group_lead: float = 7000.0        # a hero this far ahead of the team's median waits
     patience_s: float = 15.0          # ...but never longer than this (game seconds), then it goes on
@@ -122,6 +130,7 @@ class TeamPolicy:
         self._hp: dict[int, deque] = {}
         self._max_hp: dict[int, float] = {}
         self._retreating: dict[int, bool] = {}
+        self._escape_until: dict[int, float] = {}
         self._evade_until: dict[int, float] = {}
         self._holding: dict[int, bool] = {}
         self._waiting_since: dict[int, float] = {}
@@ -326,13 +335,22 @@ class TeamPolicy:
         pos = hero.pos
         hp = hero.hp_frac if hero.hp_frac is not None else 1.0
 
-        # 1. Retreat with hysteresis, and evade fast HP loss near a threat.
-        if hp < c.retreat_hp:
-            self._retreating[seat] = True
-        elif self._retreating.get(seat) and hp >= k.return_hp:
-            self._retreating[seat] = False
+        # 1. Low on HP: escape while threatened (or, the old way, go home and heal), and evade
+        #    fast HP loss near a threat.
         near = [e for e in c.enemies if distance(pos, e.pos) <= k.engage_range]
         in_enemy_tower = any(distance(pos, s.pos) <= k.tower_range for s in c.enemy_towers)
+        threatened = bool(near) or (in_enemy_tower and self._loss_rate(seat, c.t) > 0.02)
+        if k.heal_at_home:
+            if hp < c.retreat_hp:
+                self._retreating[seat] = True
+            elif self._retreating.get(seat) and hp >= k.return_hp:
+                self._retreating[seat] = False
+        else:
+            if hp < c.retreat_hp and threatened:
+                self._escape_until[seat] = c.t + k.calm_s
+            self._retreating[seat] = c.t < self._escape_until.get(seat, -1e9)
+        if hp < k.heal_hp and (threatened or self._retreating.get(seat)) and offers.raw_for(HEAL) is not None:
+            return Choice(HEAL, "low hp: heal skill", P_SAVE, ["macro_retreat", "macro_attack"])
         if (hp < k.danger_hp and (near or in_enemy_tower) and c.posture != "allin"
                 and self._ttd(seat, c.t) < k.danger_ttd):
             self._evade_until[seat] = c.t + k.evade_seconds
@@ -343,7 +361,7 @@ class TeamPolicy:
             self._waiting_since.pop(seat, None)  # a wait starts afresh after a fight or a retreat
         if self._retreating.get(seat):
             self._holding[seat] = False
-            return self._go_home(m, "low hp: retreat", hero, c)
+            return self._go_home(m, "low hp: escape" if not k.heal_at_home else "low hp: retreat", hero, c)
         if c.t < self._evade_until.get(seat, -1e9):
             self._holding[seat] = False
             return self._go_home(m, "losing hp fast: evade", hero, c)
@@ -372,7 +390,7 @@ class TeamPolicy:
                 if o and self._aims_at_hero(o, pos, c) and o.dist <= k.skill_range * 1.15:
                     return Choice(macro, f"{macro[6:]} on hero", P_SKILL_HERO, ["macro_attack", "macro_advance"])
             o = m.get("macro_attack")
-            if o:
+            if o and not self._monster(o):
                 at_hero = self._aims_at_hero(o, pos, c)
                 return Choice("macro_attack", "attack hero" if at_hero else "attack into the fight",
                               P_HIT_HERO if at_hero else P_ATTACK, ["macro_advance"])
@@ -398,7 +416,7 @@ class TeamPolicy:
             if front <= k.tower_range + 6000:
                 return self._go_home(m, "protect the lead: pull back", hero, c, priority=P_POSITION)
             o = m.get("macro_attack")
-            if o and o.dist <= k.attack_range and not self._aims_at_structure(o, pos, c):
+            if o and o.dist <= k.attack_range and not self._aims_at_structure(o, pos, c) and not self._monster(o):
                 return Choice("macro_attack", "protect: farm in range", P_ATTACK, ["macro_retreat"])
             return self._hold(m, "protect the lead: hold", P_HOLD)
 
@@ -413,7 +431,8 @@ class TeamPolicy:
                 if dt <= k.tower_range:
                     return self._go_home(m, "tower without the team: step out", hero, c, priority=P_POSITION)
                 o = m.get("macro_attack")
-                if o and o.dist <= k.attack_range and not self._aims_at_structure(o, pos, c):
+                if o and o.dist <= k.attack_range and not self._aims_at_structure(o, pos, c) \
+                        and not self._monster(o):
                     return Choice("macro_attack", "wait for the team: farm", P_ATTACK, ["macro_retreat"])
                 return self._hold(m, "wait for the team at the tower", P_HOLD)
 
@@ -426,7 +445,8 @@ class TeamPolicy:
                 if lead > limit and self._patient(seat, c.t):
                     self._holding[seat] = True
                     o = m.get("macro_attack")
-                    if o and o.dist <= k.attack_range and not self._aims_at_structure(o, pos, c):
+                    if o and o.dist <= k.attack_range and not self._aims_at_structure(o, pos, c) \
+                            and not self._monster(o):
                         return Choice("macro_attack", "ahead of the team: farm", P_ATTACK, ["macro_advance"])
                     return self._hold(m, "ahead of the team: wait", P_HOLD)
         self._holding[seat] = False
@@ -434,12 +454,13 @@ class TeamPolicy:
 
         # Farm and push.
         o = m.get("macro_attack")
-        if o and o.dist <= k.attack_range:
+        if o and o.dist <= k.attack_range and not self._monster(o):
             return Choice("macro_attack", "push: attack in range", P_ATTACK, ["macro_advance"])
         if k.skills_on_minions and not any(distance(pos, e.pos) <= 2 * k.engage_range for e in c.enemies):
             for macro in ("macro_skill1", "macro_skill2"):
                 o = m.get(macro)
-                if o and o.dist <= k.skill_range and not self._aims_at_structure(o, pos, c):
+                if o and o.dist <= k.skill_range and not self._aims_at_structure(o, pos, c) \
+                        and not self._monster(o):
                     return Choice(macro, f"{macro[6:]} on the wave", P_SKILL_UNIT, ["macro_attack", "macro_advance"])
         return _first(m, [("macro_advance", "push: advance"), ("macro_attack", "attack (no advance)")], P_ADVANCE)
 
@@ -491,6 +512,12 @@ class TeamPolicy:
                 and (h.hp_frac is None or h.hp_frac >= 0.4))
         return n >= c.min_pushers
 
+    def _monster(self, o: Offer) -> bool:
+        """The label names a jungle monster or boss (left alone unless ``attack_monsters``)."""
+        if self.knobs.attack_monsters or not o.target:
+            return False
+        return any(w in o.target for w in _MONSTER_WORDS)
+
     def _aims_at_hero(self, o: Offer, pos: tuple[float, float], c: _Ctx) -> bool:
         if "hero" in o.target:
             return "enemy" in o.target or not any(w in o.target for w in ("ally", "friend", "own"))
@@ -504,6 +531,9 @@ class TeamPolicy:
         if o.target and any(w in o.target for w in ("hero", "soldier", "minion", "creep", "monster")):
             return False
         return _matches(o.dist, [distance(pos, s.pos) for s in c.enemy_towers])
+
+
+_MONSTER_WORDS = ("monster", "jungle", "neutral", "tyrant", "overlord", "dragon", "baron", "buff", "boss")
 
 
 def _matches(d: float, candidates: list[float]) -> bool:

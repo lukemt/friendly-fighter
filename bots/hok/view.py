@@ -32,13 +32,18 @@ from altruagent import GameState, LegalAction
 GAME_TYPE = "honor_of_kings_5v5"
 MACROS = ("macro_advance", "macro_retreat", "macro_attack", "macro_skill1", "macro_skill2", "macro_skill3")
 SKILLS = ("macro_skill1", "macro_skill2", "macro_skill3")
-HOLD = "button_0"  # the do-nothing button: a raw action, so it clears the standing order
+# Orders the policy may give besides macros; the agent turns them into a listed raw button.
+HOLD = "hold"  # the do-nothing button (live: s<n>:button_1 "NoOp"); a raw action clears the standing order
+HEAL = "heal"  # the heal summoner skill (live: s<n>:button_11 "HealSkill")
+RAW_ORDERS = (HOLD, HEAL)
 STEP_SECONDS = 0.2  # one step is 3 frames, 0.2 s of game time (/skill/hok section 1)
 FRAMES_PER_SECOND = 15.0
 
 _SEAT_ID = re.compile(r"^s(\d+):(.+)$")
 _DISTANCE = re.compile(r"(\d+(?:\.\d+)?)\s*away")
 _NEAREST = re.compile(r"nearest:\s*([^()]*?),\s*\d+(?:\.\d+)?\s*away")
+_TOWARD = re.compile(r"toward\s+(.*?)\s*\(\s*\d+(?:\.\d+)?\s*away")
+_HOLD_LABELS = ("noop", "no-op", "no op", "none", "nothing", "idle")
 
 
 def _dict(value: Any) -> dict:
@@ -82,8 +87,11 @@ def label_distance(label: str | None) -> float:
 
 
 def label_target(label: str | None) -> str:
-    """What a macro label says is nearest (``"enemy hero 169"``), lowercased; "" without one."""
-    m = _NEAREST.search(label or "")
+    """What a macro label names as its target, lowercased; "" without one. Live labels:
+    ``"Basic attack (nearest: enemy hero 169, 4123 away)"``,
+    ``"Cast skill 1 toward enemy hero 169 (4123 away)"``,
+    ``"Move toward the nearest enemy tower (9000 away)"``."""
+    m = _NEAREST.search(label or "") or _TOWARD.search(label or "")
     return m.group(1).strip().lower() if m else ""
 
 
@@ -102,17 +110,20 @@ class Offer:
     def payload(self) -> dict:
         return _dict(self.action.input.get("action"))
 
-    def fill_fields(self) -> dict | None:
-        """A complete raw action from this entry: the listed constant fields plus the
-        first legal value of each ``legal_*`` field; None when a field has no value."""
+    def fill_fields(self, *, centred: bool = False) -> dict | None:
+        """A complete raw action from this entry: the listed constant fields plus one legal
+        value of each ``legal_*`` field (the first; ``centred``: the middle one of an
+        ``offset`` list, so an aimed skill lands on the hero itself); None when a field
+        has no value."""
         out: dict[str, Any] = {}
         for key, value in self.payload.items():
             if key.startswith("legal_"):
                 values = _list(value)
                 if not values:
                     return None
-                out[key[len("legal_"):]] = values[0]
-            else:
+                name = key[len("legal_"):]
+                out[name] = values[len(values) // 2] if centred and "offset" in name else values[0]
+            elif key != "seat":
                 out[key] = value
         out["seat"] = self.seat
         return out
@@ -129,6 +140,31 @@ class SeatOffers:
 
     def all(self) -> list[Offer]:
         return list(self.macros.values()) + list(self.buttons.values())
+
+    def hold(self) -> Offer | None:
+        """The do-nothing button: one whose label says so (live: ``button_1`` "NoOp"), else
+        ``button_0`` (upstream's fixtures: "None"); only one with no fields to fill."""
+        named = [o for o in self.buttons.values() if not o.needs_fields
+                 and any(w in o.label.lower().rsplit("]", 1)[-1] for w in _HOLD_LABELS)]
+        if named:
+            return min(named, key=lambda o: o.base)
+        o = self.buttons.get("button_0")
+        return o if o is not None and not o.needs_fields else None
+
+    def button_named(self, *words: str) -> Offer | None:
+        """A raw button whose label names one of ``words`` (e.g. "healskill")."""
+        for o in sorted(self.buttons.values(), key=lambda o: o.base):
+            label = o.label.lower().rsplit("]", 1)[-1].replace(" ", "")
+            if any(w in label for w in words):
+                return o
+        return None
+
+    def raw_for(self, order: str) -> Offer | None:
+        if order == HOLD:
+            return self.hold()
+        if order == HEAL:
+            return self.button_named("healskill")
+        return self.buttons.get(order)
 
 
 @dataclass

@@ -37,7 +37,7 @@ from altruagent import WAIT, DecisionContext, GameState, LegalAction, WithReason
 from altruagent.console import print_line
 
 from .policy import Choice, Knobs, TeamPolicy
-from .view import GAME_TYPE, HOLD, MACROS, Offer, TeamView, offers_by_seat, read_view
+from .view import GAME_TYPE, HEAL, HOLD, MACROS, RAW_ORDERS, Offer, TeamView, offers_by_seat, read_view
 
 PACE_S = 0.3                # real time: at most one idle look per this long
 RESEND_S = 1.5              # an order sent this recently isn't resent while the server catches up
@@ -192,10 +192,8 @@ class HokAgent:
                 continue
             if order in offers.macros:
                 return order
-            if order == HOLD:
-                button = offers.buttons.get(HOLD)
-                if button is not None and not button.needs_fields:
-                    return order
+            if order in RAW_ORDERS and offers.raw_for(order) is not None:
+                return order
         return None
 
     def _already(self, seat: int, order: str, view: TeamView, now: float) -> bool:
@@ -205,6 +203,9 @@ class HokAgent:
         if order == HOLD:
             # A raw action clears the standing order: holding = no standing order after our hold.
             return standing is None and last is not None and last[0] == HOLD
+        if order == HEAL:
+            # Once: the skill leaves the offer while it cools down; don't fire it twice in a row.
+            return last is not None and last[0] == HEAL and now - last[1] < RESEND_S
         if standing == order:
             return True
         if last is not None and last[0] == order and now - last[1] < RESEND_S:
@@ -218,9 +219,15 @@ class HokAgent:
 
     def _emit(self, seat: int, order: str, view: TeamView, reason: str, now: float):
         offers = view.offers[seat]
-        if order == HOLD:
-            move: Any = offers.buttons[HOLD].action
-            form = "action_id"
+        if order in RAW_ORDERS:
+            button = offers.raw_for(order)
+            assert button is not None  # _resolve checked it
+            if button.needs_fields:
+                move: Any = button.fill_fields(centred=True)
+                form = "raw"
+            else:
+                move = button.action
+                form = "action_id"
         elif self._use_action_id:
             move = offers.macros[order].action
             form = "action_id"
@@ -240,7 +247,8 @@ class HokAgent:
         offers = view.offers.get(seat)
         if offers is None:
             return None
-        buttons = sorted(offers.buttons.values(), key=lambda o: (o.base != HOLD, o.needs_fields, o.base))
+        hold = offers.hold()
+        buttons = sorted(offers.buttons.values(), key=lambda o: (o is not hold, o.needs_fields, o.base))
         for o in buttons:
             if self._is_refused(seat, o.base, view, now):
                 continue

@@ -39,15 +39,24 @@ STEP_SECONDS = 0.2
 FRAMES_PER_STEP = 3
 MACROS = ("macro_advance", "macro_retreat", "macro_attack", "macro_skill1", "macro_skill2", "macro_skill3")
 
-BASE = {1: (-42000.0, -42000.0), 2: (42000.0, 42000.0)}
-SPAWN = {1: (-48000.0, -48000.0), 2: (48000.0, 48000.0)}
-LANES = [
-    [BASE[1], (-44000.0, -28000.0), (-44000.0, 44000.0), (28000.0, 44000.0), BASE[2]],   # top
-    [BASE[1], BASE[2]],                                                                   # mid
-    [BASE[1], (-28000.0, -44000.0), (44000.0, -44000.0), (44000.0, 28000.0), BASE[2]],   # bottom
+# The live map (first live game, e5f159ed): one diagonal lane; per camp an outer tower (4000 HP)
+# at +-11.5k, an inner tower (6000) at +-21.5k, the crystal (8000) at +-34.3k, the spring at +-45k.
+LIVE_BASE = {1: (-34330.0, -34390.0), 2: (34360.0, 34330.0)}
+LIVE_SPAWN = {1: (-45000.0, -45070.0), 2: (45070.0, 45000.0)}
+LIVE_LANES = [[LIVE_BASE[1], LIVE_BASE[2]]]
+LIVE_TOWERS = ((0.332, 4000.0), (0.187, 6000.0))   # camp 1's (fraction along the lane, HP), outer first
+# The first guess (before any live game): three lanes, three towers each.
+OLD_BASE = {1: (-42000.0, -42000.0), 2: (42000.0, 42000.0)}
+OLD_SPAWN = {1: (-48000.0, -48000.0), 2: (48000.0, 48000.0)}
+OLD_LANES = [
+    [OLD_BASE[1], (-44000.0, -28000.0), (-44000.0, 44000.0), (28000.0, 44000.0), OLD_BASE[2]],   # top
+    [OLD_BASE[1], OLD_BASE[2]],                                                                   # mid
+    [OLD_BASE[1], (-28000.0, -44000.0), (44000.0, -44000.0), (44000.0, 28000.0), OLD_BASE[2]],   # bottom
 ]
-TOWER_FRACTIONS = (0.36, 0.24, 0.12)   # camp 1's outer, inner, high-ground towers along each lane
-TOWER_HP = 6000.0
+OLD_TOWERS = ((0.36, 6000.0), (0.24, 6000.0), (0.12, 6000.0))
+BASE = LIVE_BASE
+SPAWN = LIVE_SPAWN
+LANES = LIVE_LANES
 CRYSTAL_HP = 8000.0
 TOWER_RANGE = 8800.0
 TOWER_DAMAGE = 450.0
@@ -137,6 +146,9 @@ class Unit:
 @dataclass
 class SimConfig:
     max_steps: int = 3000
+    map: str = "live"                   # "live": the one-lane map seen live; "3lane": the first guess
+    fountain_heal: float = 0.0          # share of max HP a second at the spring (live: none seen)
+    revive_per_level: float = 2.2       # revive = 2 s + this x level (live: 5-25 s)
     skill_fallback: str = "idle"        # a standing skill order on cooldown: "idle" | "attack"
     remove_destroyed: bool = True       # destroyed structures leave the state's list
     opaque_labels: bool = False         # labels name no target kind (forces distance matching)
@@ -150,6 +162,13 @@ class Sim:
 
     def __init__(self, seed: int = 0, config: SimConfig | None = None) -> None:
         self.cfg = config or SimConfig()
+        live = self.cfg.map == "live"
+        self.base = LIVE_BASE if live else OLD_BASE
+        self.spawn = LIVE_SPAWN if live else OLD_SPAWN
+        self.lanes = LIVE_LANES if live else OLD_LANES
+        self.towers = LIVE_TOWERS if live else OLD_TOWERS
+        self.last_tier = len(self.towers) - 1
+        self.heal_ready: dict[int, float] = {}
         self.rng = random.Random(seed)
         self.step_no = 0
         self.t = 0.0
@@ -168,7 +187,7 @@ class Sim:
         self._targetable: dict[int, bool] = {}
         self._summary_cache: dict[int, tuple[int, dict]] = {}
         self._entries_cache: dict[int, tuple[int, list]] = {}
-        self._lane_minions: list[list[Unit]] = [[], [], []]
+        self._lane_minions: list[list[Unit]] = [[]]
         self._camp_view_cache: dict[int, tuple[int, list, list]] = {}
         self._build()
 
@@ -182,23 +201,23 @@ class Sim:
 
     def _build(self) -> None:
         for camp in (1, 2):
-            for lane_i, lane in enumerate(LANES):
-                for tier, frac in enumerate(TOWER_FRACTIONS):
+            for lane_i, lane in enumerate(self.lanes):
+                for tier, (frac, hp) in enumerate(self.towers):
                     f = frac if camp == 1 else 1.0 - frac
                     x, z = _lane_point(lane, f)
-                    t = self._new(camp, "tower", x, z, TOWER_HP, TOWER_DAMAGE * self.cfg.tower_dmg_mult,
+                    t = self._new(camp, "tower", x, z, hp, TOWER_DAMAGE * self.cfg.tower_dmg_mult,
                                   TOWER_RANGE, 1.0)
                     t.lane, t.tier = lane_i, tier
                     self.structures.append(t)
-            c = self._new(camp, "crystal", *BASE[camp], CRYSTAL_HP, CRYSTAL_DAMAGE * self.cfg.tower_dmg_mult,
-                          TOWER_RANGE, 1.0)
-            c.tier = 3
+            c = self._new(camp, "crystal", *self.base[camp], CRYSTAL_HP,
+                          CRYSTAL_DAMAGE * self.cfg.tower_dmg_mult, TOWER_RANGE, 1.0)
+            c.tier = self.last_tier + 1
             self.structures.append(c)
-            s = self._new(camp, "spawn", *SPAWN[camp], 1e9, 0, FOUNTAIN_RANGE, 1.0)
+            s = self._new(camp, "spawn", *self.spawn[camp], 1e9, 0, FOUNTAIN_RANGE, 1.0)
             self.structures.append(s)
             for i, role in enumerate(ROLE_ORDER):
                 hp, atk, rng, interval, mult, srng = ROLES[role]
-                sx, sz = SPAWN[camp]
+                sx, sz = self.spawn[camp]
                 h = self._new(camp, "hero", sx + 500 * (i - 2), sz - 500 * (i - 2) * (1 if camp == 1 else -1),
                               hp, atk, rng, interval)
                 h.seat = i if camp == 1 else 5 + i
@@ -231,7 +250,8 @@ class Sim:
                     and o.tier == s.tier - 1]
             return all(not o.alive for o in prev)
         if s.kind == "crystal":
-            return any(not o.alive for o in self.structures if o.kind == "tower" and o.camp == s.camp and o.tier == 2)
+            return any(not o.alive for o in self.structures
+                       if o.kind == "tower" and o.camp == s.camp and o.tier == self.last_tier)
         return True
 
     def visible_to(self, camp: int, u: Unit) -> bool:
@@ -288,13 +308,13 @@ class Sim:
         s = self.nearest_enemy_structure(h)
         if s is not None:
             out["macro_advance"] = (s, math.dist(h.pos, s.pos))
-        home = SPAWN[h.camp]
+        home = self.spawn[h.camp]
         if math.dist(h.pos, home) > 3000:
             out["macro_retreat"] = (None, math.dist(h.pos, home))
         target, d = self.nearest_target(h)
         if target is not None:
             out["macro_attack"] = (target, d)
-        unit_target, ud = self.nearest_target(h, structures=False, max_d=h.skill_rng)
+        unit_target, ud = self.nearest_target(h, max_d=h.skill_rng)
         if unit_target is not None:
             for i in range(3):
                 if h.level >= SKILL_LEVEL[i] and self.t >= h.skill_ready[i]:
@@ -326,16 +346,22 @@ class Sim:
             h.oneshot = None
             return None
         button = action.get("which_button")
-        if button == 0:
+        if button == 1:  # NoOp
             h.order = None
-            h.oneshot = {"which_button": 0}
+            h.oneshot = {"which_button": 1}
             return None
         if button == 2:
-            mx, mz = action.get("move_x"), action.get("move_z")
-            if not (isinstance(mx, int) and isinstance(mz, int) and 0 <= mx <= 15 and 0 <= mz <= 15) or not h.alive:
-                return "move_x/move_z not in the legal values"
+            mv = action.get("move")
+            if not (isinstance(mv, int) and 1 <= mv <= 24) or not h.alive:
+                return "move not in the legal values"
             h.order = None
-            h.oneshot = {"which_button": 2, "move_x": mx, "move_z": mz}
+            h.oneshot = {"which_button": 2, "move": mv}
+            return None
+        if button == 11:
+            if not h.alive or self.t < self.heal_ready.get(h.uid, 0.0):
+                return "HealSkill is not available now"
+            h.order = None
+            h.oneshot = {"which_button": 11}
             return None
         return f"unknown action {action!r}"
 
@@ -350,7 +376,7 @@ class Sim:
         if self.t >= self.next_wave:
             self.next_wave += WAVE_EVERY_S
             self._spawn_wave()
-        lanes: list[list[Unit]] = [[], [], []]
+        lanes: list[list[Unit]] = [[] for _ in self.lanes]
         for m in self.minions:
             lanes[m.lane].append(m)
         self._lane_minions = lanes
@@ -384,12 +410,12 @@ class Sim:
 
     def _spawn_wave(self) -> None:
         for camp in (1, 2):
-            for lane_i in range(3):
+            for lane_i in range(len(self.lanes)):
                 for k in range(3):
                     ranged = k == 2
                     s0 = 0.02 + self.rng.uniform(0, 0.004) - 0.004 * k
                     f = s0 if camp == 1 else 1.0 - s0
-                    x, z = _lane_point(LANES[lane_i], f)
+                    x, z = _lane_point(self.lanes[lane_i], f)
                     m = self._new(camp, "minion", x, z, 1000.0 if ranged else 1500.0, 90.0 if ranged else 70.0,
                                   5000.0 if ranged else 1500.0, 1.0)
                     m.lane, m.path_s, m.speed = lane_i, f, MINION_SPEED
@@ -423,7 +449,7 @@ class Sim:
         u.hp = 0.0
         if u.kind == "hero":
             u.deaths += 1
-            u.revive_at = self.t + min(45.0, 5.0 + 2.5 * u.level)
+            u.revive_at = self.t + min(45.0, 2.0 + self.cfg.revive_per_level * u.level)
             u.order = u.order  # the standing order stays
             credit = None
             if killer.kind == "hero":
@@ -472,25 +498,29 @@ class Sim:
         if not h.alive:
             if self.t >= h.revive_at and h.revive_at > 0:
                 h.hp = h.max_hp
-                h.x, h.z = SPAWN[h.camp]
+                h.x, h.z = self.spawn[h.camp]
                 h.skill_ready = [min(r, self.t) for r in h.skill_ready]
             return
         h.money += PASSIVE_GOLD_PER_S * dt
         h.hp = min(h.max_hp, h.hp + 0.0025 * h.max_hp * dt)
-        if math.dist(h.pos, SPAWN[h.camp]) <= FOUNTAIN_RANGE:
-            h.hp = min(h.max_hp, h.hp + 0.2 * h.max_hp * dt)
+        if self.cfg.fountain_heal and math.dist(h.pos, self.spawn[h.camp]) <= FOUNTAIN_RANGE:
+            h.hp = min(h.max_hp, h.hp + self.cfg.fountain_heal * h.max_hp * dt)
         oneshot, h.oneshot = h.oneshot, None
         if oneshot is not None:
             if oneshot.get("which_button") == 2:
-                dx, dz = (oneshot["move_x"] - 7.5) / 7.5, (oneshot["move_z"] - 7.5) / 7.5
-                n = math.hypot(dx, dz) or 1.0
-                self._move_toward(h, (h.x + dx / n * 1e5, h.z + dz / n * 1e5), dt)
+                angle = math.radians((oneshot["move"] - 1) * 15.0)
+                self._move_toward(h, (h.x + math.cos(angle) * 1e5, h.z + math.sin(angle) * 1e5), dt)
+            elif oneshot.get("which_button") == 11:   # the heal summoner skill: self and allies near
+                self.heal_ready[h.uid] = self.t + 120.0
+                for a in self.heroes:
+                    if a.camp == h.camp and a.alive and math.dist(a.pos, h.pos) <= 4000:
+                        a.hp = min(a.max_hp, a.hp + 0.15 * a.max_hp)
             return
         order = h.order
         if order is None:
             return
         if order == "macro_retreat":
-            self._move_toward(h, SPAWN[h.camp], dt)
+            self._move_toward(h, self.spawn[h.camp], dt)
             return
         if order == "macro_advance":
             s = self.nearest_enemy_structure(h)
@@ -499,11 +529,11 @@ class Sim:
             return
         if order.startswith("macro_skill"):
             i = int(order[-1]) - 1
-            target, d = self.nearest_target(h, structures=False, max_d=h.skill_rng)
+            target, d = self.nearest_target(h, max_d=h.skill_rng)
             if h.level >= SKILL_LEVEL[i] and self.t >= h.skill_ready[i] and target is not None:
                 h.skill_ready[i] = self.t + SKILL_CD[i]
                 dmg = h.atk * h.skill_mult[i] * self._power(h)
-                self._damage(h, target, dmg)
+                self._damage(h, target, dmg * (0.5 if target.kind in ("tower", "crystal") else 1.0))
                 if i == 2:  # the ultimate splashes half its damage around the target
                     for u in self.heroes + self.minions:
                         if u.camp == target.camp and u is not target and u.alive \
@@ -551,7 +581,7 @@ class Sim:
                 self._damage(m, best, m.atk)
             return
         # Walk the lane toward the enemy base.
-        lane = LANES[m.lane]
+        lane = self.lanes[m.lane]
         direction = 1.0 if m.camp == 1 else -1.0
         total = sum(math.dist(lane[i], lane[i + 1]) for i in range(len(lane) - 1))
         m.path_s = min(1.0, max(0.0, m.path_s + direction * m.speed * dt / total))
@@ -653,17 +683,27 @@ class Sim:
 
     def _legal_entries(self, seat: int) -> list[dict[str, Any]]:
         h = self.heroes[seat]
-        out = [{"action_id": f"s{seat}:button_0", "label": f"[seat {seat}] None",
-                "input": {"action": {"which_button": 0, "seat": seat}}}]
+        out = [{"action_id": f"s{seat}:button_1", "label": f"[seat {seat}] NoOp",
+                "input": {"action": {"which_button": 1, "seat": seat}}}]
         if h.alive:
             out.append({"action_id": f"s{seat}:button_2", "label": f"[seat {seat}] Move",
-                        "input": {"action": {"which_button": 2, "legal_move_x": list(range(16)),
-                                             "legal_move_z": list(range(16)), "seat": seat}}})
-        names = {"macro_advance": "Advance", "macro_retreat": "Retreat", "macro_attack": "Basic attack",
-                 "macro_skill1": "Skill 1", "macro_skill2": "Skill 2", "macro_skill3": "Skill 3"}
+                        "input": {"action": {"which_button": 2, "legal_move": list(range(1, 25)), "seat": seat}}})
+            if self.t >= self.heal_ready.get(h.uid, 0.0):
+                out.append({"action_id": f"s{seat}:button_11", "label": f"[seat {seat}] HealSkill",
+                            "input": {"action": {"which_button": 11, "legal_offset_x": list(range(16, 27)),
+                                                 "legal_offset_z": list(range(16, 27)), "legal_target": [0],
+                                                 "seat": seat}}})
         for macro, (target, d) in self.macros_for(h).items():
-            out.append({"action_id": f"s{seat}:{macro}",
-                        "label": f"[seat {seat}] {names[macro]} (nearest: {self.describe(target, h.camp)}, {round(d)} away)",
+            what = self.describe(target, h.camp)
+            if macro == "macro_advance":
+                label = f"Move toward the nearest {what} ({round(d)} away)"
+            elif macro == "macro_retreat":
+                label = f"Move back toward your own base ({round(d)} away)"
+            elif macro == "macro_attack":
+                label = f"Basic attack (nearest: {what}, {round(d)} away)"
+            else:
+                label = f"Cast skill {macro[-1]} toward {what} ({round(d)} away)"
+            out.append({"action_id": f"s{seat}:{macro}", "label": f"[seat {seat}] {label}",
                         "input": {"action": {"macro": macro, "seat": seat}}})
         return out
 

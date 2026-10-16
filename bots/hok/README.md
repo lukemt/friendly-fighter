@@ -7,10 +7,11 @@ playing until it gets another. The crystal wins; at the step limit (3000 steps b
 limit, the tiebreak is damage to enemy towers and crystal, then hero kills. Contract:
 `https://api.altruagent-game.com/skill/hok`, upstream's `GAMES.md` section and `tests/test_hok.py`.
 
-**No live payload has been seen yet.** Online test matches had closed before this bot was built.
-Everything below is built from the published contract and upstream's fixtures, and checked on a
-mock platform and an abstract sim. The first live game is the first real test (see
-"Known unknowns" and "After the first live game").
+Built before any live payload existed (online test matches had closed), from the published
+contract and upstream's fixtures, checked on a mock platform and an abstract sim. Release 1
+(`195e798`) then played the first live Testing matches the same evening and won its first game
+(crystal destroyed); its recording corrected the map, the hold button and the healing model
+(see "What the first live games showed"). Release 2 is built on that.
 
 ## The idea
 
@@ -19,9 +20,12 @@ view fast from fixed rules and never waits on a model. The macros already aim (a
 target) and walk the hero, so the policy decides each hero's **intent** and leaves the aiming to the
 server:
 
-1. **Retreat on low HP and come back healed**, with hysteresis: out below 30% HP, back only at 85%.
+1. **Escape when low and threatened, then go back to work.** Below 25% HP with an enemy hero in
+   range (or taking an enemy tower's fire), a hero walks back until it has been out of danger for
+   3 s, and uses the heal summoner skill when listed. It does not walk home to heal: live, home
+   heals ~0.25% a second, so that took minutes, while a death costs a 5-25 s revive at full HP.
    **Evade** for 2 s when a hero below 60% would die within 2 s at its current damage rate near an
-   enemy hero or tower (the dive and burst detector: scale-free, from the HP history).
+   enemy hero or tower (the dive and burst detector, scale-free, from the HP history).
 2. **Fight together, not one by one.** A hero engages visible enemy heroes only when our HP-weighted
    strength around it is at least theirs (enemies fogged in the last 4 s count half). Outnumbered
    heroes back off, unless they stand under our own tower or crystal.
@@ -29,10 +33,13 @@ server:
    visible enemy hero's, when the label is opaque) is cast first, the ultimate included; then the
    basic attack. Skills go on minion waves only while no enemy hero is near.
 4. **No dives.** Never chase an enemy hero under its tower without the team; never stand in an
-   enemy tower's range with fewer than 3 healthy heroes there (unless the tower is under 15%).
-5. **Defend** a structure of ours that is losing HP: healthy heroes within reach go back and fight.
-6. **Push together.** A hero far ahead of the team's median waits (the do-nothing button, the only
-   raw action used: a hold); otherwise farm what is in range, then advance.
+   enemy tower's range with fewer than 2 healthy heroes there (unless the tower is under 15%, or
+   the enemy team is mostly dead), and wait at most 15 s for them.
+5. **Defend** a structure of ours that enemy heroes are hitting: every hero with 45%+ HP within
+   40k goes back and fights there (minions alone are left to our minions).
+6. **Push together.** A hero far ahead of the team's median waits (the do-nothing button, live
+   `button_1` "NoOp") for up to 15 s; otherwise farm what is in range, then advance. After a won
+   fight (3+ enemy heroes dead, from our kill count and enemies vanishing at low HP) nobody waits.
 7. **Play for the tiebreak** in the last 60 s: ahead on structure damage (by half a tower), pull
    back and protect it; level or behind, all in (retreat only below 12%, no waiting).
 
@@ -101,26 +108,27 @@ server:
 - `agent/commander.py`'s pattern for the optional planner (below): slow, in a background thread,
   only setting knobs.
 
-## Known unknowns (what only a live game will show)
+## What the first live games showed (2026-10-16, release 195e798)
 
-Each is a guess the bot is built to survive; `harness/replay.py`'s schema report answers most of
-them from the first recording.
+The runtime went live on release 1 and played Testing matches the same evening. The recording of
+`e5f159ed` (vs warren-test, **won: crystal destroyed**; real time, 3000 steps, 1800 s limit) settled
+most of the guesses (`harness/replay.py --schema-only`):
 
-| Unknown | What the bot assumes | If it's wrong |
+| Question | Live answer | Consequence |
 |---|---|---|
-| Distance scale | Upstream's 9000 is "in range"; towers reach ~9000 | Engage/tower rules fire too early or late; all distances are `Knobs` |
-| Label format | `"... (nearest: enemy hero 169, 4123 away)"` (upstream's GAMES.md) | Target kind falls back to matching the label distance against visible heroes and towers; no distance at all: macros are treated as out of range, so heroes advance instead of attacking |
-| A standing skill order on cooldown | May idle the hero (the harsh reading) | The bot switches back to attack as soon as the skill leaves the offer, so either way costs a step or two |
-| `macro_advance` | Walks to the nearest enemy structure; may stop under it without attacking | The tower rules and the evade rule keep heroes from standing there alone |
-| `your_pending_seats` in real time | Every living hero, every step | If only heroes without standing orders are pending, changes still go out as soon as a hero is listed |
-| `standing_orders` format and lag | `{"<seat>": "macro_…"}`, current | Also reads `s3:macro_x` and `{"macro": ...}`; an order sent < 1.5 s ago isn't resent; with no report at all it trusts what was accepted |
-| The do-nothing button (`s<n>:button_0`) | Idles the hero and clears its order | Used only to hold position; `Knobs.hold = false` turns it off |
-| Destroyed structures | Leave the list, or stay at 0 HP | Counted as destroyed when they leave the list at ≤ 25% HP |
-| Fog and per-seat views | Team vision: the same enemies in every summary | The union of the five views is used |
-| `revive_time` units | Only `> 0` with `hp` 0 matters | — |
-| Read/send rate limits | ~3 idle reads/s plus one read per sent order | `FF_HOK_PACE_S` slows it down |
-| Lockstep length | 5 calls per step: 3000 steps would take ~25-50 min, so the time limit ends it | The endgame clock uses `min(seconds_left, steps_left x 0.2 s)` |
-| What counts for the tiebreak | All damage to enemy towers and crystal (minions' too) | The score estimate is HP lost by visible structures, which is what any rule would count |
+| The map | **One lane.** Per camp: outer tower 4000 HP at ±11.5k, inner tower 6000 at ±21.5k, crystal 8000 at ±34.3k, `ACTOR_TOWER_SPRING` at ±45k, plus one `ACTOR_NONE` | The sim's map was rebuilt to match (`SimConfig.map="live"`) |
+| Healing at home | **~0.25% of max HP a second**, no fast spring heal: heroes sent home at 30% sat there for minutes (30% → 85% took ~3 min) | No more walking home to heal (`heal_at_home=False`): a low hero escapes only while threatened |
+| Revives | 0-23 s (`revive_time` in seconds, `hp: 0` and the position kept), back at full HP | Dying costs less time than healing; deaths still feed the enemy |
+| The do-nothing button | **`s<n>:button_1` "NoOp"**; there is no `button_0` | Release 1's holds fell through to retreat (most of 7,758 retreat orders). Fixed: the hold button is found by its label |
+| Labels | Attack: `Basic attack (nearest: enemy hero 133, 6120 away)`; skills: `Cast skill 1 toward enemy hero 133 (6120 away)` (also `toward enemy tower` / `enemy crystal`); advance: `Move toward the nearest enemy tower (N away)`; retreat: `Move back toward your own base (N away)` | Both shapes parsed; skills hit structures too |
+| Raw buttons | 1 NoOp, 2 Move (`legal_move`: 24 directions), 3 NormalAttack, 4-6 skills, 8 ChosenSkill, 9 Recall, 10 EquipmentSkill, **11 HealSkill**, 12 FriendSkill; aimed ones carry `legal_offset_x/z` (11 values) and `legal_target` | The heal skill is used below 40% HP when threatened, fields from its legal lists |
+| `play_action`'s answer | Carries `state` in real time too (no `accepted` key) | The runner uses it directly; no extra read |
+| `simultaneous` | Also `you_submitted`, `last_applied_actions` (every hero's applied action, the enemy's included: macros run as `Move`), `last_fallback_players`, `step_deadline_in_s` | Not used yet; `last_applied_actions` could show the enemy's intent |
+| Refusals | 6 in the whole game, all races: `'macro_skill1' is not available for seat 1 now` | Handled: rested and replaced |
+| Size | ~31 KB a state, ~3.6 KB gzipped; 2,202 states in 10 min (8 MB recording) | Fine |
+
+Still unknown: lockstep games (none yet), whether `last_applied_actions` timing helps, what
+ChosenSkill/FriendSkill/EquipmentSkill do, the heal skill's effect.
 
 ## After the first live game
 
@@ -130,3 +138,36 @@ them from the first recording.
    first contact, and add the real payload as a test fixture.
 3. Check the runtime's log for `[hok] refused`, `[hok] illegal`, `[hok] exception` lines, and the
    status lines (structure damage dealt/taken, k/d) every 30 s of game time.
+
+## The optional slow planner: a proposal, not built
+
+Red Alert's `agent/commander.py` pattern would carry over: a background thread that every ~15 s
+reads a compact view (score estimate, heroes' HP/levels, structures, enemies seen, the policy's
+posture) and sets `Knobs` (posture, `min_pushers`, retreat lines, `hold`), never an order. Play never
+waits for it.
+
+**Not built, on purpose:**
+- The decisions that win fights here are fast and local (retreat at 30%, skill when the target is
+  in range, step out of tower aggro), and the scripted policy already makes them every 0.3 s. A
+  model replying in seconds can't do better on those.
+- The slow decisions a planner could take (posture, how many heroes to push a tower with, when to
+  protect a lead) are exactly the knobs the sim sweeps tune, and the endgame posture is already
+  scripted from the score.
+- Without one live payload we don't know what a model would be reasoning about. The first
+  recordings should show whether there is a systematic gap (e.g. losing every teamfight to one
+  opponent style). Then the cheap version is a switch between two or three sim-validated knob
+  presets, which can be scripted (the score trend) before any model is asked.
+
+**Cost if built** (no model calls were made; this needs the user's OK): one call every 15 s with
+~1,500 input tokens (the view, like upstream's `build_view`) and ~100 output tokens (a knob JSON).
+
+| Match | Calls | Input tokens | Output tokens |
+|---|---|---|---|
+| Real time (3000 steps x 0.2 s = 10 min) | ~40 | ~60k | ~4k |
+| Lockstep (ends at the time limit, ~30 min) | ~120 | ~180k | ~12k |
+
+For a model priced at $X per million input tokens and $Y per million output tokens, a real-time
+match costs about 0.06·X + 0.004·Y dollars (lockstep three times that). At an illustrative $1 / $5
+tier, that is ~$0.08 per real-time match, ~$0.24 per lockstep match. Through the user's ChatGPT
+quota (the Codex desk, like Red Alert's `bots/codex_advisor.py`) it costs no credits but needs the
+user's OK for anything beyond small runs.

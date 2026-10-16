@@ -1,12 +1,13 @@
 """Opponents for the sim, and a factory from short names.
 
-- ``button0``: the placeholder ``agent/agent.py`` (first legal action: ``s0:button_0``,
-  then the next pending hero's, so every hero idles).
+- ``button0``: the placeholder ``agent/agent.py`` (first legal action: the first hero's
+  do-nothing button, then the next pending hero's, so every hero idles).
 - ``advance``: every hero on ``macro_advance`` for good.
 - ``upstream``: the starter's built-in rules (``examples/llm/hok.py`` with no model:
   retreat below 25% HP, skills/attack on anything closer than 9000, else advance;
   re-planned every 3 s).
-- ``ff-hok`` / ``ff-hok:{"knob": value}``: our bot (``bots.hok``).
+- ``ff-hok`` / ``ff-hok:{"knob": value}`` / ``ff-hok@0.2``: our bot (``bots.hok``), with knobs
+  or another real-time pace.
 """
 
 from __future__ import annotations
@@ -37,8 +38,8 @@ class AlwaysAdvance:
                 if view.realtime and view.standing.get(seat) == "macro_advance":
                     continue
                 return {"macro": "macro_advance", "seat": seat}
-            if not view.realtime and "button_0" in offers.buttons:
-                return offers.buttons["button_0"].action
+            if not view.realtime and offers.hold() is not None:
+                return offers.hold().action
         return WAIT
 
 
@@ -52,12 +53,15 @@ def make_agent(spec: str, clock: Callable[[], float], sleep: Callable[[float], N
         from examples.llm.hok import HokPlayer
 
         return HokPlayer(None, log=lambda _l: None, clock=clock)
-    if name == "ff-hok":
+    if name.startswith("ff-hok"):
         from .. import create_agent
 
         knobs = json.loads(arg) if arg else {}
-        return create_agent(knobs, clock=clock, sleep=sleep, log=lambda _l: None, reasoning=False)
-    raise ValueError(f"unknown agent {spec!r} (button0, advance, upstream, ff-hok[:{{knobs}}])")
+        extra = {}
+        if "@" in name:  # ff-hok@0.2: another real-time pace
+            extra["pace_s"] = float(name.split("@", 1)[1])
+        return create_agent(knobs, clock=clock, sleep=sleep, log=lambda _l: None, reasoning=False, **extra)
+    raise ValueError(f"unknown agent {spec!r} (button0, advance, upstream, ff-hok[@pace][:{{knobs}}])")
 
 
 __all__ = ["AlwaysAdvance", "Placeholder", "make_agent", "offers_by_seat"]

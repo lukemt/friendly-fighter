@@ -112,9 +112,17 @@ def test_realtime_does_not_resend_an_order_the_server_has_not_reported_yet():
         {"macro": "macro_advance", "seat": 0}
 
 
+def with_enemy_near(summary, dx=3000, hp=3000):
+    """The summary with a visible enemy hero ``dx`` from this hero."""
+    me = summary["my_hero"]
+    summary["other_heroes"] = [{"runtime_id": 77, "hero_id": 177, "camp": 2, "visible": True, "hp": hp,
+                                "max_hp": 3000, "x": me["x"] + dx, "z": me["z"]}]
+    return summary
+
+
 def test_realtime_urgent_change_goes_first():
     summaries = {s: _summary(s) for s in SEATS}
-    summaries[3] = _summary(3, hp=300)  # hero 3 is nearly dead
+    summaries[3] = with_enemy_near(_summary(3, hp=300))  # hero 3 is nearly dead, an enemy at hand
     standing = {str(s): "macro_advance" for s in SEATS}
     a = agent()
     decision = unwrap(a.choose_action(state(hok_payload(standing=standing, summaries=summaries)), HOK))
@@ -226,7 +234,7 @@ def test_legality_check(decision, ok):
 
 def test_refused_order_rests_and_the_next_choice_is_used():
     summaries = {s: _summary(s) for s in SEATS}
-    summaries[0] = _summary(0, hp=300)
+    summaries[0] = with_enemy_near(_summary(0, hp=300))
     a = agent()
     st = state(hok_payload(pending=[0], entries=_entries(0), summaries=summaries))
     assert unwrap(a.choose_action(st, HOK)) == {"macro": "macro_retreat", "seat": 0}
@@ -260,8 +268,54 @@ def view_with(summaries=None, entries=None, mode="realtime", **kw):
     return read_view(state(hok_payload(mode=mode, summaries=summaries, entries=entries, **kw)))
 
 
-def test_retreat_with_hysteresis():
+def test_low_hero_escapes_only_while_threatened():
     pol = TeamPolicy()
+    calm = {s: _summary(s) for s in SEATS}
+    for s in SEATS:
+        calm[s]["other_heroes"] = []
+    calm[0] = _summary(0, hp=500)
+    calm[0]["other_heroes"] = []
+    # Low but nobody near: home heals ~0.25%/s live, so it keeps playing.
+    assert pol.plan(view_with(calm, version=1))[0].base != "macro_retreat"
+    hot = dict(calm)
+    hot[0] = with_enemy_near(_summary(0, hp=500))
+    assert pol.plan(view_with(hot, version=50))[0].base == "macro_retreat"
+    # Still escaping 2 s later with the enemy gone, back to work after 3 s of calm.
+    assert pol.plan(view_with(calm, version=60))[0].base == "macro_retreat"
+    assert pol.plan(view_with(calm, version=70))[0].base != "macro_retreat"
+
+
+def test_heal_skill_when_low_and_threatened():
+    entries = _entries(0) + [{"action_id": "s0:button_11", "label": "[seat 0] HealSkill",
+                              "input": {"action": {"which_button": 11, "legal_offset_x": [16, 17, 18, 19, 20],
+                                                   "legal_offset_z": [16, 17, 18, 19, 20], "legal_target": [0],
+                                                   "seat": 0}}}]
+    summaries = {s: _summary(s) for s in SEATS}
+    summaries[0] = with_enemy_near(_summary(0, hp=900))
+    a = agent()
+    d = unwrap(a.choose_action(state(hok_payload(pending=[0], entries=entries, summaries=summaries)), HOK))
+    assert d == {"which_button": 11, "offset_x": 18, "offset_z": 18, "target": 0, "seat": 0}
+    assert _legal(d, state(hok_payload(pending=[0], entries=entries, summaries=summaries)))
+
+
+def test_live_shapes_noop_button_and_skill_labels():
+    """Live (e5f159ed): the do-nothing button is button_1 "NoOp"; skills read "toward ..."."""
+    from bots.hok.view import offers_by_seat
+    acts = [LegalAction.from_dict(a) for a in [
+        {"action_id": "s0:button_1", "label": "[seat 0] NoOp", "input": {"action": {"which_button": 1, "seat": 0}}},
+        {"action_id": "s0:button_9", "label": "[seat 0] Recall",
+         "input": {"action": {"which_button": 9, "legal_offset_x": [16], "legal_offset_z": [16],
+                              "legal_target": [0], "seat": 0}}},
+        {"action_id": "s0:macro_skill1", "label": "[seat 0] Cast skill 1 toward enemy hero 133 (6120 away)",
+         "input": {"action": {"macro": "macro_skill1", "seat": 0}}}]]
+    offers = offers_by_seat(acts)[0]
+    assert offers.hold().base == "button_1"
+    assert offers.macros["macro_skill1"].target == "enemy hero 133" and offers.macros["macro_skill1"].dist == 6120
+    assert offers.raw_for("heal") is None
+
+
+def test_retreat_with_hysteresis_when_healing_at_home():
+    pol = TeamPolicy(Knobs(heal_at_home=True, retreat_hp=0.3, return_hp=0.85))
     low = {s: _summary(s) for s in SEATS}
     low[0] = _summary(0, hp=600)
     assert pol.plan(view_with(low, version=1))[0].base == "macro_retreat"
@@ -336,7 +390,7 @@ def test_hero_far_ahead_waits_for_the_team():
         summaries[s]["my_hero"].update(x=-40000, z=-40000)
     summaries[0]["my_hero"].update(x=-5000, z=-5000)   # far ahead toward the tower at (10000, 10000)
     plan = TeamPolicy().plan(view_with(summaries))
-    assert plan[0].base == "button_0" and plan[1].base == "macro_advance"
+    assert plan[0].base == "hold" and plan[1].base == "macro_advance"
 
 
 def test_endgame_protects_a_lead_and_goes_all_in_when_behind():
@@ -525,3 +579,49 @@ def test_recorded_mock_match_replays_cleanly(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "label shapes" in out and "nearest-shape" in out
     assert " 0 illegal" in out
+
+
+def test_jungle_monsters_are_left_alone_by_default():
+    summaries = {s: _summary(s) for s in SEATS}
+    for s in SEATS:
+        summaries[s]["other_heroes"] = []
+    labels = {"macro_attack": "[seat 0] Basic attack (nearest: neutral monster 7, 3000 away)"}
+    plan = TeamPolicy().plan(view_with(summaries, entries_for(0, ALL, labels), pending=[0]))
+    assert plan[0].base == "macro_advance"
+    plan = TeamPolicy(Knobs(attack_monsters=True)).plan(view_with(summaries, entries_for(0, ALL, labels), pending=[0]))
+    assert plan[0].base == "macro_attack"
+
+
+# -- live payloads (scrubbed from the first live game, e5f159ed) ---------------------------------------
+
+
+def live_states():
+    import json
+    from pathlib import Path
+
+    return json.loads((Path(__file__).parent / "data" / "hok_live_states.json").read_text())
+
+
+@pytest.mark.parametrize("index", [0, 1])
+@pytest.mark.parametrize("mode", ["realtime", "lockstep"])
+def test_live_state_gets_a_legal_answer(index, mode):
+    raw = copy.deepcopy(live_states()[index])
+    if mode == "lockstep":
+        raw["pacing"] = {"mode": "lockstep"}
+    st = state(raw)
+    a = agent()
+    for _ in range(6):  # several calls on the same state: each answer legal, never an exception
+        d = a.choose_action(st, HOK)
+        assert d is WAIT or _legal(d, st)
+        a.on_action_result({"accepted": True}, HOK)
+    assert not any(k.endswith("exception") for k in a.stats) and a.stats.get("illegal", 0) == 0
+
+
+def test_live_view_reads_the_real_shapes():
+    view = read_view(state(live_states()[0]))
+    assert view.camp == 1 and view.seats == [0, 1, 2, 3, 4] and view.realtime
+    kinds = sorted({(s.camp, s.kind) for s in view.structures})
+    assert (1, "spawn") in kinds and (2, "tower") in kinds and (2, "crystal") in kinds
+    assert all(o.hold() is not None and o.hold().base == "button_1" for o in view.offers.values())
+    dead = [s for s, h in view.heroes.items() if h.dead]
+    assert dead and all(view.heroes[s].revive_time for s in dead)
