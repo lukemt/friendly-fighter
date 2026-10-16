@@ -60,7 +60,7 @@ def _jsonable(value: Any) -> Any:
 class Recorder:
     def __init__(self, root: Path = ROOT, *, enabled: bool | None = None, bot: str | None = None) -> None:
         self._root = root
-        self._bot = bot
+        self.bot = bot
         self._file: gzip.GzipFile | None = None
         self._enabled = os.environ.get("FF_RECORD", "1") != "0" if enabled is None else enabled
         self._pending = 0
@@ -111,7 +111,7 @@ class Recorder:
     def state(self, state, context) -> None:
         if not self._config_written and getattr(context, "game_config", None) is not None:
             self._config_written = True
-            self._write(context, {"kind": "config", "game_type": context.game_type, "bot": self._bot,
+            self._write(context, {"kind": "config", "game_type": context.game_type, "bot": self.bot,
                                   "config": context.game_config})
         self._write(context, {"kind": "state", "game_type": context.game_type, "raw": state.raw})
         if isinstance(state.raw, dict) and state.raw.get("result"):

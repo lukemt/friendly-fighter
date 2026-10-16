@@ -8,6 +8,10 @@ and returns a fresh ``FriendlyFighter``:
   the optional OpenAI ``Commander`` (agent/commander.py) tuning its strategy
   in the background when ``OPENAI_API_KEY`` is set. The game never waits on
   the model.
+- **Honor of Kings** (``honor_of_kings_5v5``) is played by the scripted team
+  bot in ``bots/hok`` (five heroes, one standing order each). It is checked
+  first, by game type or by the state's shape, so a real-time HoK state never
+  reaches the Red Alert bot.
 - **Any other game** (in case this agent is ever seated in Werewolf or
   Pokémon) goes to the starter's LLM example when ``OPENAI_API_KEY`` is set,
   and otherwise plays the first legal action.
@@ -34,6 +38,7 @@ from .remote import RemoteSeat, read_control
 from .redalert_bot import Knobs, RedAlertBot
 
 RED_ALERT = "red_alert"
+HOK = "honor_of_kings_5v5"
 # remote/control.json is looked at once a second at most, not on every view: on the shared
 # workspace filesystem each look costs about a millisecond (a fifth of a worker's CPU).
 CONTROL_EVERY_SECONDS = 1.0
@@ -55,6 +60,12 @@ def knobs_from_env() -> Knobs:
 def _is_realtime(state: GameState) -> bool:
     pacing = state.raw.get("pacing")
     return isinstance(pacing, dict) and pacing.get("mode") == "realtime"
+
+
+def _is_hok(state: GameState, context: DecisionContext) -> bool:
+    from bots.hok import is_hok
+
+    return is_hok(state, context.game_type)
 
 
 def knobs_from_dict(wanted: dict | None) -> Knobs:
@@ -81,6 +92,7 @@ class FriendlyFighter:
         self._bot: RedAlertBot | None = None
         self._commander: Commander | None = None
         self._fallback: Any = None
+        self._hok_bot: Any = None
         self._fallback_ready = False
         custom = knobs is not None or bool(os.environ.get("FF_KNOBS"))
         self._recorder = Recorder(enabled=record, bot="ff-live" if custom and self.BOT == "ff-default" else self.BOT)
@@ -102,6 +114,8 @@ class FriendlyFighter:
         return move
 
     def _choose(self, state: GameState, context: DecisionContext):
+        if context.game_type == HOK or (context.game_type != RED_ALERT and _is_hok(state, context)):
+            return self._hok().choose_action(state, context)
         if context.game_type == RED_ALERT or (context.game_type is None and _is_realtime(state)):
             bot = self._red_alert()
             if not self._controls:
@@ -136,7 +150,9 @@ class FriendlyFighter:
 
     def on_action_result(self, result: dict, context: DecisionContext) -> None:
         self._recorder.result(result, context)
-        if self._probe is not None or self._console is not None:
+        if self._hok_bot is not None:
+            self._hok_bot.on_action_result(result, context)
+        elif self._probe is not None or self._console is not None:
             self.bot_result(result, context)
         elif self._remote is not None:
             self._remote.on_action_result(result, context)
@@ -167,6 +183,15 @@ class FriendlyFighter:
             else:
                 print_line("[ff] red_alert: scripted controller (no OPENAI_API_KEY: commander off)")
         return self._bot
+
+    def _hok(self) -> Any:
+        if self._hok_bot is None:
+            from bots.hok import create_agent as create_hok_agent
+
+            self._hok_bot = create_hok_agent()
+            self._recorder.bot = self._hok_bot.BOT
+            print_line(f"[ff] {HOK}: scripted team bot (bots.hok)")
+        return self._hok_bot
 
     def _other(self) -> Any:
         if not self._fallback_ready:

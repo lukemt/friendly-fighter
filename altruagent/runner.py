@@ -192,6 +192,13 @@ _REALTIME_TRANSIENT_ERROR_CODES = frozenset({"RUNTIME_TEMPORARILY_UNAVAILABLE"})
 REALTIME_RETRY_SECONDS = 1.0
 _REALTIME_PACING = "realtime"
 
+# Team games (one agent commands several units, one action each per call):
+# their lockstep states get the real-time treatment too. ``WAIT`` is allowed
+# (the server plays standing orders after its action timeout), and a refused
+# move is reported and re-read rather than ending the match: a refusal there is
+# one hero's order, and the other heroes still need theirs.
+_TEAM_GAMES = frozenset({"honor_of_kings_5v5"})
+
 # The runner believed messaging/a capability was available (phase said so)
 # but the adapter disagrees — a genuine runner/adapter mismatch, not a
 # contestant bug and not a race; never silently retried.
@@ -479,6 +486,12 @@ def _is_realtime(state: GameState) -> bool:
     """Whether the match runs in real time: the state's ``pacing.mode``."""
     pacing = state.raw.get("pacing")
     return isinstance(pacing, dict) and pacing.get("mode") == _REALTIME_PACING
+
+
+def _is_team_game(state: GameState, context: DecisionContext) -> bool:
+    """Whether this is a team game (``_TEAM_GAMES``), by the context's or the state's game type."""
+    game_type = context.game_type or (state.raw.get("game_type") if isinstance(state.raw, dict) else None)
+    return game_type in _TEAM_GAMES
 
 
 def _resolve_result_hook(choose_action: Any) -> Callable[[dict, DecisionContext], Any] | None:
@@ -920,7 +933,8 @@ def run_game(
             continue
 
         if state.is_current_actor:
-            realtime = _is_realtime(state)
+            # A team game's lockstep states are paced like real time (``_TEAM_GAMES``).
+            realtime = _is_realtime(state) or _is_team_game(state, context)
             if realtime and not config_fetched:
                 config_fetched = True
                 context = _with_game_config(game, context)
