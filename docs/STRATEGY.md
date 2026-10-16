@@ -127,6 +127,9 @@ test before relying on them.
     `lowpower || powerdown`; the silo draws 150). So killing its power plants stops the clock, and
     killing the silo (2,500) ends it. Both are within V2 range (10) of the outside of its
     defenses (tesla 7).
+  - **Against the Rush AI the nuke is a minor cause** (rush-wave family, 75 games of v10 vs Rush =
+    56 distinct games): 4 of v10's 40 losses show a nuke-like burst, all at 18.8-19.8 min. 17 end
+    before 12:00, mostly on trapped at 8.4-9.1 min, after a lost first fight at 4:55-5:10.
   - **We have no support powers through the platform** (no such order), so we can't nuke back.
   - **Selling books no loss:** a sold building isn't counted in losses, pays 50% of its value
     (times its health) and gives infantry worth 40%. A player is out only with no building and no
