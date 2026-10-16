@@ -124,8 +124,11 @@ its games one after the other without reloading the game data (~5 s), restarted 
 games. **Lanes outlive the run** (`~/openra-sim/lanes/`): the next run takes over their
 engines, already loaded and with their code compiled (a fresh engine's first game costs
 ~10 CPU-s more), one run per lane at a time (a lock file); an engine of another build or
-configuration is replaced, and an engine left unused for 30 minutes exits
-(`FF_LANE_IDLE_EXIT`). `python scripts/ffsim.py lanes` lists them, `--stop` stops them,
+configuration is replaced, and an engine left unused for 10 minutes exits
+(`FF_LANE_IDLE_EXIT`). **Memory:** an engine grows with the games it hosts (~320 MB fresh, 900+ MB
+after ~60), so one bigger than `FF_LANE_MAX_RSS_MB` (600) is restarted before its next game. A lab
+worker waiting for a game slot lets go of its lane, and a run takes lanes with a running engine
+first, so the machine holds about one engine per slot (the RAM is ~8 GB). `python scripts/ffsim.py lanes` lists them, `--stop` stops them,
 and `run --fresh-engines` uses new engines that end with the run. One game at a time per process: concurrent sessions in one process slowed each
 other's economies when OpenRA's AI played (half of six parallel sessions harvested their
 first 1000 ore ~1500 ticks late), which showed as 3 kills a game instead of 29 vs the AI.

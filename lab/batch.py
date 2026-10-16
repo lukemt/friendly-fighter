@@ -50,8 +50,9 @@ class GameSlot:
     """One of the machine's game slots, held for one game: a lock on ``sim/lab/slots/slot-<k>``
     (freed when the game ends, or by the kernel when its process dies). The file says who holds it."""
 
-    def __init__(self, run_id: int | None = None, label: str = "", poll: float = 1.0, log=print) -> None:
-        self.run_id, self.label, self.poll, self.log = run_id, label, poll, log
+    def __init__(self, run_id: int | None = None, label: str = "", poll: float = 1.0, log=print, on_wait=None) -> None:
+        """``on_wait``: called once if all slots are taken, before waiting (a worker lets go of its engine)."""
+        self.run_id, self.label, self.poll, self.log, self.on_wait = run_id, label, poll, log, on_wait
         self.fd: int | None = None
 
     def __enter__(self) -> "GameSlot":
@@ -73,6 +74,8 @@ class GameSlot:
             if not waited:
                 self.log(f"[lab] all {slot_count()} game slots are taken (lab status): waiting", flush=True)
                 waited = True
+                if self.on_wait is not None:
+                    self.on_wait()
             time.sleep(self.poll)
 
     def __exit__(self, *exc) -> None:
@@ -162,7 +165,9 @@ def _worker(n: int, jobs, results, log_path: str, record: bool, db_path: str | N
             if job is None:
                 break
             try:
-                with GameSlot(job.get("run_id"), job.get("label", "")):
+                # (waiting for a slot, a worker lets go of its engine: another run's worker can take it over,
+                # so the machine holds about one engine per slot, not one per worker)
+                with GameSlot(job.get("run_id"), job.get("label", ""), on_wait=arena.release_engines):
                     t0 = time.monotonic()
                     game = arena.play(GameJob(**job))
                 results.put({"ok": True, "job": job, "game": _brief(game), "wall": time.monotonic() - t0, "worker": n})

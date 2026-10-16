@@ -59,7 +59,10 @@ RUNS_DIR = Path(os.environ.get("FF_SIM_RUNS", SIM_HOME / "runs"))
 # load the game data and compile the engine's code again; one exits after FF_LANE_IDLE_EXIT seconds
 # without a run.
 LANES_DIR = Path(os.environ.get("FF_LANES_DIR", SIM_HOME / "lanes"))
-LANE_IDLE_EXIT_SECONDS = int(os.environ.get("FF_LANE_IDLE_EXIT", "1800"))
+LANE_IDLE_EXIT_SECONDS = int(os.environ.get("FF_LANE_IDLE_EXIT", "600"))
+# An engine grows with every game it hosts (~320 MB fresh, 900+ MB after ~60 games): a lane whose
+# engine is bigger than this is restarted before its next game (FF_LANE_MAX_RSS_MB; 0: never).
+LANE_MAX_RSS_MB = int(os.environ.get("FF_LANE_MAX_RSS_MB", "600"))
 
 VIEW_INTERVAL = 6
 VIEW_PHASE = 5  # the platform's views fall on ticks 5, 11, 17... (state_version % 6 == 5 in every recording)
@@ -247,6 +250,20 @@ def _engine_alive(pid: int, port: int) -> bool:
     return state != "Z" and f"Launch.MultiSession={port}".encode() in cmdline
 
 
+def _rss_mb(pid: int) -> float:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1]) / 1024
+    except (OSError, IndexError, ValueError):
+        pass
+    return 0.0
+
+
+def _too_big(pid: int) -> bool:
+    return bool(LANE_MAX_RSS_MB) and _rss_mb(pid) > LANE_MAX_RSS_MB
+
+
 class _Detached:
     """A persistent lane's engine started by an earlier run: as much of Popen as EngineHost uses."""
 
@@ -340,7 +357,7 @@ class EngineHost:
             return False
         if not _engine_alive(info.get("pid", 0), info.get("port", 0)):
             return False
-        if info.get("key") != self._env_key() or not self.RAW:
+        if info.get("key") != self._env_key() or not self.RAW or _too_big(info["pid"]):
             self._kill(info["pid"])
             return False
         try:
@@ -461,6 +478,10 @@ class EngineHost:
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
+    def rss_mb(self) -> float:
+        """The engine process's resident memory, in MB (0 when unknown)."""
+        return _rss_mb(self.proc.pid) if self.proc is not None else 0.0
+
     def cpu_seconds(self) -> float:
         """CPU time the engine process has used so far (all its threads)."""
         try:
@@ -527,7 +548,8 @@ class HostPool:
     def _claim(self) -> Path:
         """A persistent lane no other run is using (its lock file, held until this pool stops)."""
         LANES_DIR.mkdir(parents=True, exist_ok=True)
-        for i in range(1, 65):
+        # (lanes with an engine left running first: taking over a loaded engine beats starting one more)
+        for i in sorted(range(1, 65), key=lambda i: not (LANES_DIR / f"lane-{i}" / "host.json").exists()):
             lane = LANES_DIR / f"lane-{i}"
             lane.mkdir(exist_ok=True)
             fd = os.open(lane / "lock", os.O_CREAT | os.O_RDWR, 0o644)
@@ -562,7 +584,8 @@ class HostPool:
             while True:
                 for i, host in enumerate(self.lanes):
                     if not host.busy:
-                        if host.games >= self.recycle or (host.proc is not None and not host.alive()):
+                        if (host.games >= self.recycle or (host.proc is not None and not host.alive())
+                                or (LANE_MAX_RSS_MB and host.proc is not None and host.rss_mb() > LANE_MAX_RSS_MB)):
                             if self.persist:
                                 host.stop(kill=True)
                             else:

@@ -81,6 +81,42 @@ The platform plays 20 minutes; everything up to run 114 was 10. Same bots, suite
 `lab h history` shows these per opponent and map during a game (where it built, what units it
 used).
 
+### How the AIs decide (read from the engine's code, 2026-10-16)
+
+From `mods/ra/rules/ai.yaml` and `OpenRA.Mods.Common/Traits/BotModules/SquadManagerBotModule.cs`
+and `Squads/` in `~/openra-sim/fork`, at 25 ticks/s. These are the rules, not lab observations:
+test before relying on them.
+
+| | Rush | Normal | Turtle |
+|---|---|---|---|
+| Wave size (`SquadSize` + random 0-29) | 20: a wave leaves within ~1 s of 20 idle units at home | 40-69: rarely reached, so it rarely attacks | 10, but the first attack force is formed at a random time in 0-66 min, and then never again |
+| "Rush" check (all its squads converge on our base) | every 24 s, once it has 20+ ground units | every 24 s, 40+ units | never |
+| Defends its own things within (`ProtectUnitScanRadius`) | 15 cells | 15 | 30 |
+
+- **The rush check compares its idle units at home with our armed things within 15 cells of our
+  construction yard**, defense structures included, by summed damage per second. It goes only when
+  it is clearly stronger (about 1.3x or more). Then every squad it has turns on that target, which
+  is why one late wave can be all of its army at once. A strong armed presence around the
+  construction yard at those checks keeps that from happening. Units fighting 10+ cells out don't
+  count.
+- **A wave goes for whatever of ours is closest to its leader** (reachable, anything it can
+  attack), and on the way it switches to anything within 12 cells. So it hits the first thing of
+  ours on its path: harvesters, an army standing forward, an outlying building.
+- **A wave flees only when it is hurt.** At high health it always attacks, whatever it faces. Once
+  it is down to about half health and we are stronger nearby (10 cells), it runs to a random
+  building of its own, unless one of its buildings is within 10 cells. Then it rejoins the pool for
+  the next wave. So waves that break on our defenses come back as the next wave: chasing the
+  fleeing units is free kills.
+- **Hitting any of its buildings or harvesters pulls its idle home units after the attacker,** plus
+  any squad within 15 cells (30 for the Turtle). These defenders never flee: they chase while they
+  see the attacker, give up a few seconds after losing sight, then look within 12 cells (Turtle 15)
+  for something else to hit. **This can be baited.** One fast unit hits a harvester and runs back
+  to our army, standing out of reach of their defenses, and the whole reaction group follows into
+  it. This is untested (an idea for anyone).
+- **No capturing through the platform.** The action set has no capture order, so the oil derricks
+  on trapped (5), sidestep (2) and shadowfiend-II (5) can't be taken. Each would pay 100 every
+  15 s, but the AIs don't use them either.
+
 ## Units and tactics
 
 - **V2s (range 10) and artillery (12) outrange every defense:** tesla 7, SAM 7.5, turret 6.5,
