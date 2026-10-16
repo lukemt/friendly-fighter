@@ -1012,7 +1012,7 @@ def cmd_status(a, db) -> int:
     for pid in live_runtimes():
         print(f"the live tournament runtime is running (pid {pid}): lab games run at a lower priority (nice 10)")
     from lab import FAMILY, MAIN_ROOT
-    from lab.batch import slot_count, slots_in_use
+    from lab.batch import slot_count, slots_in_use, waiting
 
     print(f"this session: {'family ' + FAMILY if FAMILY else 'the main checkout'} ({ROOT}); lab shared at {LAB_DIR}"
           + (f" (main checkout {MAIN_ROOT})" if MAIN_ROOT != ROOT else ""))
@@ -1021,6 +1021,12 @@ def cmd_status(a, db) -> int:
     for h in held:
         since = f"{(time.time() - h['since']) / 60:.0f} min" if h.get("since") else "?"
         print(f"  slot {h['slot']}: {h.get('family', '?')}, run {h.get('run')}, {h.get('label', '')[:50]} (pid {h.get('pid')}, {since})")
+    queue = waiting()
+    if queue:
+        print(f"waiting for a slot, first come first served: {len(queue)}")
+        for k, w in enumerate(queue, 1):
+            since = f"{(time.time() - w['since']) / 60:.0f} min" if w.get("since") else "?"
+            print(f"  {k}. {w.get('family', '?')}, run {w.get('run')}, {w.get('label', '')[:50]} (pid {w.get('pid')}, {since})")
     notes = db.q("SELECT * FROM notes ORDER BY id DESC LIMIT 5")
     if notes:
         print("recent notes (lab note; every session's):")
