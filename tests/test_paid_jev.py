@@ -60,3 +60,33 @@ def test_spent_counts_only_logs_written_within_the_hour(tmp_path, monkeypatch):
     old.write_text(json.dumps({"t": 1, "tokens": 9_000_000}) + "\n")
     os.utime(old, (1_000, 1_000))
     assert abs(jevlog.spent(now=new.stat().st_mtime + 10) - 1.0 * jevlog.PRICE_PER_MTOK) < 1e-9
+
+
+def _lab_cli():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "scripts" / "lab.py"
+    spec = importlib.util.spec_from_file_location("lab_cli_for_tests", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_a_frozen_council_with_the_jev_oracle_counts_as_paid_jev(monkeypatch):
+    from types import SimpleNamespace
+
+    cli = _lab_cli()
+    frozen = "bots.frozen.ff_council_champ_v10.bot:create_agent"
+    bots = {"v10": {"factory": frozen, "kwargs": {"oracle": "rules"}},
+            "v10-jev": {"factory": frozen, "kwargs": {"oracle": "jev"}},
+            "council": {"factory": "bots.jev_council:create_agent", "kwargs": {}},
+            "forced": {"factory": "bots.jev_council:create_agent", "kwargs": {"force": "boom"}},
+            "other": {"factory": "bots.rush_wave.x:create_agent", "kwargs": {}}}
+    monkeypatch.setattr(cli.registry, "get", lambda n, *a: SimpleNamespace(kind="module", params=bots[n]))
+    assert [n for n in bots if cli._uses_jev(n)] == ["v10-jev", "council"]
+
+
+def test_the_registered_v10_jev_entry_asks_jev():
+    cli = _lab_cli()
+    assert cli._uses_jev("ff-council-champ-v10-jev") and not cli._uses_jev("ff-council-champ-v10")

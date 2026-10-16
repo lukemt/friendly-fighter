@@ -292,6 +292,23 @@ paired seeds, maps rotated, seats swapped, a second seed before anything is crow
 | E11 | **Does a controlled Tanya pay?** (the user's idea, 2026-10-16; experiment `tanya-sniper`, details below) | a Tanya setting on v10's rules when Allied: build her, keep her behind the army, shoot infantry from range, pull her back from vehicles and turrets | 1a by hand vs ai-rush and ext-henry; 1 on unselected moments (`--kind at`, Allied seats only); 2-3 whole games on 2 seeds | keep it if net gains on Allied seats with no loss elsewhere |
 | E10 | **Switch the live bot?** | gate v10 vs `ff-default` on `@gate` | already clear on `@standard`; confirm on `@field` | user decides |
 
+### Jev experiments, with the budget (2026-10-16)
+
+The user allows paid Jev at $1 an hour (AGENTS.md rule 11): ~$0.005 a Jev seat in a 20-minute
+game, so the money no longer limits these. What does: one paid run per family at a time, and
+`think: measured` (Jev's ~230 ms a call is charged to the game clock, as on the platform). In
+order:
+
+| # | Question | Design | Cost |
+|---|---|---|---|
+| J1 | **Does Jev answering beat the rules on the same loops?** The question v10 left open (Jev council = v7 = the rules council, runs 59-60, before the economy fix). | `ff-council-champ-v10-jev` (v10's frozen code, `oracle: jev`) vs `ff-council-champ-v10`: `lab compare ff-council-champ-v10,ff-council-champ-v10-jev --baselines @ais,@exploiters,ext-ryan,ext-henry --games 8`, 2 seeds | 64 Jev seats a seed, ~$0.35 |
+| J2 | **One decision at a time:** where does Jev beat a rule? | the jev family's split bots: `jev-sjj` (Jev decides the quartermaster) vs `jev-sjs` (shadow: the rules decide, Jev's answer logged) vs `jev-rifr`; the shadow logs give the disagreements | as J1 |
+| J3 | **The decisions the rules get wrong:** boom or hold after a raid (v10 locks greed 0 after one raid: the jev family, run 195), and hold or fight when outnumbered in the last 3 minutes (ext-henry's last stand at 18:00) | a Jev question for each, against the rule and the jev family's coded fixes (`greed_hold`, `macro`); probe at unselected moments, then whole games vs ext-henry and @ais | a probe ~$0.05; whole games as J1 |
+| J4 | **At the disagreements:** branch every point where Jev's shadow answer differs from the rule (L5), play both | `jev-sjs` logs, `lab branch` | ~100 short branches, <$0.10 |
+
+J1 decides whether the live bot should ask Jev at all: if v10-jev wins on 2 seeds (and `lab jev`
+shows answers in every game, none frozen), it goes to a gate, and the switch is the user's call.
+
 ### E11 in detail: a controlled Tanya
 
 **Idea (the user's):** Tanya under deliberate control instead of not at all. Our bots have never

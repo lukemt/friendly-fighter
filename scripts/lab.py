@@ -186,15 +186,17 @@ REUSE_KINDS = {"play", "league", "gate", "compare", "exploit"}  # (whole games: 
 
 
 def _uses_jev(name: str) -> bool:
-    """A bot that asks Jev (a module bot built on bots/jev_bot.py, frozen or not; not a forced one)."""
+    """A bot that asks Jev (a module bot built on bots/jev_bot.py, frozen or not; not a forced one). A
+    frozen council's factory path needn't say "jev" (bots.frozen.ff_council_champ_v10): ``oracle: jev``
+    in its kwargs does."""
     try:
         bot = registry.get(name)
     except KeyError:
         return False
     factory = str(bot.params.get("factory", "")) if bot.kind == "module" else ""
     kwargs = bot.params.get("kwargs") or {}
-    return ("jev" in factory and not kwargs.get("force") and kwargs.get("use_jev", True)
-            and kwargs.get("oracle", "jev") == "jev")
+    return (("jev" in factory or (factory and kwargs.get("oracle") == "jev")) and not kwargs.get("force")
+            and kwargs.get("use_jev", True) and kwargs.get("oracle", "jev") == "jev")
 
 
 # -- commands ------------------------------------------------------------------------------------
