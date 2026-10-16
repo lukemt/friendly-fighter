@@ -114,8 +114,18 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
                       f"answers: probe a moment or play a few games, not a suite. To go ahead: "
                       f"{batch.PAID_JEV}={paid} lab ... (or point JEV_URL at a local server). Not starting.", flush=True)
                 raise SystemExit(2)
-            params = {**params, "paid_jev_games": paid}
-            print(f"[lab] paid Jev: {paid} game(s) (allowed {allowed})", flush=True)
+            from lab import jevlog
+
+            seats, cost = batch.jev_estimate(jobs, _uses_jev)
+            spent, budget = jevlog.spent(), batch.jev_budget_per_hour()
+            if spent + cost > budget:
+                print(f"[lab] paid Jev budget: ${budget:.2f} an hour (all sessions); spent in the last hour "
+                      f"${spent:.3f}, and this run's {seats} Jev seat(s) would cost up to ${cost:.3f}. Play fewer "
+                      f"games, or wait. Not starting.", flush=True)
+                raise SystemExit(2)
+            params = {**params, "paid_jev_games": paid, "paid_jev_estimate": round(cost, 4)}
+            print(f"[lab] paid Jev: {paid} game(s) (allowed {allowed}), {seats} seat(s), up to ${cost:.3f}; "
+                  f"last hour ${spent:.3f} of ${budget:.2f}", flush=True)
         problem = Jev().check()
         if problem:
             print(f"[lab] {', '.join(jev_bots)} need Jev, and {problem}: they would play on frozen decisions. "

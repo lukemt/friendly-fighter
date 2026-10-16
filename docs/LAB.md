@@ -184,6 +184,12 @@ more Jev games than that is refused before it starts, and the run's parameters r
 `paid_jev_games`. `lab jev eval` needs `FF_LAB_PAID_JEV=1`. A local server (`JEV_URL`) is free and
 needs none of this.
 
+**The budget: $1 an hour, all sessions together** (the user, 2026-10-16). A paid run is also
+refused when its estimate plus what the call logs show was spent in the last hour goes over it
+(`lab/jevlog.py` `spent`). The estimate is $0.0003 a Jev seat-minute, rounded up from run 151
+($0.0023 a 10-minute seat), so about $0.006 a 20-minute seat: up to ~150 Jev seats in 20-minute
+games an hour. `FF_LAB_JEV_BUDGET` sets another hourly amount. `lab jev` shows the spend.
+
 Jev answers vary by about 0.02 in probability between identical calls, but the choices (and so the
 seeded games) replay the same. `ff-jev-off` is the same code with Jev switched off (a control);
 `ff-jev-v6-measured` charges its real decision time, Jev calls included, as game time, as the

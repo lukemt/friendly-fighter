@@ -144,6 +144,27 @@ def paid_jev_allowed() -> int:
         return 0
 
 
+# The user's budget for paid Jev: $1 an hour, all lab sessions together (2026-10-16). A run is refused
+# when its estimate and the last hour's spend (lab/jevlog.py: the tokens in call logs written within
+# the hour) go over it. The estimate is per seat-minute: run 151 measured $0.0023 a 10-minute seat
+# (52 calls, 53,855 input tokens); rounded up, about $0.006 a 20-minute seat.
+JEV_BUDGET = "FF_LAB_JEV_BUDGET"
+JEV_USD_PER_SEAT_MINUTE = 0.0003
+
+
+def jev_budget_per_hour() -> float:
+    try:
+        return max(0.0, float(os.environ.get(JEV_BUDGET) or 1.0))
+    except ValueError:
+        return 1.0
+
+
+def jev_estimate(jobs: list[dict], uses_jev) -> tuple[int, float]:
+    """Paid Jev seats in ``jobs`` and what they would cost at most (dollars)."""
+    seats = [(n, j.get("minutes", 20)) for j in jobs for n in j["bots"] if uses_jev(n)]
+    return len(seats), sum(m for _, m in seats) * JEV_USD_PER_SEAT_MINUTE
+
+
 NICE = 10  # lab games yield the CPU to anything else (the live tournament runtime above all)
 
 
