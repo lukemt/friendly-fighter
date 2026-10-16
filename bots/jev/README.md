@@ -270,6 +270,20 @@ the rows because the family code changed after the run started, so the table is 
   the control (and every variant) believes "no raid so far, enemy army never seen" at 10:00 and `jev-rifr`'s blind
   rule (riflemen) applies from the first minute; and the whole-game test of staging (run 183) had too few games
   (+10 points of win rate would not show in 32 games). Whole games on a fresh seed: run 192.
+- **Whole games confirm the riflemen rule and the staging** (run 192, 20 min, no superweapons, fresh seed 7101, 12
+  games per bot and opponent, frozen bots; points and mean net):
+
+  | opponent | v10 | `jev-regroup-v1` | `jev-st5-v1` | `jev-rifr-v1` |
+  |---|---|---|---|---|
+  | ai-normal | 7/12 (+3,800) | 10/12 (+16,275) | 12/12 (+27,462) | 12/12 (+33,308) |
+  | ai-rush | 4/12 (+2,404) | 3/12 (-5,858) | 6/12 (+8,238) | **8/12 (+16,396)** |
+  | all | 11/24 (46%) | 13/24 (54%) | 18/24 (75%) | **20/24 (83%)** |
+  | paired vs v10 | | +0.08 points a game (-0.18..+0.34) | **+0.29 (+0.11..+0.48)**, net +14,748 (+3,380..+26,115) | **+0.38 (+0.18..+0.57)**, net +21,750 (+11,469..+32,031) |
+
+  Regroup alone: nothing in whole games (as in run 183). Staging 5 cells (with regroup): better here, nothing in
+  run 183 (seed 5101, 24/32 each); pooled on `ai-normal` v10 17/28, `jev-st5-v1` 21/28. The riflemen rule: the
+  clearest gain, on both AIs. v10 is only 46% on this seed (the board has it at 6/8 and 3/8 on the same two).
+  Next: the same bots on the agents and the field (run 195: `@field2`, ryan-plan, the eco exploiters, turtle).
 - **Focus fire when defending** (`jev-focus`, run 180, same set and rule; `jev-base` again identical to v10 in all 15
   after the module was renamed to `hands.py` for freezing): +1,660 vs control (-4,351..+7,671), better in 6/15,
   W-D-L 7-0-8 against 6-0-9. Nothing; parked.

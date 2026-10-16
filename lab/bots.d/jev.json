@@ -612,6 +612,96 @@
     "rules",
     "combo"
    ]
+  },
+  {
+   "name": "jev-rifr-m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": "measured",
+   "description": "jev-rifr with its real decision time charged to the game clock (the control for jev-sjj-m)",
+   "tags": [
+    "jev",
+    "rules",
+    "composition",
+    "latency"
+   ]
+  },
+  {
+   "name": "jev-sjj-m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.splitjev:create_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "jev"
+    }
+   },
+   "think": "measured",
+   "description": "jev-rifr-m with the quartermaster's production question answered by Jev (p>=0.55, else the rules); real decision time charged to the game clock",
+   "tags": [
+    "jev",
+    "council",
+    "composition",
+    "latency"
+   ]
+  },
+  {
+   "name": "jev-sjs-m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.splitjev:create_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "shadow"
+    }
+   },
+   "think": "measured",
+   "description": "jev-rifr-m with Jev asked next to the rules and only logged (shadow)",
+   "tags": [
+    "jev",
+    "council",
+    "composition",
+    "latency"
+   ]
+  },
+  {
+   "name": "jev-a1-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_a1_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-a1 jev-a1@2b44eb57 at 55f5380+changes: jev-base + army waiting 5 cells from home + riflemen when the enemy is mostly infantry (jev-st5 + jev-rifr)",
+   "tags": [
+    "combo",
+    "frozen",
+    "jev",
+    "rules"
+   ]
   }
  ]
 }
