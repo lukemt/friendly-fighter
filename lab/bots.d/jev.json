@@ -786,6 +786,84 @@
     "rules",
     "economy"
    ]
+  },
+  {
+   "name": "jev-a1g2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "greed_hold": 2
+    }
+   },
+   "think": 0.005,
+   "description": "jev-a1 (staging 5 + riflemen rule) + greed 2 outside fortify",
+   "tags": [
+    "jev",
+    "rules",
+    "combo",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-a1m5",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 5
+    }
+   },
+   "think": 0.005,
+   "description": "jev-a1 (staging 5 + riflemen rule) + the refinery schedule up to 5",
+   "tags": [
+    "jev",
+    "rules",
+    "combo",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-a1m8",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 8
+    }
+   },
+   "think": 0.005,
+   "description": "jev-a1 (staging 5 + riflemen rule) + the refinery schedule up to 8",
+   "tags": [
+    "jev",
+    "rules",
+    "combo",
+    "economy"
+   ]
   }
  ]
 }

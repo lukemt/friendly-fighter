@@ -295,6 +295,20 @@ the rows because the family code changed after the run started, so the table is 
   run 183 (seed 5101, 24/32 each); pooled on `ai-normal` v10 17/28, `jev-st5-v1` 21/28. The riflemen rule: the
   clearest gain, on both AIs. v10 is only 46% on this seed (the board has it at 6/8 and 3/8 on the same two).
   Next: the same bots on the agents and the field (run 195: `@field2`, ryan-plan, the eco exploiters, turtle).
+- **Against the field** (run 195, 20 min, seed 7301, 6 games each; stopped at 126 of 216 when the economy tests
+  took priority; `@field2` and the first of the exploiters were done):
+
+  | opponent | v10 | `jev-rifr-v1` | `jev-st5-v1` | `jev-a1-v1` (staging 5 + riflemen) |
+  |---|---|---|---|---|
+  | ext-henry | 1/6 (-9,617) | 1/6 (-3,508) | 2/6 (-7,242) | **4/6 (+3,342)** |
+  | ext-henry-rusher | 6/6 | 6/6 | 6/6 | 6/6 |
+  | ext-henry-yuriko | 5/5 | 5/5 | 5/5 | 5/5 |
+  | ext-ryan | 6/6 | 6/6 | 6/6 | 6/6 |
+
+  `ext-henry` (a contestant's bot: expansions, 3 barracks, last-stand all-in at 18:00) beats v10 five times in six
+  and is the opponent that is left. `jev-a1-v1` is the best of ours against it (4/6, small numbers), the
+  riflemen rule alone is not. In the v10 losses the lead holds to 18:00-18:30 (+1.5k, -6.9k, +6.2k) and the fight at
+  our base then costs 64-80 units.
 - **Focus fire when defending** (`jev-focus`, run 180, same set and rule; `jev-base` again identical to v10 in all 15
   after the module was renamed to `hands.py` for freezing): +1,660 vs control (-4,351..+7,671), better in 6/15,
   W-D-L 7-0-8 against 6-0-9. Nothing; parked.
