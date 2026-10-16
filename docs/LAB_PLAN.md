@@ -318,6 +318,8 @@ executor, squads, an economy schedule, per-opponent profiles in `opponents.py`).
 | A5 | **Decisions learned from branches** (search offline, rules online): at sampled moments play each option for 60-180 s (the probes do this by hand), label the best, train a small classifier for that decision | The platform gives no forward model live, but the lab's engine is deterministic and branches are cheap (~34 s) | medium, and CPU: ~N options x branches per label | one decision (attack now / wait) at unselected moments |
 | A6 | Deep RL, one network for everything | microRTS: won only with very many games | not here | no |
 
+**A1, first look** (2026-10-16, from games already played, paired with v10): the best existing bot per opponent gains +0.36 (jev-rifr-v1 vs ai-normal), +0.29 (jev-rifr-v1 vs ai-rush), +0.50 (jev-a1m8 vs ext-henry), nothing elsewhere; an always-right selector's ceiling is ~+0.19 points a game on @screen (optimistic: the best of ~10 on small samples). The winners are one lineage, so a combined bot may take most of it; how jev-a1m8 does against the AIs decides how much room a selector has.
+
 **A4, first look** (2026-10-16, experiment `arch-value-model`; logistic regression in numpy on
 the differences between the seats: net, army value, assets, harvesters, buildings, combat units).
 Only ~630 whole 20-minute games have both seats' timeline (the lab records it for agent seats,
