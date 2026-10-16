@@ -566,6 +566,52 @@
     "placebo",
     "rules"
    ]
+  },
+  {
+   "name": "jev-rifr-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_rifr_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-rifr jev-rifr@c9b72cfd at 811281f: jev-rifb + riflemen when 60%+ of the enemy units seen in the last 90 s are infantry, rocket soldiers when 35%- (and vehicles seen), else mixed",
+   "tags": [
+    "composition",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-rr",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-rifr + regroup (idle units walk back to the staging point), no change of the staging point",
+   "tags": [
+    "jev",
+    "rules",
+    "combo"
+   ]
   }
  ]
 }

@@ -252,6 +252,24 @@ the rows because the family code changed after the run started, so the table is 
   kind the coordinator makes (v10 with every decision a tick later). Whole games (run 183) had regroup together
   with the 5-cell staging and showed nothing, so the test on unselected moments across seven kinds of
   opponent, to the end of the game, is run 190.
+- **The unselected-moment screen, to the end of the game** (run 190, experiment `jev-u10`, `@jev-u10`: 47 moments at
+  10:00 of v10's no-superweapons games, any outcome: ai-normal 14, ai-rush 12, ai-turtle 4, both eco exploiters 4
+  each, exploit-ryan-plan 6, ext-ryan 4; played to the end, W-D-L at the end):
+
+  | bot | change | net vs control (paired, 95% CI) | better in | W-D-L |
+  |---|---|---|---|---|
+  | control (v10) | | +4,665 a game | | 34-0-13 |
+  | `jev-plc` | regroup only | **+6,256 (+1,110..+11,403)** | 28/47 | 38-0-9 |
+  | `jev-st5` | staging 5 cells + regroup | **+9,298 (+2,984..+15,612)** | 29/47 | 39-0-8 |
+  | `jev-rifr` | riflemen rule (blind: riflemen) | **+8,022 (+3,843..+12,201)** | 32/47 | 40-0-7 |
+
+  By opponent (net difference, n): `ai-normal` regroup +17,289 (14), staging +13,646, riflemen +10,957; `ai-rush`
+  regroup +5,804 (12), staging +21,875, riflemen +18,933 (11-0-1 against 7-0-5); the agent-like opponents
+  (`exploit-ryan-plan`, the eco exploiters, `ext-ryan`; 3-6 moments each, all but a few won by the control too) show
+  -9,442..+9,133 with no pattern. The AIs carry the gain. Two cautions: a branch starts with an empty memory, so
+  the control (and every variant) believes "no raid so far, enemy army never seen" at 10:00 and `jev-rifr`'s blind
+  rule (riflemen) applies from the first minute; and the whole-game test of staging (run 183) had too few games
+  (+10 points of win rate would not show in 32 games). Whole games on a fresh seed: run 192.
 - **Focus fire when defending** (`jev-focus`, run 180, same set and rule; `jev-base` again identical to v10 in all 15
   after the module was renamed to `hands.py` for freezing): +1,660 vs control (-4,351..+7,671), better in 6/15,
   W-D-L 7-0-8 against 6-0-9. Nothing; parked.
