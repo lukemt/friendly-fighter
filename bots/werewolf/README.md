@@ -36,26 +36,47 @@ docker exec -u dev -w /workspace friendly-fighter-werewolf-dev-workspace-1 \
   .venv/bin/python -m bots.werewolf.harness.run --ours 1 --mix rule --games 3000 --ref first
 ```
 
-### Results (1 of our bots, 6 RuleBots; 3000 games, seeds 1000..3999; win rate of our seat's team)
+### Results
 
-| Role of our seat | ours | first-legal in that seat | paired diff vs first-legal | rule bot in that seat | paired diff vs rule bot |
+All numbers: win rate of our seat's team, 95% interval in brackets, `n` = our seats. Paired = the same game (roles, seats,
+opponents) replayed with the reference player in our seats. **Two seed blocks** (1000..3999 and 50000..52999, 3000 games
+each) gave the same picture; the tables below are the fresh block (50000..), measured before the last default change
+(`preempt_claim` 0 -> 0.5, below).
+
+**1 of our bots among 6 RuleBots** (the stand-in for competent seats):
+
+| Role of our seat | ours (preempt 0) | first-legal in that seat | paired diff | rule bot in that seat | paired diff |
 |---|---|---|---|---|---|
-| wolf (n=883) | 68.1% | 59.2% | +8.8 [+5.8, +11.8] | 71.5% | -3.4 [-6.4, -0.4] |
-| seer (n=404) | 28.0% | 5.0% | +23.0 [+18.6, +27.4] | 29.5% | -1.5 [-6.9, +4.0] |
-| villager (n=1713) | 42.8% | 21.1% | +21.8 [+19.7, +23.9] | 28.7% | +14.1 [+11.8, +16.4] |
-| all | 48.3% | 30.1% | +18.1 [+16.5, +19.7] | 41.4% | +6.9 [+5.1, +8.6] |
+| wolf (n=915) | 68.9% | 59.8% | +9.1 [+6.3, +11.9] | 74.2% | -5.4 [-8.1, -2.6] |
+| seer (n=419) | 28.4% | 6.0% | +22.4 [+18.1, +26.8] | 28.2% | +0.2 [-5.0, +5.5] |
+| villager (n=1666) | 43.8% | 21.6% | +22.1 [+20.0, +24.3] | 28.6% | +15.2 [+12.9, +17.5] |
+| all (n=3000) | 49.3% | 31.1% | +18.2 [+16.6, +19.8] | 42.4% | +6.8 [+5.1, +8.6] |
 
-Ablations on the same games (our role win rates, wolf / seer / villager):
-- Default: 68.1 / 28.0 / 42.9.
-- No talk (`talk=false`): 63.0 / **6.7** / **26.6**. Talking is most of the value.
-- `max_chats=1`: 64.3 / 29.2 / 40.0. `max_chats=2`: 66.1 / 28.5 / 43.3.
-- Wolf day-1 fake seer claim (`preempt_claim`): 0.5 gives wolf 69.8, 1.0 gives 73.2. Not yet checked on a second seed.
-- Seer claim day (`claim_by_day` 1/2/3/never): seer 26.2 / 28.0 / 28.2 / 28.2. No clear difference.
-- `abstain_below` 0.34 / 0.45, `follow_partner=false`, `no_info_vote=hash`, `counterclaim=false`: all within noise.
+(First block: all +18.1 vs first-legal, +6.9 vs rule bot; wolf -3.4 vs rule bot, seer -1.5.)
 
-**Not done yet:** a second seed block for the defaults; runs with 2 or 3 of our bots and with `first,random,rule` mixes
-(the harness supports them: `--ours 2 --mix first,random,rule`); the sim wolf is still slightly worse than a RuleBot wolf.
-Claims need a second seed (docs/STRATEGY.md).
+**Wolf day-1 fake seer claim (`preempt_claim`), fresh block:** wolf 68.9% (0) -> 72.8% (0.5) -> 75.6% (1.0); all-roles 49.3 -> 50.5 -> 51.3.
+First block agreed (68.1 -> 69.8 -> 73.2). The default is **0.5** ("sometimes"): at 1.0 the sim wolf beats the RuleBot wolf, but the
+RuleBot seer is a weak contester, so I hedge. With 0.5 the wolf is about on par with a RuleBot wolf (72.8 vs 74.2).
+
+**1 of ours among a mix of first-legal, random and rule bots** (1/3 each; fresh block, paired against first-legal):
+all +6.0 [+4.6, +7.4]; wolf 85.8 vs 76.6 (+9.2); seer 32.0 vs 17.2 (+14.8); villager 21.4 vs 19.3 (+2.0 [+0.2, +3.9]).
+The village is badly handicapped there (4+ non-talking seats), so our single villager adds little.
+
+**2 of ours, same mix:** all 45.4% vs 38.5% (+6.9 [+5.6, +8.2]); wolf +6.1, seer +17.6, villager +4.6 (seat counts 1754 / 868 / 3378).
+**3 of ours, same mix:** all 48.5% vs 38.9% (+9.6 [+8.5, +10.8]); wolf +2.4, seer +19.8, villager +10.7.
+**3 of ours among 4 RuleBots:** all 49.0% vs 40.6% with RuleBots in those seats (+8.4); villager-side seats +22.6/+23.4, but when
+the 3 seats are wolves they play against our stronger villagers (wolf seats 45.4% vs 72.5%: a table effect, not a weaker wolf).
+
+Night kill resets the stall counter or not (`--night-resets`): identical results (the 3-day rule almost never fires when the
+bot votes).
+
+Ablations (first block, 3000 games; wolf / seer / villager win %): default 68.1 / 28.0 / 42.9. **No talk (`talk=false`): 63.0 / 6.7 /
+26.6**, so talking is most of the value (in the sim, the RuleBots react to what we say; real seats may not). `max_chats` 1: 64.3 / 29.2 / 40.0;
+2: 66.1 / 28.5 / 43.3. Seer `claim_by_day` 1/2/3/never: seer 26.2 / 28.0 / 28.2 / 28.2 (no clear difference). `abstain_below`,
+`follow_partner=false`, `no_info_vote=hash`, `counterclaim=false`: within noise.
+
+**What is not shown:** how well this works against real seats (LLM chat is messier than RuleBot's phrasing; the reader is a set
+of regexes), and the payload shapes (below). The sim is evidence for the logic, not for the win rate on the platform.
 
 ## Replay
 
@@ -79,8 +100,7 @@ mid-size prices ($3 / $15) ~ $0.08; prompt caching lowers it. These are assumpti
 ## Core changes (shared code)
 
 `agent/agent.py`: `choose_action` and `choose_message` remember `context.game_type`; `_other()` returns the Werewolf bot
-for `werewolf` (new `_werewolf()` method). Nothing else changes. Merge with the Pokémon branch not yet tried: both
-edit `_other()`'s neighbourhood, and I avoided its adjacent lines on purpose.
+for `werewolf` (new `_werewolf()` method). Nothing else changes. A trial three-way merge (`git merge-file`, base `4d11a02`) with the Pokémon branch's `agent/agent.py` gave no conflicts and the merged file parses.
 
 ## Testing
 

@@ -67,6 +67,8 @@ class Memory:
     my_checks: dict[int, str] = field(default_factory=dict)  # seer: target -> "wolf" | "villager"
     check_days: dict[int, int] = field(default_factory=dict)
     pending_check: int | None = None
+    pending_day: int = 0
+    warned_unparsed: bool = False
     unparsed_checks: int = 0
     # wolf
     fake_results: list[Result] = field(default_factory=list)

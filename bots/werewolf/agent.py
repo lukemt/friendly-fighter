@@ -142,6 +142,11 @@ class WerewolfAgent:
                 mem.version += 1
                 if mem.pending_check == t:
                     mem.pending_check = None
+        if mem.pending_check is not None and snap.day > mem.pending_day and not mem.warned_unparsed \
+                and snap.sub_phase == "day_vote":
+            mem.warned_unparsed = True  # the platform's text for a seer result isn't what the reader expects
+            self._fail("seer result", Unacceptable(f"no result for Player{mem.pending_check} in the observation: "
+                                                   f"{snap.observation[:200]!r}"))
         if mem.pending_check is not None and mem.pending_check in snap.dead:
             # no result text found, but the target's role came out in public
             d = snap.dead[mem.pending_check]
@@ -162,6 +167,7 @@ class WerewolfAgent:
         if sub == "night_seer" or (sub is None and snap.role == SEER and ABSTAIN not in snap.legal):
             seat = night_seer(snap, self.mem, bel, rng)
             self.mem.pending_check = seat
+            self.mem.pending_day = snap.day
         elif sub == "night_wolf":
             seat = night_wolf(snap, self.mem, bel, rng, self.settings)
         elif sub == "day_vote" or ABSTAIN in snap.legal:

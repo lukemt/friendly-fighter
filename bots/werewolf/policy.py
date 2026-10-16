@@ -18,7 +18,7 @@ class Settings:
     max_chats: int = 4  # per day, of the platform's 5
     claim_by_day: int = 2  # a seer without a wolf finding claims by this day
     counterclaim: bool = True  # a wolf counter-claims seer when a real seer has claimed
-    preempt_claim: float = 0.0  # chance a wolf claims seer on day 1 before anyone else does
+    preempt_claim: float = 0.5  # chance a wolf claims seer on day 1 before anyone else does (sim: +4 pts for wolves at 0.5, +7 at 1.0)
     no_info_vote: str = "lowest"  # "lowest" | "hash": how a vote with nothing to go on is placed
     abstain_below: float = 0.0  # abstain when the best suspect is below this wolf probability (0 = never)
     follow_partner: bool = True
