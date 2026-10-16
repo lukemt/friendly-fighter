@@ -209,7 +209,10 @@ def _engine_hash() -> str:
     try:
         from ffsim.engine_openra import ENGINE_DIR, engine_build_id
 
-        return engine_build_id(ENGINE_DIR)
+        from . import LAB_LOBBY
+
+        lobby = ",".join(f"{k}={v}" for k, v in sorted(LAB_LOBBY.items()))
+        return engine_build_id(ENGINE_DIR) + (f"+{lobby}" if lobby else "")
     except Exception:  # noqa: BLE001
         return "engine"
 

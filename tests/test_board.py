@@ -15,7 +15,10 @@ CFG = {"reference": "ref", "fixed": ["old"], "baselines": ["ai-rush", "ai-normal
 
 
 @pytest.fixture()
-def db(tmp_path):
+def db(tmp_path, monkeypatch):
+    from lab import moments
+
+    monkeypatch.setattr(moments, "_engine", lambda: "eng")  # (the board counts games of the current engine)
     d = LabDB(tmp_path / "lab.db")
     yield d
     d.close()
