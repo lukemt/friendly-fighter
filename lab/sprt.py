@@ -67,6 +67,7 @@ class Sequential:
         self.reference, self.others = candidates[0], list(candidates[1:])
         self.t0, self.t1, self.alpha, self.beta, self.min_pairs = t0, t1, alpha, beta, min_pairs
         self.verdict: dict[str, str | None] = {c: None for c in self.others}
+        self.stopped = False  # (the run was interrupted)
         self.pairs: dict[str, int] = {c: 0 for c in self.others}
         self.update()
 
@@ -110,6 +111,7 @@ class Sequential:
             v = self.verdict[c]
             text = {"better": f"BETTER: H1 accepted (at least about {self.t1:+.2f} a game)",
                     "not better": f"NOT BETTER: H0 accepted (no gain of {self.t1:+.2f} a game)"}.get(
-                v, "undecided at the cap (--games): more games, or call it no clear difference")
+                v, "undecided: the run stopped before the cap" if self.stopped else
+                "undecided at the cap (--games): more games, or call it no clear difference")
             lines.append(f"  {c}: {text}, after {self.pairs[c]} pairs (LLR {llr(self.diffs(c), self.t0, self.t1):+.2f})")
         return "\n".join(lines)

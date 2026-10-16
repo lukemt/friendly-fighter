@@ -180,6 +180,8 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict, sequential=No
     except KeyboardInterrupt:
         status = "interrupted"
         print("[lab] interrupted", flush=True)
+        if test is not None:
+            test.stopped = True
     finally:
         db.end_run(run_id, status)
     wall = time.monotonic() - t0

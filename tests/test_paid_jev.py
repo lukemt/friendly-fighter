@@ -99,3 +99,12 @@ def test_profiling_is_off_unless_asked_and_writes_a_file_when_on(tmp_path, monke
     monkeypatch.setenv(batch.PROFILE, "1")
     assert batch._profiled(lambda job: job * 2, 21, 7, 0) == 42
     assert [p.name for p in tmp_path.iterdir()][0].startswith("run-7-w0-")
+
+
+def test_jev_call_logs_go_to_the_shared_lab(monkeypatch):
+    monkeypatch.setenv("FF_JEV_LOG", "x")  # (so that teardown restores whatever was there)
+    monkeypatch.delenv("FF_JEV_LOG")
+    batch.lab_env()
+    import os
+
+    assert os.environ["FF_JEV_LOG"] == str(batch.LAB_DIR / "jev")

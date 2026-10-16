@@ -221,6 +221,9 @@ def lab_env() -> None:
     os.environ["PYTHONHASHSEED"] = "0"
     os.environ.setdefault("FF_REMOTE_DIR", str(LAB_DIR / "remote"))
     os.environ.setdefault("FF_RECORD", "0")
+    # Every Jev client's call log into the shared lab (frozen copies otherwise write next to their own
+    # checkout: a family's worktree; lab jev and the paid budget, jevlog.spent, read the shared one).
+    os.environ.setdefault("FF_JEV_LOG", str(LAB_DIR / "jev"))
     os.environ.pop("FF_THINK_MS", None)
     os.environ.pop("FF_KNOBS", None)
     if not os.environ.get("FF_SIM_OPENAI"):
