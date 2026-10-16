@@ -364,3 +364,17 @@ def test_knobs_names_play_without_an_entry_and_exploit_samples_them():
         assert all(v in exploit.SPACE[k] for k, v in knobs.items())
         assert knobs["posture"] != "defend" or "attack_threshold" not in knobs
     assert exploit.sample(12, seed=3) == names  # (the same seed, the same tries)
+
+
+def test_the_gate_crowns_better_somewhere_and_no_worse_anywhere():
+    def paired(diffs, by, margin_lo=-1.0):
+        mean, lo, hi = report._mean_ci(diffs)
+        return {"n": len(diffs), "mean": mean, "lo": lo, "hi": hi, "net": 0.0, "sd": 0.5, "margin": 0.0,
+                "margin_lo": margin_lo, "margin_hi": 1.0, "by_baseline": by}
+    even = {"mean": 0.0, "lo": -0.2, "hi": 0.2, "n": 8}
+    henry = {"mean": 0.6, "lo": 0.2, "hi": 1.0, "n": 8}
+    d = [0.0] * 40 + [1.0] * 5 + [-1.0] * 2
+    assert report.gate_verdict(paired(d, {"a": even, "ext-henry": henry}), [])[0] == "BETTER"  # (clearly ahead vs one)
+    assert report.gate_verdict(paired(d, {"a": {**even, "hi": -0.1}, "ext-henry": henry}), [])[0] != "BETTER"  # (worse vs a)
+    assert report.gate_verdict(paired([0.0] * 40, {"a": even}, margin_lo=0.02), [])[0] == "BETTER"  # (bigger wins)
+    assert report.gate_verdict(paired([0.0] * 30 + [-1.0] * 3, {"a": even}, margin_lo=0.02), [])[0] != "BETTER"  # (fewer points)

@@ -256,7 +256,13 @@ of the time, calls a no-gain candidate better 4% of the time, and stops a clearl
   0.25 x net / 20,000, capped at +-0.25: a narrow win ~1.0, a crushing one 1.25, a narrow loss ~0,
   a crushing one -0.25. A loss never outscores a win. It rewards bots that win big and hold up
   (the user's idea, 2026-10-16), and net is the sharper measure (t x1.17 median), so it needs
-  fewer games. The tournament counts wins: crown on points (the gate's default).
+  fewer games. **It is the default since 2026-10-16** (`--score points` for points only).
+- **The gate's rule (crown):** better somewhere clearly, and no worse anywhere. BETTER when no
+  opponent's interval is below the champion's and the head-to-head isn't clearly lost, and one of:
+  the points overall are clearly better; the margin score overall is clearly better with no fewer
+  points; the candidate wins head to head with no fewer points; or it is clearly better against
+  one opponent with no fewer points overall. On a fresh seed: several ways to pass mean more lucky
+  passes on a seed everyone screened on.
 
 **The same seeds for everything.** The `i`-th game of a run on `--seed S` has seed `S x 10007 + i`
 against every opponent, in `play`, `compare`, `gate` and the board (`league.game_seed`). So the

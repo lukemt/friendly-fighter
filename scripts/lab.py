@@ -332,7 +332,7 @@ def sprt_args(s) -> None:
                                                      "'no worse': -0.1,0)")
     s.add_argument("--alpha", type=float, default=0.05, help="--sprt: false 'better' rate")
     s.add_argument("--beta", type=float, default=0.05, help="--sprt: missed 'better' rate (at H1)")
-    s.add_argument("--score", choices=["points", "margin"], default="points",
+    s.add_argument("--score", choices=["points", "margin"], default="margin",
                    help="--sprt: what a game is worth: points (1 / 0.5 / 0), or margin: points + 0.25 x net / 20,000, "
                         "capped at +-0.25 (bigger wins count more; a loss never above a win)")
 

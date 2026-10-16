@@ -566,7 +566,11 @@ def gate_report(db, run_id: int, candidate: str, champion: str) -> str:
     verdict, why = gate_verdict(paired, h)
     if paired["n"]:
         out.append(f"paired (same seeds, {paired['n']} pairs): candidate - champion = {paired['mean']:+.2f} points a game "
-                   f"(95% CI {paired['lo']:+.2f} to {paired['hi']:+.2f}); net {paired['net']:+.0f} a game")
+                   f"(95% CI {paired['lo']:+.2f} to {paired['hi']:+.2f}); net {paired['net']:+.0f} a game; margin score "
+                   f"{paired['margin']:+.2f} (CI {paired['margin_lo']:+.2f} to {paired['margin_hi']:+.2f})")
+        for b, d in paired["by_baseline"].items():
+            if d["lo"] > 0:
+                out.append(f"  clearly better against {b}: {d['mean']:+.2f} (CI {d['lo']:+.2f} to {d['hi']:+.2f})")
         for b, d in paired["by_baseline"].items():
             if d["hi"] < 0:
                 out.append(f"  regression against {b}: {d['mean']:+.2f} (CI {d['lo']:+.2f} to {d['hi']:+.2f})")
@@ -593,18 +597,24 @@ def _mean_ci(xs: list[float]) -> tuple[float, float, float]:
 
 def paired_difference(db, run_id: int, candidate: str, champion: str, baselines: list[str]) -> dict:
     """Candidate and champion played each baseline on the same seeds: the per-seed differences."""
-    diffs, nets, by = [], [], {}
+    from .sprt import score
+
+    diffs, nets, margins, by = [], [], [], {}
     for b in baselines:
         c = {(r["seed"], r["map"]): r for r in perspective(db, candidate, {"run": run_id, "vs": b})}
         k = {(r["seed"], r["map"]): r for r in perspective(db, champion, {"run": run_id, "vs": b})}
         d = [_points(c[key]["result"]) - _points(k[key]["result"]) for key in c if key in k]
         nets += [(c[key]["net"] or 0) - (k[key]["net"] or 0) for key in c if key in k]
+        margins += [score(_points(c[key]["result"]), c[key]["net"], True) - score(_points(k[key]["result"]), k[key]["net"], True)
+                    for key in c if key in k]
         diffs += d
         mean, lo, hi = _mean_ci(d)
         by[b] = {"mean": mean, "lo": lo, "hi": hi, "n": len(d)}
     mean, lo, hi = _mean_ci(diffs)
     net_mean, net_lo, net_hi = _mean_ci([n / 1000 for n in nets])  # (in thousands: the variance floor is for points)
+    margin, margin_lo, margin_hi = _mean_ci(margins)
     return {"n": len(diffs), "mean": mean, "lo": lo, "hi": hi, "net": sum(nets) / len(nets) if nets else 0.0,
+            "margin": margin, "margin_lo": margin_lo, "margin_hi": margin_hi,
             "net_lo": net_lo * 1000, "net_hi": net_hi * 1000,
             "by_baseline": by, "sd": (math.sqrt(sum((x - mean) ** 2 for x in diffs) / (len(diffs) - 1))
                                       if len(diffs) > 1 else 0.5)}
@@ -617,8 +627,19 @@ def gate_verdict(paired: dict, h2h: list[dict]) -> tuple[str, str]:
     if paired["n"] and paired["hi"] < 0 or (h2h and hhi < 0.5):
         return "WORSE", "the champion does better" + (" against the baselines" if paired["n"] and paired["hi"] < 0 else " head to head")
     regressions = [b for b, d in paired["by_baseline"].items() if d["hi"] < 0]
-    if (paired["n"] and paired["lo"] > 0 or (h2h and hlo > 0.5 and paired["mean"] >= 0)) and not regressions:
-        return "BETTER", ("better against the baselines" if paired["n"] and paired["lo"] > 0 else "wins head to head, no worse elsewhere")
+    if not regressions:
+        # Better somewhere clearly, and no worse anywhere (the user's rule, 2026-10-16): on points
+        # overall, on the margin score overall (points + capped net: bigger wins count), head to
+        # head, or against one opponent, with the pooled points not below the champion's.
+        if paired["n"] and paired["lo"] > 0:
+            return "BETTER", "better against the baselines"
+        if paired["n"] and paired.get("margin_lo", -1) > 0 and paired["mean"] >= 0:
+            return "BETTER", "better on the margin score (bigger wins), no fewer points, no worse anywhere"
+        if h2h and hlo > 0.5 and paired["mean"] >= 0:
+            return "BETTER", "wins head to head, no worse elsewhere"
+        ahead = [b for b, d in paired["by_baseline"].items() if d["lo"] > 0]
+        if ahead and paired["mean"] >= 0:
+            return "BETTER", f"clearly better against {', '.join(ahead)}, no worse anywhere"
     if paired["n"] > 1 and abs(paired["mean"]) > 0.01:
         need = math.ceil((1.96 * max(paired["sd"], 0.2) / abs(paired["mean"])) ** 2)
         return "UNCLEAR", f"a difference of {paired['mean']:+.2f} a game needs about {need} pairs to show; this run had {paired['n']}"
