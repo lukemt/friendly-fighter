@@ -105,3 +105,38 @@ def test_a_sequential_gate_plays_the_same_games_round_by_round():
     assert sorted(map(json.dumps, plain)) == sorted(map(json.dumps, rounds))
     assert [j["label"] for j in rounds[:5]] == ["gate:c:h2h", "gate:c:x", "gate:c:x", "gate:c:y", "gate:c:y"]
     assert {j["seed"] for j in rounds[:5]} == {league.game_seed(4, 0)}
+
+
+def test_the_margin_score_rewards_bigger_wins_but_never_a_loss_over_a_win():
+    assert sprt.score(1.0, 30000) == 1.0  # (points only, by default)
+    assert sprt.score(1.0, 2000, margin=True) == pytest.approx(1.025)
+    assert sprt.score(1.0, 90000, margin=True) == 1.25  # (capped)
+    assert sprt.score(0.0, -90000, margin=True) == -0.25
+    assert sprt.score(0.0, 90000, margin=True) < sprt.score(1.0, -90000, margin=True)
+
+
+def test_compare_can_add_head_to_head_games():
+    jobs = league.compare(["ref", "a", "b"], ["x", "y"], 2, interleaved=True, h2h=True)
+    h2h = [j for j in jobs if j["label"] == "compare:h2h"]
+    assert len(h2h) == 4 and all("ref" in j["bots"] for j in h2h)
+    assert [j["label"] for j in jobs[:3]] == ["compare:h2h", "compare:h2h", "compare:x"]
+    plain = league.compare(["ref", "a"], ["x"], 3, h2h=True)
+    assert sum(j["label"] == "compare:h2h" for j in plain) == 3
+
+
+def test_head_to_head_games_count_as_pairs(db):
+    run = db.start_run("compare", "test", {})
+    for i in range(3):  # (good beats ref head to head, nothing else)
+        game = {"id": f"h{i}", "run_id": run, "created": 1.0, "finished": 1.0, "map": "trapped", "minutes": 20,
+                "seed": i, "time_mode": "virtual", "game_seconds": 1200.0, "wall_seconds": 1.0,
+                "termination": "time_limit", "winner": 0, "outcome": "decisive", "branch_of": None, "branch_tick": None,
+                "branch_label": None, "trace": None, "engine": "eng", "info": "{}"}
+        db.save_game(game, [{"game_id": f"h{i}", "position": 0, "bot": "good", "version": "good@1", "kind": "module",
+                             "result": "win", "points": 1.0, "net": 4000},
+                            {"game_id": f"h{i}", "position": 1, "bot": "ref", "version": "ref@1", "kind": "module",
+                             "result": "loss", "points": 0.0, "net": -4000}], [], [], {})
+    test = sprt.Sequential(db, run, [], ["ref", "good"], 0.0, 0.1, 0.05, 0.05)
+    assert test.diffs("good") == [1.0, 1.0, 1.0]
+    margin = sprt.Sequential(db, run, [], ["ref", "good"], 0.0, 0.1, 0.05, 0.05, margin=True)
+    assert margin.diffs("good")[0] == pytest.approx(1.1)
+    assert test._subject({"bots": ["ref", "good"]}) == "good"

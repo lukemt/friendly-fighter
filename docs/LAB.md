@@ -249,6 +249,15 @@ of the time, calls a no-gain candidate better 4% of the time, and stops a clearl
 20-50 pairs and a clearly better one after 30-50. Most ideas are no better, so most compares end early.
 `BETTER` here is the screen's answer, not a crown: confirm on a fresh seed (the gate).
 
+- **`--h2h`:** also `--games` of each candidate against the reference itself (seats swapped every
+  other game). With `--sprt` each such game is a pair too (the candidate's points minus the
+  reference's in that game: +1, 0 or -1). A gate's head-to-head games count the same way.
+- **`--score margin`:** a game is worth its points plus a bonus for the size of the win or loss,
+  0.25 x net / 20,000, capped at +-0.25: a narrow win ~1.0, a crushing one 1.25, a narrow loss ~0,
+  a crushing one -0.25. A loss never outscores a win. It rewards bots that win big and hold up
+  (the user's idea, 2026-10-16), and net is the sharper measure (t x1.17 median), so it needs
+  fewer games. The tournament counts wins: crown on points (the gate's default).
+
 **The same seeds for everything.** The `i`-th game of a run on `--seed S` has seed `S x 10007 + i`
 against every opponent, in `play`, `compare`, `gate` and the board (`league.game_seed`). So the
 champion's game against an opponent on a seed is played once and then reused by every run

@@ -21,6 +21,19 @@ from __future__ import annotations
 
 import math
 
+MARGIN_WEIGHT, MARGIN_SCALE = 0.25, 20000  # --score margin: a game's points + 0.25 x net / 20,000, capped at +-0.25
+
+
+def score(points: float, net: float | None, margin: bool = False) -> float:
+    """A game's score for the test: its points (1 / 0.5 / 0); with ``margin``, plus a bonus for how
+    big the win (or loss) was, capped so that a loss never scores above a win: a narrow win ~1.0, a
+    crushing one 1.25, a narrow loss ~0, a crushing one -0.25 (the user's idea, 2026-10-16: an
+    incentive for bots that win big and hold up)."""
+    if not margin:
+        return points
+    return points + MARGIN_WEIGHT * max(-1.0, min(1.0, (net or 0) / MARGIN_SCALE))
+
+
 PAIR_VARIANCE = 0.27  # measured: sd 0.52 of the points difference of a pair (994 pairs, 2026-10-16)
 PRIOR = 10            # pairs' worth of that variance mixed into a run's own
 MIN_PAIRS = 12        # no verdict before this many pairs
@@ -62,8 +75,8 @@ class Sequential:
     jobs still need playing (batch.run)."""
 
     def __init__(self, db, run_id: int, jobs: list[dict], candidates: list[str], t0: float, t1: float,
-                 alpha: float, beta: float, min_pairs: int = MIN_PAIRS) -> None:
-        self.db, self.run_id, self.jobs = db, run_id, jobs
+                 alpha: float, beta: float, min_pairs: int = MIN_PAIRS, margin: bool = False) -> None:
+        self.db, self.run_id, self.jobs, self.margin = db, run_id, jobs, margin
         self.reference, self.others = candidates[0], list(candidates[1:])
         self.t0, self.t1, self.alpha, self.beta, self.min_pairs = t0, t1, alpha, beta, min_pairs
         self.verdict: dict[str, str | None] = {c: None for c in self.others}
@@ -72,24 +85,31 @@ class Sequential:
         self.update()
 
     def _subject(self, job: dict) -> str | None:
-        for name in job["bots"]:
-            if name == self.reference or name in self.verdict:
-                return name
-        return None
+        """The candidate a job is for (a head-to-head game is the candidate's), else the reference."""
+        names = job["bots"]
+        return next((n for n in names if n in self.verdict), self.reference if self.reference in names else None)
 
     def diffs(self, candidate: str) -> list[float]:
         from .reuse import run_clause
 
         clause, args = run_clause("g", [self.run_id])
-        rows = self.db.q(f"SELECT g.map, g.seed, s.bot, s.position, s.points, o.bot AS opponent FROM games g "
-                         f"JOIN seats s ON s.game_id = g.id JOIN seats o ON o.game_id = g.id AND o.position != s.position "
-                         f"WHERE {clause} AND g.branch_of IS NULL AND s.bot IN (?, ?)", *args, self.reference, candidate)
+        rows = self.db.q(f"SELECT g.map, g.seed, s.bot, s.position, s.points, s.net, o.bot AS opponent, o.net AS onet "
+                         f"FROM games g JOIN seats s ON s.game_id = g.id JOIN seats o ON o.game_id = g.id AND "
+                         f"o.position != s.position WHERE {clause} AND g.branch_of IS NULL AND s.bot IN (?, ?)",
+                         *args, self.reference, candidate)
         by: dict[tuple, dict[str, float]] = {}
+        out = []
         for r in rows:
             if r["points"] is None:
                 continue
-            by.setdefault((r["opponent"], r["map"], r["seed"], r["position"]), {})[r["bot"]] = r["points"]
-        return [v[candidate] - v[self.reference] for v in by.values() if candidate in v and self.reference in v]
+            if r["bot"] == candidate and r["opponent"] == self.reference:  # (head to head: one game, both sides)
+                out.append(score(r["points"], r["net"], self.margin) - score(1 - r["points"], r["onet"], self.margin))
+                continue
+            if r["opponent"] in (candidate, self.reference):
+                continue
+            by.setdefault((r["opponent"], r["map"], r["seed"], r["position"]), {})[r["bot"]] = score(
+                r["points"], r["net"], self.margin)
+        return out + [v[candidate] - v[self.reference] for v in by.values() if candidate in v and self.reference in v]
 
     def update(self) -> None:
         for c in self.others:
@@ -105,8 +125,9 @@ class Sequential:
         return who is None or self.verdict.get(who) is None
 
     def summary(self) -> str:
-        lines = [f"sequential test (--sprt): H0 {self.t0:+.2f} vs H1 {self.t1:+.2f} points a game, "
-                 f"alpha {self.alpha:g}, beta {self.beta:g}"]
+        lines = [f"sequential test (--sprt): H0 {self.t0:+.2f} vs H1 {self.t1:+.2f} "
+                 f"{'score (points + margin)' if self.margin else 'points'} a game, alpha {self.alpha:g}, beta {self.beta:g}; "
+                 f"head-to-head games count as pairs"]
         for c in self.others:
             v = self.verdict[c]
             text = {"better": f"BETTER: H1 accepted (at least about {self.t1:+.2f} a game)",

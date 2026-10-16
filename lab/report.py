@@ -645,6 +645,12 @@ def compare_report(db, run_id: int, candidates: list[str], baselines: list[str])
     rows.append(total)
     out.append(_table(rows, ["baseline (points, mean net)"] + candidates))
     for c in candidates[1:]:
+        h2h = perspective(db, c, {"run": run_id, "vs": candidates[0]})
+        if h2h:
+            pts = sum(_points(r["result"]) for r in h2h)
+            out.append(f"{c} against {candidates[0]} head to head: {pts:g}/{len(h2h)} "
+                       f"(net {round(sum(r['net'] or 0 for r in h2h) / len(h2h)):+d} a game)")
+    for c in candidates[1:]:
         d = paired_difference(db, run_id, c, candidates[0], baselines)
         flag = "better" if d["lo"] > 0 else "worse" if d["hi"] < 0 else "no clear difference"
         nflag = " (net better)" if d["net_lo"] > 0 else " (net worse)" if d["net_hi"] < 0 else ""
