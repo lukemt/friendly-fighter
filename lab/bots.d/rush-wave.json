@@ -1,3 +1,18 @@
 {
- "bots": []
+ "bots": [
+  {
+   "name": "rush-wave-base",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005
+  }
+ ]
 }

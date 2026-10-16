@@ -81,10 +81,15 @@ the shared moment sets alone.
 
 | Bot | What it is | Status |
 |---|---|---|
+| `rush-wave-base` | Copy of frozen v10 (`bots/rush_wave/v10/`), v10's settings. Every change from here is a keyword argument that is off by default. | Reproduces v10 (run 130) |
 
 ## Results
 
 (Each claim with its evidence: run ids, `lab probe` / `lab compare` output, games to look at.)
+
+- **`rush-wave-base` plays exactly like v10** (run 130, `lab play rush-wave-base ai-rush --games 2
+  --seed 77 --map trapped`, 2026-10-16): net -24,600 (game `02524faf`, wiped 8:44) and -25,700
+  (game `e197e04a`, wiped 9:06), the same as v10's runs 126-127.
 
 ## Core changes
 
