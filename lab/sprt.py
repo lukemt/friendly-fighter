@@ -80,6 +80,7 @@ class Sequential:
         self.reference, self.others = candidates[0], list(candidates[1:])
         self.t0, self.t1, self.alpha, self.beta, self.min_pairs = t0, t1, alpha, beta, min_pairs
         self.verdict: dict[str, str | None] = {c: None for c in self.others}
+        self.decided_at: dict[str, tuple[int, float]] = {}  # (pairs and LLR when the verdict came)
         self.stopped = False  # (the run was interrupted)
         self.pairs: dict[str, int] = {c: 0 for c in self.others}
         self.update()
@@ -113,10 +114,18 @@ class Sequential:
 
     def update(self) -> None:
         for c in self.others:
+            if self.verdict[c] is not None and c in self.decided_at:
+                d = self.diffs(c)
+                lo, hi = bounds(self.alpha, self.beta)
+                if len(d) > self.decided_at[c][0] and lo < llr(d, self.t0, self.t1) < hi:
+                    self.verdict[c] = None  # (games already playing took it back inside the bounds: play on)
+                    self.decided_at.pop(c)
             if self.verdict[c] is None:
                 d = self.diffs(c)
                 self.pairs[c] = len(d)
                 self.verdict[c] = decide(d, self.t0, self.t1, self.alpha, self.beta, self.min_pairs)
+                if self.verdict[c] is not None:
+                    self.decided_at[c] = (len(d), llr(d, self.t0, self.t1))
 
     def keep(self, index: int) -> bool:
         who = self._subject(self.jobs[index])
@@ -134,5 +143,15 @@ class Sequential:
                     "not better": f"NOT BETTER: H0 accepted (no gain of {self.t1:+.2f} a game)"}.get(
                 v, "undecided: the run stopped before the cap" if self.stopped else
                 "undecided at the cap (--games): more games, or call it no clear difference")
-            lines.append(f"  {c}: {text}, after {self.pairs[c]} pairs (LLR {llr(self.diffs(c), self.t0, self.t1):+.2f})")
+            final = self.diffs(c)
+            value = llr(final, self.t0, self.t1)
+            at = self.decided_at.get(c)
+            if at is not None and len(final) > at[0]:
+                lo, hi = bounds(self.alpha, self.beta)
+                text += f" at {at[0]} pairs (LLR {at[1]:+.2f})"
+                if lo < value < hi:  # (games already playing when it was decided took it back inside the bounds)
+                    text += "; the games in flight then took it back inside the bounds: NOT SETTLED, play on"
+                lines.append(f"  {c}: {text}; with all {len(final)} pairs LLR {value:+.2f}")
+                continue
+            lines.append(f"  {c}: {text}, after {self.pairs[c]} pairs (LLR {value:+.2f})")
         return "\n".join(lines)

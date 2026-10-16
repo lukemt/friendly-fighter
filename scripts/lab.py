@@ -350,6 +350,7 @@ def _sequential(a, db, candidates: list[str]):
 
 def cmd_gate(a, db) -> int:
     baselines = _expand(_split(a.baselines))
+    a.champion = a.champion or current_champion()
     _check_bots([a.candidate, a.champion] + baselines)
     jobs = schedule.gate(a.candidate, a.champion, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes,
                          interleaved=bool(a.sprt))
@@ -1012,6 +1013,12 @@ def cmd_jev(a, db) -> int:
     return 0
 
 
+def current_champion() -> str:
+    """The lab's champion now: the last entry of lab/champions.json (``lab champion``). Until 2026-10-16
+    ``lab gate`` defaulted to ff-default, so gate runs 228 and 232 measured jev-combo-v1 against it."""
+    return json.loads((ROOT / "lab" / "champions.json").read_text())["ladder"][-1]["bot"]
+
+
 def cmd_champion(a, db) -> int:
     import datetime
 
@@ -1341,7 +1348,7 @@ def main() -> int:
 
     s = sub.add_parser("gate", help="is a candidate better than the champion?")
     s.add_argument("candidate")
-    s.add_argument("--champion", default="ff-default")
+    s.add_argument("--champion", default=None, help="default: the current champion (lab champion)")
     s.add_argument("--baselines", default="@ais", help="bots or @suites (lab/suites.json), separated by commas")
     s.add_argument("--games", type=int, default=6, help="per opponent (with --sprt: at most)")
     sprt_args(s)

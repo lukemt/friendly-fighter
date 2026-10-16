@@ -140,3 +140,43 @@ def test_head_to_head_games_count_as_pairs(db):
     margin = sprt.Sequential(db, run, [], ["ref", "good"], 0.0, 0.1, 0.05, 0.05, margin=True)
     assert margin.diffs("good")[0] == pytest.approx(1.1)
     assert test._subject({"bots": ["ref", "good"]}) == "good"
+
+
+def test_a_verdict_the_games_in_flight_took_back_is_reported_as_not_settled():
+    from lab import sprt
+
+    seq = sprt.Sequential.__new__(sprt.Sequential)
+    seq.others, seq.reference = ["cand"], "ref"
+    seq.t0, seq.t1, seq.alpha, seq.beta, seq.margin, seq.stopped = 0.0, 0.1, 0.05, 0.05, False, False
+    seq.verdict, seq.pairs, seq.decided_at = {"cand": "better"}, {"cand": 17}, {"cand": (15, 3.1)}
+    seq.diffs = lambda c: [1.0] * 13 + [-1.0] * 4  # (two late losses after the crossing)
+    text = seq.summary()
+    assert "at 15 pairs (LLR +3.10)" in text and "NOT SETTLED" in text
+
+
+def test_the_gate_defaults_to_the_current_champion():
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    ladder = json.loads((root / "lab" / "champions.json").read_text())["ladder"]
+    source = (root / "scripts" / "lab.py").read_text()
+    assert 's.add_argument("--champion", default=None' in source and "a.champion = a.champion or current_champion()" in source
+    assert ladder[-1]["bot"] != "ff-default"
+
+
+def test_play_resumes_when_late_games_take_a_verdict_back():
+    from lab import sprt
+
+    seq = sprt.Sequential.__new__(sprt.Sequential)
+    seq.others, seq.reference = ["cand"], "ref"
+    seq.t0, seq.t1, seq.alpha, seq.beta, seq.min_pairs, seq.margin = 0.0, 0.1, 0.05, 0.05, 12, False
+    seq.verdict, seq.pairs, seq.decided_at = {"cand": None}, {"cand": 0}, {}
+    data = [1.0] * 15
+    seq.diffs = lambda c: list(data)
+    seq.update()
+    assert seq.verdict["cand"] == "better" and seq.decided_at["cand"][0] == 15
+    data += [-1.0] * 6  # (the games in flight)
+    seq.update()
+    assert seq.verdict["cand"] is None and "cand" not in seq.decided_at
