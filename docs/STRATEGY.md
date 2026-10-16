@@ -241,6 +241,20 @@ test before relying on them.
 - **The best bot so far needs no API.** `ff-council-rules-eco` is the council's loops answered by
   code rules, plus the economy fix: 86% (run 63) and 16/16 against the exploiters. See
   docs/JEV_LOOPS.md.
+- **Paid Jev as v10's advisor adds nothing (J1, run 223, 2026-10-16).**
+  - **Setup:** `ff-council-champ-v10-jev`, v10 with Jev answering its loops. 7 opponents × 8 games,
+    seed 2026, all 5,263 decisions answered, $0.0059 a game.
+  - **Result:** 43/55 against v10's 47/56: −0.05 points a game (CI −0.17..+0.06), and the SPRT
+    leaned "no gain".
+  - **Where the difference was:** it held the Rush AI better (5/8 against 3/8), but ext-henry beat
+    it (3/8 against 7/8). Jev spends 45% of the game in "fortify" (the rules 34%), so it booms less
+    and loses henry's economy race.
+  - **Takeaway:** v10's rules already make Jev's calls. Spending credits pays only where Jev decides
+    something the rules don't (J2: production from 4:00).
+- **A model advisor can make a rules bot much stronger (run 225).** ext-henry with Codex (GPT-6-Luna)
+  advising it, tuned with notes from the first trial (grow first, no reflex holds, one flanked final
+  push), wiped out v10 twice, on maps where v10 had beaten the plain henry. `jev-combo-v1` still
+  beat it 3/3. docs/LAB_PLAN.md L4b.
 
 ## Against other contestants' bots (`@field`, docs/EXTERNAL_BOTS.md)
 
