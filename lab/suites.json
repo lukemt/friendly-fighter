@@ -56,5 +56,12 @@
   "exploit-eco-waves",
   "exploit-eco-tanks",
   "exploit-ryan-plan"
+ ],
+ "field2": [
+  "ext-ryan",
+  "ext-henry",
+  "ext-henry-rusher",
+  "ext-henry-yuriko",
+  "ext-pakled"
  ]
 }

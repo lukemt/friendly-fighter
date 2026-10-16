@@ -383,14 +383,16 @@ class ExternalAgent:
 
 def create_agent(*, repo: str, commit: str, url: str = "", entry: str = "agent.agent:create_agent",
                  packages: list[str] | tuple[str, ...] = ("agent",), env: dict | None = None, name: str = "",
-                 advisor: str | None = None, stubs: dict | None = None, log_files: bool | None = None) -> ExternalAgent:
+                 advisor: str | None = None, stubs: dict | None = None, log_files: bool | None = None,
+                 subdir: str = "") -> ExternalAgent:
     """One seat's copy of a contestant's bot (see the module docstring).
 
     ``advisor="desk"``: their model calls go to the advisor desk of the running ``lab advise`` session
     (an error outside one, so leagues never wait for an answer); ``advisor="package.module:Class"``: a
     scripted advisor with ``Desk.ask``'s signature answers them (e.g. ``bots.ryan_plan:PlanDesk``). ``stubs``: ``{"module:function":
-    value}`` replaces a function of theirs by one that returns ``value`` (e.g. a per-game dump)."""
-    root = check_checkout(repo, commit)
+    value}`` replaces a function of theirs by one that returns ``value`` (e.g. a per-game dump). ``subdir``:
+    where their packages are in the checkout (``src`` for a src layout; default the top)."""
+    root = check_checkout(repo, commit) / subdir if subdir else check_checkout(repo, commit)
     name = name or repo
     desk = None
     if advisor == "desk":
