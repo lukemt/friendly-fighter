@@ -297,6 +297,55 @@ a fresh seed doesn't share them).
 
 ---
 
+## Part 1b: other architectures (the user's idea, 2026-10-16)
+
+Every bot of ours so far is one architecture: the scripted bot (`agent/redalert_bot.py`, `Knobs`)
+under the council's three loops (strategist, quartermaster, field commander), answered by code
+rules (v10) or Jev. The families' leads are v10 plus one setting. What else has won elsewhere:
+StarCraft bots (UAlbertaBot, Steamhammer, CherryPi) are **modular** (separate managers for
+economy, production, army, scouting) and pick from a **portfolio of strategies** by reading the
+opponent, some with an **opponent model** kept across games. In microRTS, scripted bots won for
+years; deep reinforcement learning won only lately, with far more games than this machine plays
+(~2,000 a day). The strongest contestant here, ext-henry, is modular (brain, commander,
+executor, squads, an economy schedule, per-opponent profiles in `opponents.py`).
+
+| # | Architecture | Why here (evidence) | Cost | First test |
+|---|---|---|---|---|
+| A1 | **A portfolio and a selector:** several whole strategies (v10; anti-rush with `defend_radius` 22; macro with henry-style refineries; a timing attack), and a selector that reads the opponent from what was scouted by 3:00-6:00 and switches | Different leads win against different opponents (rush-wave-k-v1 Rush 5/8 vs v10 3/8; jev-a1m8 7/7 vs ext-henry, v10 4/8), and v10 commits to one plan: after one raid it stays on hold for the game (the jev family, run 195) | low-medium: the strategies are settings of the same core | each strategy alone vs `@screen` (which wins where), then the selector vs v10 and vs each strategy alone, `--sprt` |
+| A2 | **An opponent model across matches:** the platform names the opponent at the start (`OfficialAssignment.opponents`; imported games show "Yuriko Red", "Cryosis"). Remember what each did (rush time, army mix, expansions) and open with its counter | Tournament opponents repeat; henry's bot already keeps profiles | low, on top of A1 | lab: a "memory" from earlier lab games against the same bot, vs no memory |
+| A3 | **Modular managers** (henry's and UAlbertaBot's shape): an economy manager with a refinery and harvester schedule, production, an army manager with squads (main army, home guard, raiders), scouting; each with its own rules | ext-henry beats v10 5-1 by out-building it (assets 85k vs 57k at 17:54) and its last stand; v10's army is one group that scatters (the regroup lead, run 187) | high: a new bot, days | its first manager alone (the economy) inside v10, then more |
+| A4 | **A learned evaluation:** a model trained on the lab's ~5,700 games (timeline every 5 s: armies, economy, kills, losses, both seats) that predicts the result from the state at any time | Lets a bot choose between options by the predicted result (attack or hold, expand or not), and lets the lab end games already decided (a 20-minute game is ~60 s of a slot) | low-medium: gradient boosting on what the database has | how well minute 10-12 predicts the end (held-out games), then one decision (posture) by the model, probed |
+| A5 | **Decisions learned from branches** (search offline, rules online): at sampled moments play each option for 60-180 s (the probes do this by hand), label the best, train a small classifier for that decision | The platform gives no forward model live, but the lab's engine is deterministic and branches are cheap (~34 s) | medium, and CPU: ~N options x branches per label | one decision (attack now / wait) at unselected moments |
+| A6 | Deep RL, one network for everything | microRTS: won only with very many games | not here | no |
+
+**A1, first look** (2026-10-16, from games already played, paired with v10): the best existing bot per opponent gains +0.36 (jev-rifr-v1 vs ai-normal), +0.29 (jev-rifr-v1 vs ai-rush), +0.50 (jev-a1m8 vs ext-henry), nothing elsewhere; an always-right selector's ceiling is ~+0.19 points a game on @screen (optimistic: the best of ~10 on small samples). The winners are one lineage, so a combined bot may take most of it; how jev-a1m8 does against the AIs decides how much room a selector has.
+
+**A4, first look** (2026-10-16, experiment `arch-value-model`; logistic regression in numpy on
+the differences between the seats: net, army value, assets, harvesters, buildings, combat units).
+Only ~630 whole 20-minute games have both seats' timeline (the lab records it for agent seats,
+not for OpenRA AIs), 189 held out:
+
+| state at | accuracy | sign of net alone | 97%+ sure | of those right |
+|---|---|---|---|---|
+| 6:00 | 86.8% | 83.7% | 24% | 100% |
+| 10:00 | 91.5% | 86.0% | 53% | 97.0% |
+| 12:00 | 94.7% | 86.0% | 63% | 97.5% |
+| 15:00 | 95.8% | 87.8% | 66% | 98.4% |
+
+Army value and assets count beside the score. For the lab, ending a game the model is 97% sure of
+at 12:00 would save about a quarter of a whole game's time; but the 2-3% it calls wrong are the
+comebacks (ext-henry's 18:00 last stand), which late-game ideas are about. So: opt-in for screens
+of early ideas only, never for gates. Next: record AI seats' timeline too, more games, then one
+bot decision by it.
+
+**Order:** A1 with A2 first (cheapest, uses what we have, proven in StarCraft); A4 alongside (a
+tool for the selector and for the lab's speed); A3 if A1 shows that the economy and army
+structure, not the plan, is what loses to ext-henry; A5 for the decisions the others leave open.
+Each is a family's brief (AGENTS.md: two families never chase the same idea). The machine's 5
+slots are the limit: a fourth family shares them with the other three (first come, first served).
+
+---
+
 ## Part 2: bots to add
 
 | Group | Bot | Source | Why | Effort |
@@ -363,7 +412,7 @@ shows answers in every game, none frozen), it goes to a gate, and the switch is 
 
 **Idea (the user's):** Tanya under deliberate control instead of not at all. Our bots have never
 built her: v10 is Allied in ~half its lab games (england/france/germany 489 of 986 seats) but
-builds a tech center in 19 games.
+never builds a tech center (the `atek` events of v10's games are all the enemy's, spotted).
 
 **What she can and can't do here** (`~/openra-sim/fork/mods/ra/rules/infantry.yaml` `E7`, weapons
 `smallcaliber.yaml` `Colt45`, the API's attack in `OpenRA.Mods.Common/Traits/Player/ActionHandler.cs`):
@@ -400,6 +449,12 @@ killed is ~2,000-6,000 of tiebreak for an 1,800 unit.
 seat against ai-rush and ext-henry (macro autopilot, Tanya by hand) to see whether kiting her is
 possible at the API's order rate. Then a probe on unselected moments (`--kind at`, Allied seats,
 ai-rush, ai-normal, ext-henry; the placebo bot alongside), then whole games on 2 seeds.
+**Stage 1a by hand (2026-10-16, experiment `tanya-sniper`), 2 games, both no good:** vs ai-rush from
+7:30 the 3,300 for the tech center and Tanya starved the defense, and the Rush wave killed every
+harvester; vs ext-henry from 13:00 she came out only at ~16:00 (cash 0: v10's economy spends
+everything) and died in her first fight. **Parked:** worth a coded probe only on a bot that keeps
+money in the bank.
+
 **Open questions:** whether the tech center (1500) costs us more than she gains before 10:00;
 whether a seat's decision rate is fast enough to keep her out of reach of jeeps and dogs.
 

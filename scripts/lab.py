@@ -332,6 +332,9 @@ def sprt_args(s) -> None:
                                                      "'no worse': -0.1,0)")
     s.add_argument("--alpha", type=float, default=0.05, help="--sprt: false 'better' rate")
     s.add_argument("--beta", type=float, default=0.05, help="--sprt: missed 'better' rate (at H1)")
+    s.add_argument("--score", choices=["points", "margin"], default="margin",
+                   help="--sprt: what a game is worth: points (1 / 0.5 / 0), or margin: points + 0.25 x net / 20,000, "
+                        "capped at +-0.25 (bigger wins count more; a loss never above a win)")
 
 
 def _sequential(a, db, candidates: list[str]):
@@ -341,7 +344,8 @@ def _sequential(a, db, candidates: list[str]):
     from lab import sprt
 
     t0, t1 = sprt.parse_bounds(a.bounds)
-    return lambda run_id, jobs: sprt.Sequential(db, run_id, jobs, candidates, t0, t1, a.alpha, a.beta)
+    return lambda run_id, jobs: sprt.Sequential(db, run_id, jobs, candidates, t0, t1, a.alpha, a.beta,
+                                                margin=a.score == "margin")
 
 
 def cmd_gate(a, db) -> int:
@@ -367,7 +371,7 @@ def cmd_compare(a, db) -> int:
         raise SystemExit("--sprt tests candidates against the first (the reference): name two or more")
     sequential = _sequential(a, db, candidates)
     jobs = schedule.compare(candidates, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes,
-                            interleaved=bool(a.sprt))
+                            interleaved=bool(a.sprt), h2h=a.h2h)
     run_id = _play(db, jobs, a, "compare", vars(a), sequential=sequential)
     print()
     print(report.compare_report(db, run_id, candidates, baselines))
@@ -1307,6 +1311,8 @@ def main() -> int:
     s.add_argument("candidates", help="bots separated by commas; the first is the reference")
     s.add_argument("--baselines", default="@standard", help="bots or @suites (lab/suites.json), separated by commas")
     s.add_argument("--games", type=int, default=6, help="per baseline and candidate (with --sprt: at most)")
+    s.add_argument("--h2h", action="store_true",
+                   help="also --games of each candidate against the reference (with --sprt they count as pairs)")
     sprt_args(s)
     playing(s)
 

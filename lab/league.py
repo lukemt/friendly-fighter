@@ -35,14 +35,20 @@ def game_seed(seed: int, i: int) -> int:
 
 
 def compare(candidates: list[str], baselines: list[str], games: int, *, maps: list[str] = MAPS, seed: int = 1,
-            minutes: int = 20, interleaved: bool = False) -> list[dict]:
+            minutes: int = 20, interleaved: bool = False, h2h: bool = False) -> list[dict]:
     """Every candidate against every baseline, ``games`` each, on the same seeds (paired).
     ``interleaved``: game 1 against every baseline, then game 2, ... (a sequential test's order:
-    a stop at any point has seen every baseline about as often)."""
+    a stop at any point has seen every baseline about as often). ``h2h``: and ``games`` of each
+    candidate against the reference (the first), seats swapped every other game."""
     order = ([(k, i) for i in range(games) for k in range(len(baselines))] if interleaved
              else [(k, i) for k in range(len(baselines)) for i in range(games)])
     jobs = []
-    for k, i in order:
+    for n, (k, i) in enumerate(order):
+        if h2h and (n % len(baselines) == 0 if interleaved else n < games):
+            g = i if interleaved else n
+            for who in candidates[1:]:
+                jobs.append(_job(who, candidates[0], map_id=maps[g % len(maps)], seed=game_seed(seed, g),
+                                 minutes=minutes, label=f"compare:h2h", swap=bool(g % 2)))
         for who in candidates:
             jobs.append(_job(who, baselines[k], map_id=maps[i % len(maps)], seed=game_seed(seed, i), minutes=minutes,
                              label=f"compare:{baselines[k]}", swap=bool(i % 2)))
