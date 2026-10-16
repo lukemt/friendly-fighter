@@ -85,7 +85,7 @@ seen lately is mostly infantry.
 | Bot | What it is | Status |
 |---|---|---|
 | `rush-wave-base` | Copy of frozen v10 (`bots/rush_wave/v10/`), v10's settings. Every change from here is a keyword argument that is off by default. | Reproduces v10 (runs 130, 133) |
-| `rush-wave-a` | Base + `anti_infantry=0.6` (idea 1): when 60%+ of the enemy combat units seen in the last 240 s are infantry (10+ seen, from 5:00), train flamethrowers, riflemen and grenadiers instead of rocket soldiers; artillery, no V2s. | Probed (inconclusive); screening |
+| `rush-wave-a` | Base + `anti_infantry=0.6` (idea 1): when 60%+ of the enemy combat units seen in the last 240 s are infantry (10+ seen, from 5:00), train flamethrowers, riflemen and grenadiers instead of rocket soldiers; artillery, no V2s. | Screened on 2 seeds (runs 137, 139): no effect |
 
 ## Results
 
@@ -101,6 +101,20 @@ seen lately is mostly infantry.
   `rush-wave-a` games, never in the 2 base games), but only once the wave is in view (20-51 enemy
   units seen). **A probe branch starts with an empty memory of the enemy**, so a trigger that reads
   what was seen earlier is judged unfairly; it needs full 20-minute games (stage 2).
+- **Idea 1, stage 2 screen: no effect** (`lab compare ff-council-champ-v10,rush-wave-a --baselines
+  ai-rush --games 8`, 20 minutes, experiment `rush-wave-antiinf`):
+
+  | seed | run | v10 | rush-wave-a | paired points a game (95% CI) | paired net (95% CI) |
+  |---|---|---|---|---|---|
+  | 880 | 137 | 6/8, +15,988 | 7/8, +23,538 | +0.12 (-0.12..+0.37) | +7,550 (-1,739..+16,839) |
+  | 990 | 139 | 5/8, +17,725 | 5/8, +12,400 | +0.00 (-0.15..+0.15) | -5,325 (-10,921..+271) |
+
+  Pooled 12/16 against 11/16, the net difference changes sign between seeds: nothing better. It
+  switched on at 5:00-6:12 in every game (the first rush is mostly infantry), so this tests
+  "anti-infantry units from 5:00 on". It does not change the early wipe: on trapped, seed 990, v10 and
+  `rush-wave-a` ended identically (games `9368b4cc`, `eb80938d`, -25,100, wiped at 8:36).
+  **Idea 1 does not clear the bar** (a paired interval above 0 over 16 games on 2 seeds). Not frozen,
+  not entered on the board.
 
 ## Core changes
 
