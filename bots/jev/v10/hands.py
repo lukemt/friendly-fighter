@@ -94,6 +94,9 @@ FIRST_WAVE_SECONDS = 360      # ...or until this much game time has passed
 DEFEND_RADIUS = 16            # enemies this close to home are a threat
 HOME_RADIUS = 25              # our units this close to home help defend
 REORDER_SECONDS = 6.0         # don't re-order the same unit more often than this
+MACRO_REFINERIES = ((300.0, 4), (390.0, 5), (480.0, 6), (570.0, 7), (660.0, 8))  # (jev family) (game s, refineries wanted)
+MACRO_REFINERY_FUNDS = 0      # (jev family) v10 spends everything on units, so cash is ~0: a queued refinery is paid first (owed money)
+MACRO_MAX_HARVESTERS = 12
 REGROUP_SECONDS = 15.0        # (jev family) idle units are sent back to the staging point at most this often
 DEFEND_REORDER_SECONDS = 3.0
 WAVE_REORDER_SECONDS = 8.0
@@ -133,6 +136,7 @@ class Knobs:
     regroup: bool = False            # (jev family) idle combat units walk to the staging point even in the defend posture
     focus: bool = False              # (jev family) defending: each kind of unit attacks the enemy it hurts most (an `attack` order with a target)
     snipe: bool = False              # (jev family) defending: while Tanya (e7) is in sight every combat unit attacks her
+    macro: int = 0                   # (jev family) up to this many refineries on a time schedule (4 by 5:00 ... 8 by 11:00), harvesters = refineries + 2; 0: v10
 
 
 @dataclass
@@ -377,6 +381,8 @@ class RedAlertBot:
         harvesters = [u for u in units if str(u.get("type")).lower() == "harv"]
         target_harv = min(MAX_HARVESTERS + knobs.greed * HARVESTERS_PER_REFINERY,
                           refineries * HARVESTERS_PER_REFINERY + (1 if knobs.posture == "eco" else 0) + knobs.greed)
+        if knobs.macro:
+            target_harv = max(target_harv, min(MACRO_MAX_HARVESTERS, refineries + 2, refineries * 3))
         want_harv = refineries > 0 and len(harvesters) + self._count_queued(production, "harv", now) < target_harv
         idle_harv = [u["id"] for u in harvesters
                      if u.get("idle") and now - self._unit_ordered.get(u["id"], -1e9) >= REORDER_SECONDS]
@@ -470,6 +476,11 @@ class RedAlertBot:
             plan.append("fix")
         if not have.get("dome"):
             plan.append("dome")
+        if knobs.macro and cash >= MACRO_REFINERY_FUNDS:
+            now_s = self._clock()
+            wanted = max((n for t, n in MACRO_REFINERIES if now_s >= t), default=0)
+            if have.get("proc", 0) < min(wanted, knobs.macro):
+                plan.append("proc")
         if knobs.posture == "eco" and have.get("proc", 0) < 3:
             plan.append("proc")
         if cash > SURPLUS_CASH and have.get("weap", 0) < 2 and have.get("proc", 0) >= 2:

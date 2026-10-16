@@ -702,6 +702,90 @@
     "jev",
     "rules"
    ]
+  },
+  {
+   "name": "jev-g1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "greed_hold": 1
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base but greed 1 in the plans hold/attack (v10: 0): one raid no longer ends the boom for good; fortify still stops it",
+   "tags": [
+    "jev",
+    "rules",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-g2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "greed_hold": 2
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base but greed 2 in the plans hold/attack (v10: 0): one raid no longer ends the boom for good; fortify still stops it",
+   "tags": [
+    "jev",
+    "rules",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-m5",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "macro": 5
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + a refinery schedule (4 by 5:00, 5 by 6:30, 6 by 8:00, 7 by 9:30, 8 by 11:00, capped at 5) and harvesters = refineries + 2 (max 12), whatever the plan (v10: 3-4 refineries, ~5 harvesters against raiders)",
+   "tags": [
+    "jev",
+    "rules",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-m8",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "macro": 8
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + a refinery schedule (4 by 5:00, 5 by 6:30, 6 by 8:00, 7 by 9:30, 8 by 11:00, capped at 8) and harvesters = refineries + 2 (max 12), whatever the plan (v10: 3-4 refineries, ~5 harvesters against raiders)",
+   "tags": [
+    "jev",
+    "rules",
+    "economy"
+   ]
   }
  ]
 }

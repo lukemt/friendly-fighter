@@ -162,3 +162,36 @@ def test_snipe_sends_everyone_at_tanya_and_the_tanya_rule_switches_to_tanks():
         return b.jev.production(facts, 800.0, raw)
 
     assert production(True) == "vehicles" and production(False) == "rockets"  # (v10: blind-or-vehicles rule)
+
+
+def test_greed_hold_keeps_the_economy_growing_outside_boom_and_fortify():
+    from bots.jev.v10.bot import CouncilBot
+
+    v10 = CouncilBot(oracle="rules", plan="boom", keep_first=240, early_refineries=1)
+    v10.plan = "hold"
+    v10._knobs_for_plan()
+    assert v10.greed == 0  # v10: a plan other than boom is no greed
+    g2 = CouncilBot(oracle="rules", plan="boom", keep_first=240, early_refineries=1, greed_hold=2)
+    for plan, greed, defenses in (("boom", 2, 2), ("hold", 2, 2), ("fortify", 0, 4), ("attack", 2, 2)):
+        g2.plan = plan
+        g2._knobs_for_plan()
+        assert (g2.greed, g2.defenses) == (greed, defenses), plan
+
+
+def test_macro_wants_more_refineries_on_a_schedule_and_harvesters_follow():
+    bot = RedAlertBot(knobs=Knobs(posture="defend", macro=6), log=lambda line: None)
+    available = {"powr", "proc", "tent", "weap", "fix", "dome", "apwr", "pbox"}
+    economy = {"power_provided": 500, "power_drained": 100}
+    types = ["fact", "powr", "powr", "tent", "weap", "fix", "dome"] + ["proc"] * 3
+
+    def pick(now, macro, n_proc=3):
+        bot._game_seconds = now
+        tt = ["fact", "powr", "powr", "tent", "weap", "fix", "dome"] + ["proc"] * n_proc
+        return bot._next_building(tt, available, economy, [], 0, Knobs(posture="defend", macro=macro, early_refineries=1))
+
+    assert pick(200.0, 6) != "proc"        # before 5:00 no macro refinery
+    assert pick(310.0, 6, n_proc=3) == "proc"   # 4 by 5:00
+    assert pick(310.0, 6, n_proc=4) != "proc"
+    assert pick(500.0, 6, n_proc=5) == "proc"   # 6 by 8:00
+    assert pick(500.0, 6, n_proc=6) != "proc"   # capped at macro=6
+    assert pick(310.0, 0, n_proc=3) != "proc"   # v10: not asked

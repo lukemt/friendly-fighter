@@ -152,7 +152,17 @@ probes: same branches, same scores).
    v10 games (first ~13.5 min, with the big wave); v10 loses 13 of them. `snipe`: while she is in sight every
    combat unit attacks her; `tanya_rule`: tanks only once she has been seen (she does nothing to vehicles).
    Tested on unselected moments (13:00 of v10's 21 games against Allied Normal AIs, any outcome), with a placebo.
-5. **Measured on the way:** v10's `choose_action` costs 0.53 ms mean per view (p95 0.8 ms, max 13 ms,
+5. **The economy** (`greed_hold`, `macro`; experiment `jev-econ`). Run 195 (`lab curves`): `ext-henry` has 5.8 / 7.3 /
+   9.8 / 10.3 harvesters at 6 / 9 / 14 / 19 min and assets 68k at 14:00; v10 and all my variants stay at 4.7-5.0
+   harvesters and 43-46k. The cause is in v10's rules: it booms (greed 2: up to 10 harvesters, 4 refineries) only
+   while no enemy unit has come near the base (`Rules.plan` boom needs `raids == 0`, or a turtle opponent), so after
+   one raid it holds at greed 0 (cap 6 harvesters, 3 refineries) for the rest of the game. By opponent, v10's
+   harvesters at 9 min (all no-superweapons games): ai-normal 9.2, ai-turtle 9.6 (nobody raids), ai-rush 6.0,
+   exploit-ryan-plan 6.1, eco exploiters 6.1-7.1, ext-henry 5.1, ext-ryan 4.0. Henry's schedule
+   (`REFINERY_SCHEDULE`): 4 refineries by 5:00, 5 by 6:30, 6 by 8:00, 7 by 9:30, 8 by 11:00; harvesters =
+   refineries + 2 (max 12). `greed_hold`: the plans hold/attack keep greed 1 or 2 (fortify still stops it).
+   `macro`: that refinery schedule up to 5 or 8, harvesters = refineries + 2.
+6. **Measured on the way:** v10's `choose_action` costs 0.53 ms mean per view (p95 0.8 ms, max 13 ms,
    3,500 calls of a 20-minute game, run 168), so the platform's view interval (~0.24 s) is not
    threatened by the champion's own code, and the lab's fixed 5 ms think is 10 times conservative.
 
@@ -172,6 +182,7 @@ probes: same branches, same scores).
 | `jev-st5`, `jev-st8` | `jev-base`, the army waits 5 / 8 cells from home (`stage_cells`) and idle units regroup there | probe run 170; `jev-st5` in full games: run 181; frozen as `jev-st5-v1` |
 | `jev-tan1`, `jev-tan2`, `jev-tan3` | `jev-base` + `snipe` (Tanya) / + `tanya_rule` (tanks once she is seen) / both | probe run 187 (`@jev-tanya-13`) |
 | `jev-plc` | the PLACEBO: `jev-base` with only `regroup` (idle units walk to v10's own staging point) | runs 185, 187 |
+| `jev-g1`, `jev-g2`, `jev-m5`, `jev-m8` | `jev-base` + `greed_hold` 1 / 2, or the refinery schedule capped at 5 / 8 (`macro`) | registered |
 | `jev-a1`, `jev-a2` | `jev-st5` + the riflemen rule (`a1`); + focus fire (`a2`) | registered |
 | `jev-rifb` | `jev-base`, riflemen only while the enemy army is unseen after 5:00 (`blind_production="rifles"`) | registered |
 | `jev-rifr` | `jev-rifb` + riflemen at 60%+ infantry among the enemy seen, rockets at 35%- (`rifle_rule`) | registered; the rules side of the Jev test |

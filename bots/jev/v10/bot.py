@@ -148,7 +148,7 @@ class CouncilBot(JevBot):
                  plan: str = "hold", gate: float = 0.55, attack_gate: float = 0.6, use_jev: bool = True,
                  boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev",
                  blind_production: str = "rockets", rifle_rule: bool = False, rifle_hi: float = 0.6, rifle_lo: float = 0.35,
-                 tanya_rule: bool = False, **kwargs) -> None:
+                 tanya_rule: bool = False, greed_hold: int = 0, **kwargs) -> None:
         """``gate``: the probability a new plan needs; ``attack_gate``: the same for attack and boom.
         ``boom_until``: no boom from this time; ``keep_first``: the first plan stands until then unless
         the base is raided or an attack is expected (for experiments). ``oracle="rules"``: code answers
@@ -160,6 +160,7 @@ class CouncilBot(JevBot):
         self.blind_production = blind_production  # (jev family: what the rules train while the enemy army is unseen; v10: rockets)
         self.rifle_rule, self.rifle_hi, self.rifle_lo = rifle_rule, rifle_hi, rifle_lo
         self.tanya_rule = tanya_rule  # (jev family: Tanya seen -> tanks, which she cannot hurt)
+        self.greed_hold = greed_hold  # (jev family: the greed of every plan but boom and fortify; v10: 0, so one raid ends the boom for good)
         self.plan = plan
         self.plan_since = 0.0
         self.gate, self.attack_gate = gate, attack_gate
@@ -298,7 +299,7 @@ class CouncilBot(JevBot):
         self._knobs_for_plan()
 
     def _knobs_for_plan(self) -> None:
-        self.greed = GREED if self.plan == "boom" else 0
+        self.greed = GREED if self.plan == "boom" else (self.greed_hold if self.plan != "fortify" else 0)
         self.defenses = 4 if self.plan == "fortify" else 2
 
     def _apply(self, answers: dict, facts: dict, now: float, raw: dict) -> list[dict[str, Any]]:
