@@ -432,6 +432,34 @@ lab advise stop
 
   It wins 22-33% against v10, where every earlier bot won none.
 
+### Codex as a bot's advisor
+
+A scripted desk can be a model: `bots/codex_advisor.py` puts each question to **Codex** through
+`codex app-server`, on the user's ChatGPT login (no API key, no per-call bill, but the account's
+Codex quota: Plus, a 5-hour and a weekly window). Any bot the desk can advise can be advised by Codex
+(`advisor: "bots.codex_advisor:CodexDesk"`).
+
+```bash
+FF_LAB_CODEX=1 lab compare ff-council-champ-v10 --baselines ext-henry,ext-henry-codex --games 2 --seed 8100
+.venv/bin/python -m bots.codex_advisor limits    # the quota used (%, both windows) and when it resets
+```
+
+- **Opt-in:** without `FF_LAB_CODEX=1` the desk is refused and the game fails (never a bot silently
+  without its advisor). Coordinator runs, small ones; bigger ones only with the user's go (AGENTS.md rule 11).
+- **Models:** GPT-6-Luna at low effort (the default: the user's call, use it freely). Never
+  GPT-6-Astra. `HenryCodexSol` (GPT-6-Sol; there is no 6.1-sol on the account) is the second variant.
+- **It only answers.** Each question is a new ephemeral thread in an empty folder: Codex's own agent
+  instructions replaced, its tools and add-ons off, read-only sandbox, no approvals (any request is
+  declined), no credentials in its environment. About 15k tokens and 4-7 s a question (henry's).
+- **As at the desk:** the seat is `paused`, so the game waits for each answer (an upper bound: on
+  the platform an answer later than the bot's deadline is dropped; each call's latency is logged).
+  A failure, a timeout (120 s) or an answer that doesn't fit the schema is a skip: the bot plays on
+  by its rules. Every call: `sim/lab/advise/codex/<session>-seat<N>.jsonl`.
+- **`ext-henry-codex`** is ext-henry with its advisor on (every 30 game seconds), Codex in Claude's
+  place: an approximation of henry with its real advisor. `HenryCodexDesk` adapts henry's advisor
+  to the lab (the game's clock, calls inline) without touching `bots/external.py`, which every
+  external bot's version hashes.
+
 ## Looking back
 
 ```bash
@@ -654,7 +682,7 @@ lab note --game <game> "the wave walked into two pillboxes at 6:29"
 | `sim/lab/traces/<game>.trace.gz` | each game's engine trace (replay, look, branch) |
 | `sim/lab/logs/` | the workers' logs (the bots' log lines) |
 | `sim/lab/human/` | the human session's address and logs |
-| `sim/lab/advise/` | the advise session's address and logs, and each advised game's transcript |
+| `sim/lab/advise/` | the advise session's address and logs, and each advised game's transcript (`codex/`: the Codex desk's calls) |
 | `sim/lab/external/` | contestants' bots' log lines and their advisors' last prompts |
 | `sim/external/` | contestants' repositories at their pinned commits (`lab external fetch`) |
 | `sim/lab/dashboard.html` | the dashboard (`lab dashboard`) |

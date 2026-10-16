@@ -1095,6 +1095,37 @@
    ]
   },
   {
+   "name": "ext-henry-codex",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry-codex",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry-codex/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry-codex/logs",
+      "REDALERT_ADVISOR_SECONDS": "30"
+     },
+     "advisor": "bots.codex_advisor:HenryCodexDesk",
+     "stubs": {
+      "agent.vgc.providers:anthropic_credentials": true
+     }
+    }
+   },
+   "think": "paused",
+   "description": "ext-henry with its model advisor on, Codex GPT-6-Luna (low effort) in Claude's place (bots/codex_advisor.py, FF_LAB_CODEX=1, the user's ChatGPT quota): advice every 30 game s, the game waits for each answer; analyst and squad leads off",
+   "tags": [
+    "external",
+    "advisor"
+   ]
+  },
+  {
    "name": "ext-henry-rusher",
    "kind": "module",
    "params": {

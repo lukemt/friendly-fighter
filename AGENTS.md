@@ -88,6 +88,9 @@ Several sessions may work at once, each in its own folder. There are two roles:
     it on games that don't need Jev's answers: reruns of games already played, controls that don't
     ask Jev (`--oracle rules`). A local server (`JEV_URL` in your worktree's `.env`) is free and
     needs no opt-in.
+    **Codex as an advisor** (`bots/codex_advisor.py`, `FF_LAB_CODEX=1`) runs on the user's
+    ChatGPT quota, not credits: GPT-6-Luna only (never GPT-6-Astra), small runs, and ask the user
+    before big ones.
 
 ## Starting a family session
 
