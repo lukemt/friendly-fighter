@@ -267,6 +267,25 @@ def jev_estimate(jobs: list[dict], uses_jev) -> tuple[int, float]:
 NICE = 10  # lab games yield the CPU to anything else (the live tournament runtime above all)
 
 
+PROFILE = "FF_LAB_PROFILE"
+
+
+def _profiled(play, job, run_id, worker: int):
+    """``FF_LAB_PROFILE=1 lab ...``: each game's Python time (the worker: the platform and both bots;
+    not the engine, a process of its own) goes to ``sim/lab/logs/run-<id>-w<n>-<k>.prof`` (read with
+    ``python -m pstats``)."""
+    if os.environ.get(PROFILE) != "1":
+        return play(job)
+    import cProfile
+
+    prof = cProfile.Profile()
+    try:
+        return prof.runcall(play, job)
+    finally:
+        _profiled.count = getattr(_profiled, "count", 0) + 1
+        prof.dump_stats(str(LOG_DIR / f"run-{run_id}-w{worker}-{_profiled.count}.prof"))
+
+
 def _worker(n: int, jobs, results, log_path: str, record: bool, db_path: str | None) -> None:
     _die_with_parent()
     log = open(log_path, "a", buffering=1)
@@ -289,7 +308,7 @@ def _worker(n: int, jobs, results, log_path: str, record: bool, db_path: str | N
                 # so the machine holds about one engine per slot, not one per worker)
                 with GameSlot(job.get("run_id"), job.get("label", ""), on_wait=arena.release_engines):
                     t0 = time.monotonic()
-                    game = arena.play(GameJob(**job))
+                    game = _profiled(arena.play, GameJob(**job), job.get("run_id"), n)
                 results.put({"ok": True, "job": job, "game": _brief(game), "wall": time.monotonic() - t0, "worker": n})
             except Exception as exc:  # noqa: BLE001
                 print(traceback.format_exc(), flush=True)

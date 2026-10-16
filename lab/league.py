@@ -73,16 +73,19 @@ def league(bots: list[str], games: int, *, kinds: dict[str, str], maps: list[str
 
 
 def gate(candidate: str, champion: str, baselines: list[str], games: int, *, maps: list[str] = MAPS, seed: int = 1,
-         minutes: int = 20) -> list[dict]:
+         minutes: int = 20, interleaved: bool = False) -> list[dict]:
     """``games`` against the champion, and ``games`` each for candidate and champion against every baseline
-    (the same seeds for both)."""
-    jobs = [_job(candidate, champion, map_id=maps[i % len(maps)], seed=game_seed(seed, i), minutes=minutes,
-                 label=f"gate:{candidate}:h2h", swap=bool(i % 2)) for i in range(games)]
-    for base in baselines:
-        for i in range(games):
-            s = game_seed(seed, i)
-            m = maps[i % len(maps)]
-            for who in (candidate, champion):
-                jobs.append(_job(who, base, map_id=m, seed=s, minutes=minutes, label=f"gate:{candidate}:{base}",
-                                 swap=bool(i % 2)))
-    return jobs
+    (the same seeds for both). ``interleaved``: game 1 of each (head to head, then every baseline), then
+    game 2, ... (a sequential test's order)."""
+    def h2h(i):
+        return [_job(candidate, champion, map_id=maps[i % len(maps)], seed=game_seed(seed, i), minutes=minutes,
+                     label=f"gate:{candidate}:h2h", swap=bool(i % 2))]
+
+    def against(base, i):
+        return [_job(who, base, map_id=maps[i % len(maps)], seed=game_seed(seed, i), minutes=minutes,
+                     label=f"gate:{candidate}:{base}", swap=bool(i % 2)) for who in (candidate, champion)]
+
+    if interleaved:
+        return [j for i in range(games) for j in h2h(i) + [x for base in baselines for x in against(base, i)]]
+    return [j for i in range(games) for j in h2h(i)] + [x for base in baselines for i in range(games)
+                                                         for x in against(base, i)]
