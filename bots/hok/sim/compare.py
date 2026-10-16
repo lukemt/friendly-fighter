@@ -25,13 +25,13 @@ from .engine import SimConfig
 from .match import play_match
 
 
-def _one(args: tuple[str, str, int, str, int, dict]) -> dict[str, Any]:
-    a, b, seed, mode, a_camp, cfg = args
+def _one(args: tuple[str, str, int, str, int, dict, float]) -> dict[str, Any]:
+    a, b, seed, mode, a_camp, cfg, latency = args
     specs = {a_camp: a, 3 - a_camp: b}
     config = SimConfig(**cfg)
     t0 = time.time()
     r = play_match(lambda clock, sleep, camp: make_agent(specs[camp], clock, sleep), names=specs, seed=seed,
-                   mode=mode, config=config)
+                   mode=mode, config=config, latency=latency)
     sa, sb = r.sides[a_camp], r.sides[3 - a_camp]
     return {
         "a": a, "b": b, "seed": seed, "mode": mode, "a_camp": a_camp, "score": r.score(a_camp),
@@ -75,13 +75,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=max(1, min(2, os.cpu_count() or 1)))
     ap.add_argument("--max-steps", type=int, default=None)
     ap.add_argument("--json", default=None, help="also write every game's row to this file")
+    ap.add_argument("--latency", type=float, default=0.2, help="seconds per sent order (live median 0.2)")
     args = ap.parse_args(argv)
     cfg = json.loads(args.config)
     if args.max_steps:
         cfg["max_steps"] = args.max_steps
     modes = ["realtime", "lockstep"] if args.mode == "both" else [args.mode]
     opponents = [b for b in _split(args.b) if b]
-    jobs = [(args.a, b, args.seed + i, mode, a_camp, cfg)
+    jobs = [(args.a, b, args.seed + i, mode, a_camp, cfg, args.latency)
             for b in opponents for mode in modes for i in range(args.games) for a_camp in (1, 2)]
     t0 = time.time()
     with ProcessPoolExecutor(max_workers=args.workers) as pool:

@@ -9,7 +9,7 @@
 standing orders, ``STALE_STATE`` (lockstep) and ``INVALID_ACTION``. The other
 camp is played inside the session by a baseline (or our own bot).
 
-Time is virtual: each call costs ``latency``, real time steps every 0.2 s of it
+Time is virtual: each call costs ``latency`` (live median: 0.2 s), real time steps every 0.2 s of it
 whatever the agent does, and the agent's pacing sleep advances it too.
 
 ``--chaos P`` makes the platform awkward with probability P per occasion:
@@ -68,7 +68,7 @@ class Counts:
 class SimSession:
     """An ``MCPGameSession`` stand-in over the sim, for one camp."""
 
-    def __init__(self, sim: Sim, camp: int, mode: str, opponent: Any, *, latency: float = 0.1,
+    def __init__(self, sim: Sim, camp: int, mode: str, opponent: Any, *, latency: float = 0.2,
                  chaos: float = 0.0, seed: int = 0, prelude: int = 0) -> None:
         self.sim = sim
         self.camp = camp
@@ -314,7 +314,7 @@ class MockReport:
 
 
 def run_mock(*, camp: int = 1, mode: str = "realtime", opponent: str = "upstream", chaos: float = 0.0,
-             steps: int = 3000, seed: int = 0, latency: float = 0.1, knobs: dict | None = None) -> MockReport:
+             steps: int = 3000, seed: int = 0, latency: float = 0.2, knobs: dict | None = None) -> MockReport:
     from .. import create_agent
 
     sim = Sim(seed, SimConfig(max_steps=steps))

@@ -122,7 +122,12 @@ class Offer:
                 if not values:
                     return None
                 name = key[len("legal_"):]
-                out[name] = values[len(values) // 2] if centred and "offset" in name else values[0]
+                if centred and "offset" in name:
+                    out[name] = values[len(values) // 2]
+                elif name == "target" and 0 in values:
+                    out[name] = 0  # live: other targets come and go between the read and the send
+                else:
+                    out[name] = values[0]
             elif key != "seat":
                 out[key] = value
         out["seat"] = self.seat

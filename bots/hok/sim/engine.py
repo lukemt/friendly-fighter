@@ -149,6 +149,7 @@ class SimConfig:
     map: str = "live"                   # "live": the one-lane map seen live; "3lane": the first guess
     fountain_heal: float = 0.0          # share of max HP a second at the spring (live: none seen)
     revive_per_level: float = 2.2       # revive = 2 s + this x level (live: 5-25 s)
+    heal_skill_effect: float = 0.0      # HealSkill: share of max HP to self and allies near (live: none seen)
     skill_fallback: str = "idle"        # a standing skill order on cooldown: "idle" | "attack"
     remove_destroyed: bool = True       # destroyed structures leave the state's list
     opaque_labels: bool = False         # labels name no target kind (forces distance matching)
@@ -514,7 +515,7 @@ class Sim:
                 self.heal_ready[h.uid] = self.t + 120.0
                 for a in self.heroes:
                     if a.camp == h.camp and a.alive and math.dist(a.pos, h.pos) <= 4000:
-                        a.hp = min(a.max_hp, a.hp + 0.15 * a.max_hp)
+                        a.hp = min(a.max_hp, a.hp + self.cfg.heal_skill_effect * a.max_hp)
             return
         order = h.order
         if order is None:

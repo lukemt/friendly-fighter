@@ -292,7 +292,10 @@ def test_heal_skill_when_low_and_threatened():
                                                    "seat": 0}}}]
     summaries = {s: _summary(s) for s in SEATS}
     summaries[0] = with_enemy_near(_summary(0, hp=900))
-    a = agent()
+    off = agent()  # off by default: live, it didn't heal
+    assert "macro" in unwrap(off.choose_action(state(hok_payload(pending=[0], entries=entries,
+                                                                  summaries=summaries)), HOK))
+    a = agent(heal_skill=True)
     d = unwrap(a.choose_action(state(hok_payload(pending=[0], entries=entries, summaries=summaries)), HOK))
     assert d == {"which_button": 11, "offset_x": 18, "offset_z": 18, "target": 0, "seat": 0}
     assert _legal(d, state(hok_payload(pending=[0], entries=entries, summaries=summaries)))

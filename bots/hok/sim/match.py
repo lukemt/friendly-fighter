@@ -6,7 +6,8 @@ documented shape (/skill/hok section 3; upstream's ``tests/test_hok.py``).
 
 - **real time**: the sim steps every 0.2 s of virtual time whatever the agents
   do. Each agent has its own virtual clock: a sent action costs ``latency``
-  (``play_action`` and the re-read), a ``WAIT`` lasts until the next step
+  (live: ``play_action`` takes a median 0.204 s and returns the new state), a
+  ``WAIT`` lasts until the next step
   (``wait_for_update``), and the agent's own ``sleep`` (its pacing) is
   virtual too. Heroes without a fresh action play their standing order.
 - **lockstep**: each step, each agent answers its pending heroes one call at
@@ -173,7 +174,7 @@ def _submit(sim: Sim, camp: int, side: Side, decision, state: GameState, pending
 
 def play_match(make_agents: Callable[[Callable[[], float], Callable[[float], None], int], Any] | None = None, *,
                agents: dict[int, Any] | None = None, names: dict[int, str] | None = None, seed: int = 0,
-               mode: str = "realtime", config: SimConfig | None = None, latency: float = 0.1,
+               mode: str = "realtime", config: SimConfig | None = None, latency: float = 0.2,
                max_calls_per_step: int = 12) -> MatchResult:
     """Play one match. ``make_agents(clock, sleep, camp)`` builds each camp's agent with its
     virtual clock and sleep (so pacing is virtual); or pass ready ``agents``."""

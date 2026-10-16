@@ -59,8 +59,10 @@ class Knobs:
                                       # Live (e5f159ed): home heals ~0.25%/s, so that took minutes;
                                       # a death costs a 5-25 s revive and comes back at full HP
     return_hp: float = 0.60
-    heal_hp: float = 0.40             # the heal summoner skill, when listed, below this share of HP
-                                      # and threatened
+    heal_skill: bool = False          # the HealSkill button (button_11) below heal_hp when threatened.
+                                      # Off: live (ba540e6e, 12bdf5a6) it showed no heal within 5 s, and
+                                      # most heroes using it died idle in the fight
+    heal_hp: float = 0.40
     allin_retreat_hp: float = 0.12    # the retreat line when all in
     danger_ttd: float = 2.0           # seconds to death at the current damage rate: evade
     danger_hp: float = 0.6            # ...but only below this share of HP
@@ -78,7 +80,9 @@ class Knobs:
     low_tower: float = 0.15           # a tower below this share of HP is taken whatever
     outnumber_margin: float = 0.8     # back off when their strength > ours + this
     fog_weight: float = 0.5           # an enemy seen in the last few seconds nearby, now fogged
-    skills_on_minions: bool = True
+    skills_on_minions: bool = False   # skill 1/2 on a minion wave while no enemy hero is near
+    skills_on_towers: bool = False    # skill 1/2 at an enemy tower or crystal while no enemy hero is near
+                                      # (live labels offer "Cast skill 1 toward enemy tower")
     attack_monsters: bool = False     # a macro whose label names a jungle monster or boss isn't used
     hold: bool = True                 # the do-nothing button to wait (else keep advancing)
     group_lead: float = 7000.0        # a hero this far ahead of the team's median waits
@@ -349,7 +353,8 @@ class TeamPolicy:
             if hp < c.retreat_hp and threatened:
                 self._escape_until[seat] = c.t + k.calm_s
             self._retreating[seat] = c.t < self._escape_until.get(seat, -1e9)
-        if hp < k.heal_hp and (threatened or self._retreating.get(seat)) and offers.raw_for(HEAL) is not None:
+        if k.heal_skill and hp < k.heal_hp and (threatened or self._retreating.get(seat)) \
+                and offers.raw_for(HEAL) is not None:
             return Choice(HEAL, "low hp: heal skill", P_SAVE, ["macro_retreat", "macro_attack"])
         if (hp < k.danger_hp and (near or in_enemy_tower) and c.posture != "allin"
                 and self._ttd(seat, c.t) < k.danger_ttd):
@@ -452,16 +457,24 @@ class TeamPolicy:
         self._holding[seat] = False
         self._waiting_since.pop(seat, None)
 
-        # Farm and push.
+        # Farm and push: skills on the wave or the tower first when enabled (they cool down), then
+        # the basic attack, then advance.
+        if (k.skills_on_minions or k.skills_on_towers) and \
+                not any(distance(pos, e.pos) <= 2 * k.engage_range for e in c.enemies):
+            for macro in ("macro_skill1", "macro_skill2"):
+                o = m.get(macro)
+                if not o or o.dist > k.skill_range or self._monster(o):
+                    continue
+                at_structure = self._aims_at_structure(o, pos, c)
+                if at_structure and not (k.skills_on_towers and self._enough_at(pos, c)):
+                    continue
+                if not at_structure and not k.skills_on_minions:
+                    continue
+                return Choice(macro, f"{macro[6:]} on the {'tower' if at_structure else 'wave'}", P_SKILL_UNIT,
+                              ["macro_attack", "macro_advance"])
         o = m.get("macro_attack")
         if o and o.dist <= k.attack_range and not self._monster(o):
             return Choice("macro_attack", "push: attack in range", P_ATTACK, ["macro_advance"])
-        if k.skills_on_minions and not any(distance(pos, e.pos) <= 2 * k.engage_range for e in c.enemies):
-            for macro in ("macro_skill1", "macro_skill2"):
-                o = m.get(macro)
-                if o and o.dist <= k.skill_range and not self._aims_at_structure(o, pos, c) \
-                        and not self._monster(o):
-                    return Choice(macro, f"{macro[6:]} on the wave", P_SKILL_UNIT, ["macro_attack", "macro_advance"])
         return _first(m, [("macro_advance", "push: advance"), ("macro_attack", "attack (no advance)")], P_ADVANCE)
 
     # -- helpers -----------------------------------------------------------------------------
