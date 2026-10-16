@@ -459,6 +459,27 @@
     "rules",
     "stage"
    ]
+  },
+  {
+   "name": "jev-plc",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "regroup": true
+    }
+   },
+   "think": 0.005,
+   "description": "PLACEBO for the staging probes: jev-base with regroup only (idle units walk to v10's own staging point): a perturbation that should do nothing, to measure what any change gains on outcome-selected moments",
+   "tags": [
+    "jev",
+    "rules",
+    "placebo"
+   ]
   }
  ]
 }

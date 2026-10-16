@@ -211,6 +211,23 @@ the rows because the family code changed after the run started, so the table is 
   stop result (14 of 15 at net >= 0, against 6) agree. Caveats: a branch, not a whole game; the regroup
   sends the army back at the start of the branch, which a game with the setting from the start does not need.
   Next: whole 20-minute games (run 178: `ai-normal` and `exploit-ryan-plan`, 16 games each).
+- **But the probe overstates every change, and whole games show nothing.**
+  - *Placebo* (run 185, same set and rule): `jev-plc` = `jev-base` with `regroup` only (idle units walk to v10's own
+    staging point, which should change nothing) gains **+3,383** vs the control (-2,024..+8,791), better in
+    10/15, W-D-L 12-0-3 against 6-0-9. The set is chosen by v10's bad fights, so the control replays a selected-bad
+    outcome and any perturbation regresses toward the mean. `jev-st5` is about +4,000 over the placebo: not significant.
+    **Every probe on selected moments needs a placebo variant, and the comparison is to it** (lab note 63).
+  - *Whole games* (run 183, `jev-st5-v1`, 20 min, no superweapons, seed 5101, 16 games each vs `ai-normal` and
+    `exploit-ryan-plan`): v10 10/16 (+6,828) and 14/16 (+17,556); `jev-st5-v1` 9/16 (+6,416) and 15/16 (+14,562);
+    together 24/32 each, **+0.00 points a game (CI -0.20..+0.20), net -1,703 (CI -11,008..+7,602)**: no difference.
+    Per pair the results flip both ways (chaos). The first big army loss (>= 6,000 in 30 s) comes at 13.6 min on
+    average for v10 and 12.3 for `jev-st5-v1` (15 and 13 games of 16): staging near the towers does not move it.
+  - *Why the late games are lost* (no superweapons now, so these are conventional): v10 leads or is level to
+    ~15 min with 55 units (`30573cce`: e3 x24, 2tnk x17, e1 x12), the Allied Normal AI's wave (12 e3, 12 e1,
+    a Tanya, a tank, a helicopter in sight) kills 54 units for 28 in 44 s at the staging point, and the base
+    falls 16:19-17:35. Against the Allied Normal AIs **Tanya (`e7`) is seen in 25 of 25 v10 games, first at
+    ~13.5 min, and v10 loses 13 of them** (Soviet Normal AIs have none). She does 35,714 DPS against infantry and
+    nothing against vehicles (PakledAgent's table), and v10's army is 60% infantry.
 - **Focus fire when defending** (`jev-focus`, run 180, same set and rule; `jev-base` again identical to v10 in all 15
   after the module was renamed to `hands.py` for freezing): +1,660 vs control (-4,351..+7,671), better in 6/15,
   W-D-L 7-0-8 against 6-0-9. Nothing; parked.
