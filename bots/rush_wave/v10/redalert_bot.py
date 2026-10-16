@@ -128,6 +128,10 @@ class Knobs:
     greed: int = 0                   # extra refineries (up to 2 + greed) before the rest, and as many more harvesters
     early_refineries: int = 0        # refineries before the war factory beyond the first (income sooner, tanks later)
     aim: tuple[int, int] | None = None  # attack here (the commander's pick), unless enemies are in the way
+    guard_defenses: int = 1          # the guard opening builds this many defenses once the barracks stands (rush-wave)
+    guard_infantry: int = GUARD_INFANTRY_CAP  # ...and this many infantry before the war factory (rush-wave)
+    late_buildings_from: float = 0.0  # no service depot or radar dome before this game time, seconds (rush-wave)
+    guard_mix: bool = False          # the guard alternates rifles and rockets (v10's orders of 2 always pick rifles)
     note: str = ""
 
 
@@ -360,7 +364,7 @@ class RedAlertBot:
         # units are only bought from what is left, so buildings never starve.
         free = cash - self._owed(production, now)
         if "fact" in types and not building_busy:
-            pick = self._next_building(types, available, economy, production, cash, knobs)
+            pick = self._next_building(types, available, economy, production, cash, knobs, now)
             if pick and add({"cmd": "build", "item": pick}, f"build {pick}"):
                 self._mark("build", pick, now)
         if "fact" in types and queued["Defense"] == 0 and (knobs.posture != "eco" or knobs.opening == "guard"):
@@ -438,7 +442,7 @@ class RedAlertBot:
 
     # -- building choices ---------------------------------------------------------------
 
-    def _next_building(self, types, available, economy, production, cash, knobs: Knobs) -> str | None:
+    def _next_building(self, types, available, economy, production, cash, knobs: Knobs, now: float = 0.0) -> str | None:
         have = {t: types.count(t) for t in set(types)}
         spare = int(economy.get("power_provided") or 0) - int(economy.get("power_drained") or 0)
         barracks = next((b for b in BARRACKS if b in available), None)
@@ -462,10 +466,11 @@ class RedAlertBot:
             plan.append("proc")
         if knobs.greed and have.get("proc", 0) < 2 + knobs.greed:
             plan.append("proc")
-        if not have.get("fix"):
-            plan.append("fix")
-        if not have.get("dome"):
-            plan.append("dome")
+        if now >= knobs.late_buildings_from:  # (rush-wave: money for the guard first)
+            if not have.get("fix"):
+                plan.append("fix")
+            if not have.get("dome"):
+                plan.append("dome")
         if knobs.posture == "eco" and have.get("proc", 0) < 3:
             plan.append("proc")
         if cash > SURPLUS_CASH and have.get("weap", 0) < 2 and have.get("proc", 0) >= 2:
@@ -491,7 +496,8 @@ class RedAlertBot:
         refineries), and only from money nothing else is waiting for. The guard opening
         builds one as soon as the barracks stands."""
         have = sum(types.count(d) for d in DEFENSES)
-        if knobs is not None and knobs.opening == "guard" and have < 1 and any(b in types for b in BARRACKS):
+        if (knobs is not None and knobs.opening == "guard" and have < knobs.guard_defenses
+                and any(b in types for b in BARRACKS)):
             return next((d for d in GUARD_DEFENSES if d in available and self._costs.get(d, 600) <= free), None)
         if have >= (knobs.defenses if knobs is not None else 2) or "weap" not in types or types.count("proc") < 2:
             return None
@@ -523,16 +529,16 @@ class RedAlertBot:
         surplus = free - reserve > SURPLUS_CASH
         want_infantry = knobs.unit_focus != "vehicles" or "weap" not in types or surplus
         if (knobs.opening == "guard" and now < GUARD_SECONDS and infantry and queued["Infantry"] == 0 and has_proc
-                and self._infantry_ordered < GUARD_INFANTRY_CAP):
+                and self._infantry_ordered < knobs.guard_infantry):
             # The guard: infantry first, whatever the buildings are waiting for (the queue waits for
             # money like any other: OpenRA shares it out as production runs).
-            pick = infantry[self._infantry_ordered % len(infantry)]
+            pick = infantry[(self._infantry_ordered // 2 if knobs.guard_mix else self._infantry_ordered) % len(infantry)]
             if add({"cmd": "train", "item": pick, "count": 2}):
                 self._mark("train", pick, now)
                 self._infantry_ordered += 2
             infantry = []
         if infantry and queued["Infantry"] == 0 and want_infantry:
-            cap = GUARD_INFANTRY_CAP if knobs.opening == "guard" else EARLY_INFANTRY_CAP
+            cap = knobs.guard_infantry if knobs.opening == "guard" else EARLY_INFANTRY_CAP
             early_cap = self._infantry_ordered >= (cap if "weap" not in types else 10**6)
             early_cap = early_cap or (not has_proc and self._infantry_ordered >= 2)
             pick = infantry[self._infantry_ordered % len(infantry)]

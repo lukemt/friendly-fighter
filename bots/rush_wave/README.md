@@ -86,6 +86,10 @@ seen lately is mostly infantry.
 |---|---|---|
 | `rush-wave-base` | Copy of frozen v10 (`bots/rush_wave/v10/`), v10's settings. Every change from here is a keyword argument that is off by default. | Reproduces v10 (runs 130, 133) |
 | `rush-wave-a` | Base + `anti_infantry=0.6` (idea 1): when 60%+ of the enemy combat units seen in the last 240 s are infantry (10+ seen, from 5:00), train flamethrowers, riflemen and grenadiers instead of rocket soldiers; artillery, no V2s. | Screened on 2 seeds (runs 137, 139): no effect |
+| `rush-wave-b` | Base + `guard_defenses=3`, `guard_infantry=16` (idea 3, early). | Trapped screen, seed 990 (run 154): no clear gain |
+| `rush-wave-c` | b + `late_buildings_from=300` (no service depot or dome before 5:00). | Run 154: no gain (3/8) |
+| `rush-wave-d` | Base + `guard_mix` (the guard alternates rifles and rockets). | Screening |
+| `rush-wave-e` | d + `guard_infantry=14`, `guard_defenses=2`. | Screening |
 
 ## Results
 
@@ -115,6 +119,21 @@ seen lately is mostly infantry.
   `rush-wave-a` ended identically (games `9368b4cc`, `eb80938d`, -25,100, wiped at 8:36).
   **Idea 1 does not clear the bar** (a paired interval above 0 over 16 games on 2 seeds). Not frozen,
   not entered on the board.
+
+- **Where v10 dies on trapped: the first wave, not the late game** (games `eb80938d`, `28d5a9f5`, seed 990).
+  Rush's first wave arrives at ~4:38-5:04: 11 rifle, 6 rocket soldiers and 2 light tanks (~$4,300).
+  v10 has 11 riflemen and 1 flame tower, cash 0 since 3:30 (it spent on 3 refineries and a service
+  depot); it loses all 11 in ~10 s, then the barracks, power and construction yard fall before 6:00 and
+  it never recovers (wiped 8:36). So the 12:00 fight of the brief is one way to die; on trapped it
+  happens before 6:00. A unit mix from 5:00 (idea 1) comes after that fight.
+- **A bug in v10's guard opening:** the guard orders infantry in twos and picks
+  `infantry[ordered % 2]`; `ordered` is always even, so it **only ever trains riflemen, never a rocket
+  soldier**, whatever the enemy has (light tanks run through them). Fixed only behind `guard_mix`.
+- **Guard variants b, c, base** (run 154, `lab compare ... --map trapped --games 8 --seed 990`, 20
+  minutes): v10 4/8 (+11,062), base 4/8 (+11,062, identical to v10 game by game: the new settings
+  leave the defaults alone), b 5/8 (+4,494), c 3/8 (+1,300). Paired against v10: b +0.12 points a game
+  (-0.32..+0.57), c -0.12 (-0.57..+0.32): no clear difference. A bigger riflemen-only guard still
+  loses the 5:04 fight (b, game `28d5a9f5`: 21 lost, 13 killed).
 
 ## Core changes
 

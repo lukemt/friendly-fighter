@@ -60,3 +60,66 @@ def test_switches_on_an_infantry_heavy_enemy_only(tmp_path):
     assert not bot._anti_infantry_now(720.0)
     see(bot, ["e1"] * 20)
     assert not bot._anti_infantry_now(200.0)                 # before anti_infantry_from
+
+
+def test_guard_settings_default_to_v10s(tmp_path):
+    bot = council(tmp_path)
+    assert bot.guard_settings == {"guard_defenses": 1, "guard_infantry": 10, "late_buildings_from": 0.0, "guard_mix": False}
+    k = Knobs()
+    assert (k.guard_defenses, k.guard_infantry, k.late_buildings_from, k.guard_mix) == (1, 10, 0.0, False)
+
+
+def build_order(**knobs) -> list[str]:
+    bot = RedAlertBot(log=lambda _: None, clock=Clock(), knobs=Knobs(opening="guard", **knobs))
+    types = ["fact", "powr", "proc", "tent", "weap", "proc"]
+    avail = ["powr", "proc", "tent", "weap", "fix", "dome", "ftur", "pbox"]
+    economy = {"power_provided": 400, "power_drained": 100}
+    return [bot._next_building(types, avail, economy, "", 3000, bot.knobs, now) for now in (60.0, 400.0)]
+
+
+def test_service_depot_waits_when_asked_and_not_otherwise():
+    assert build_order() == ["fix", "fix"]
+    # before 5:00 the money goes elsewhere (here: a second war factory); at 6:40 the depot comes
+    assert build_order(late_buildings_from=300.0) == ["weap", "fix"]
+
+
+def defenses_wanted(types, **knobs):
+    bot = RedAlertBot(log=lambda _: None, clock=Clock(), knobs=Knobs(opening="guard", **knobs))
+    return bot._next_defense(types, ["ftur", "pbox"], 2000, bot.knobs)
+
+
+def test_the_guard_builds_as_many_defenses_as_asked():
+    one, two = ["fact", "tent", "ftur"], ["fact", "tent", "ftur", "ftur"]
+    assert defenses_wanted(["fact", "tent"]) == "ftur"
+    assert defenses_wanted(one) is None                      # v10: one, then the economy's turn
+    assert defenses_wanted(one, guard_defenses=3) == "ftur"
+    assert defenses_wanted(two, guard_defenses=3) == "ftur"
+    assert defenses_wanted(two + ["ftur"], guard_defenses=3) is None
+
+
+def guard_orders(cap: int, ordered: int) -> list[tuple[str, int]]:
+    bot = RedAlertBot(log=lambda _: None, clock=Clock(), knobs=Knobs(opening="guard", guard_infantry=cap))
+    bot._infantry_ordered = ordered
+    got: list[dict] = []
+    bot._train_army(lambda o, *_: got.append(o) or True, ["e1", "e3"], {"Infantry": 0, "Vehicle": 0}, 3000,
+                    ["fact", "tent", "proc"], bot.knobs, 100.0)
+    return [(o["item"], o["count"]) for o in got]
+
+
+def test_guard_infantry_cap_is_a_setting():
+    assert guard_orders(10, 9) == [("e3", 2)] and guard_orders(10, 10) == []     # v10: ten, then stop
+    assert guard_orders(16, 10) == [("e1", 2)] and guard_orders(16, 15) == [("e3", 2)]
+    assert guard_orders(16, 16) == []
+
+
+def test_v10s_guard_trains_only_rifles_and_guard_mix_alternates():
+    def run(mix: bool) -> list[str]:
+        bot = RedAlertBot(log=lambda _: None, clock=Clock(), knobs=Knobs(opening="guard", guard_mix=mix, guard_infantry=16))
+        items = []
+        for ordered in range(0, 16, 2):
+            bot._infantry_ordered = ordered
+            bot._train_army(lambda o, *_: items.append(o["item"]) or True, ["e1", "e3"], {"Infantry": 0, "Vehicle": 0},
+                            3000, ["fact", "tent", "proc"], bot.knobs, 100.0)
+        return items
+    assert run(False) == ["e1"] * 8
+    assert run(True) == ["e1", "e3"] * 4

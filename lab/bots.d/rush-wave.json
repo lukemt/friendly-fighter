@@ -28,6 +28,71 @@
     }
    },
    "think": 0.005
+  },
+  {
+   "name": "rush-wave-b",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "guard_defenses": 3,
+     "guard_infantry": 16
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-c",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "guard_defenses": 3,
+     "guard_infantry": 16,
+     "late_buildings_from": 300
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-d",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "guard_mix": true
+    }
+   },
+   "think": 0.005
+  },
+  {
+   "name": "rush-wave-e",
+   "kind": "module",
+   "params": {
+    "factory": "bots.rush_wave.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "guard_mix": true,
+     "guard_infantry": 14,
+     "guard_defenses": 2
+    }
+   },
+   "think": 0.005
   }
  ]
 }

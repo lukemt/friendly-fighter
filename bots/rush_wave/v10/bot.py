@@ -34,8 +34,10 @@ from dataclasses import replace
 from typing import Any
 
 from .jev_bot import AIR, GREED, NONCOMBAT, JevBot, _clock
+from .redalert_bot import GUARD_INFANTRY_CAP
 
 INFANTRY = frozenset({"e1", "e2", "e3", "e4", "e7", "shok", "dog"})  # (engineers, medics, spies: NONCOMBAT)
+GUARD_DEFAULTS = {"guard_defenses": 1, "guard_infantry": GUARD_INFANTRY_CAP, "late_buildings_from": 0.0, "guard_mix": False}
 ANTI_INFANTRY_MIN = 10  # enemy combat units seen lately before the share means anything
 
 MODEL = "jev-1.13.0"  # pinned: an alias (jev-latest) moves with new releases and changes answers
@@ -151,7 +153,8 @@ class CouncilBot(JevBot):
                  plan: str = "hold", gate: float = 0.55, attack_gate: float = 0.6, use_jev: bool = True,
                  boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev",
                  anti_infantry: float = 0.0, anti_infantry_from: float = 300.0, anti_infantry_window: float = 240.0,
-                 **kwargs) -> None:
+                 guard_defenses: int = 1, guard_infantry: int = GUARD_INFANTRY_CAP, late_buildings_from: float = 0.0,
+                 guard_mix: bool = False, **kwargs) -> None:
         """``gate``: the probability a new plan needs; ``attack_gate``: the same for attack and boom.
         ``boom_until``: no boom from this time; ``keep_first``: the first plan stands until then unless
         the base is raided or an attack is expected (for experiments). ``oracle="rules"``: code answers
@@ -159,7 +162,11 @@ class CouncilBot(JevBot):
         ``anti_infantry`` (rush-wave; 0 = off, v10 as it was): from ``anti_infantry_from`` seconds, when at
         least this share of the enemy combat units seen in the last ``anti_infantry_window`` seconds
         (at least ANTI_INFANTRY_MIN of them) are infantry, the factories train for that (unit_focus
-        "antiinf": flamethrowers, grenadiers, riflemen; artillery, no V2s)."""
+        "antiinf": flamethrowers, grenadiers, riflemen; artillery, no V2s).
+        ``guard_defenses``, ``guard_infantry`` (rush-wave; the defaults are v10's): how many defenses and
+        how much infantry the guard opening buys before the economy; ``late_buildings_from``: no service
+        depot or radar dome before this many seconds (their money goes to the guard); ``guard_mix``: the
+        guard alternates rifles and rockets (v10's always trains rifles: its orders of 2 pick index 0)."""
         super().__init__(log_dir=log_dir, model=model, push=push, scout=scout, use_jev=use_jev, **kwargs)
         if oracle == "rules":
             self.jev = Rules(self)
@@ -171,6 +178,8 @@ class CouncilBot(JevBot):
         self.anti_infantry = anti_infantry
         self.anti_infantry_from = anti_infantry_from
         self.anti_infantry_window = anti_infantry_window
+        self.guard_settings = {"guard_defenses": guard_defenses, "guard_infantry": guard_infantry,
+                               "late_buildings_from": late_buildings_from, "guard_mix": guard_mix}
         self.attack_soon = 0.0
         self.events: list[str] = []
         self.next_due = {"strategy": 0.0, "supply": 0.0, "field": 0.0}
@@ -308,6 +317,8 @@ class CouncilBot(JevBot):
 
     def _apply(self, answers: dict, facts: dict, now: float, raw: dict) -> list[dict[str, Any]]:
         extra = super()._apply(answers, facts, now, raw)
+        if self.guard_settings != GUARD_DEFAULTS:
+            self.bot.set_knobs(replace(self.bot.knobs, **self.guard_settings))
         if self._anti_infantry_now(now):
             self.bot.set_knobs(replace(self.bot.knobs, unit_focus="antiinf"))
             self.note += " build=antiinf"
