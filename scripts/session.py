@@ -7,7 +7,8 @@
     python scripts/session.py hooks                    # (re)install the repository's git hooks
 
 Run it from the main checkout (/workspace). A family session works in its worktree only: its bots
-live in ``bots/NAME/``, are registered in ``lab/bots.d/NAME.json`` and named ``NAME-...``; the lab
+live in ``bots/<package>/`` (the name with underscores: ``rush-wave`` -> ``bots/rush_wave/``), are
+registered in ``lab/bots.d/NAME.json`` and named ``NAME-...``; the lab
 (database, traces, moment sets, notes, game slots) is the main checkout's ``sim/lab``, shared.
 """
 
@@ -85,8 +86,13 @@ and baselines to start from, and what counts as done.)
 ## Open questions and next steps
 """
 
-INIT = '''"""The {name} family's bots (bots/{name}/README.md, AGENTS.md)."""
+INIT = '''"""The {name} family's bots (bots/{package}/README.md, AGENTS.md)."""
 '''
+
+
+def package(name: str) -> str:
+    """A family's folder under bots/: its name with underscores (a Python package can't have hyphens)."""
+    return name.replace("-", "_")
 
 
 def cmd_new(a) -> int:
@@ -104,17 +110,18 @@ def cmd_new(a) -> int:
     install_hooks()
     WORKTREES.mkdir(exist_ok=True)
     git("worktree", "add", str(path), "-b", f"family/{name}", a.base)
-    (path / "bots" / name).mkdir(parents=True)
-    (path / "bots" / name / "__init__.py").write_text(INIT.format(name=name))
-    (path / "bots" / name / "README.md").write_text(README.format(name=name))
+    pkg = path / "bots" / package(name)
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text(INIT.format(name=name, package=package(name)))
+    (pkg / "README.md").write_text(README.format(name=name))
     (path / "lab" / "bots.d").mkdir(exist_ok=True)
     (path / "lab" / "bots.d" / f"{name}.json").write_text(json.dumps({"bots": []}, indent=1) + "\n")
-    git("add", f"bots/{name}", f"lab/bots.d/{name}.json", cwd=path)
+    git("add", f"bots/{package(name)}", f"lab/bots.d/{name}.json", cwd=path)
     git(*IDENTITY, "commit", "-q", "-m", f"The {name} family: its folder and registry file (scripts/session.py new)",
         cwd=path)
     print(f"""family session {name!r} ready:
   worktree  {path}  (branch family/{name}, from {a.base})
-  bots      bots/{name}/  (README.md: keep it current)
+  bots      bots/{package(name)}/  (README.md: keep it current; modules bots.{package(name)}.<module>)
   registry  lab/bots.d/{name}.json  (bots named {name}-...)
   lab       {MAIN_ROOT / 'sim' / 'lab'}  (shared: found by itself, nothing to set)
 

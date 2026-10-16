@@ -22,7 +22,7 @@ Read before working:
 | `GAMES.md` | The game's rules (20-minute games, the tiebreak) |
 | `docs/PROJECT_NOTES.md` | The project's history and setup |
 | `docs/EXTERNAL_BOTS.md`, `docs/SIMULATOR.md` | Contestant bots; the local platform |
-| `bots/<family>/README.md` | Each bot family: its idea and its results |
+| `bots/<package>/README.md` | Each bot family: its idea and its results (the package is the family's name with underscores) |
 
 ## Roles
 
@@ -35,7 +35,7 @@ Several sessions may work at once, each in its own folder. There are two roles:
 
 | Thing | Family session | Coordinator |
 |---|---|---|
-| `bots/<family>/`, `lab/bots.d/<family>.json`, `bots/frozen/<family>_*` | yours | reviews and merges |
+| `bots/<package>/`, `lab/bots.d/<family>.json`, `bots/frozen/<package>_*` | yours | reviews and merges |
 | Shared code: `agent/`, `altruagent/`, `ffsim/`, `lab/`, `scripts/`, `bots/*.py`, `lab/bots.json`, `lab/suites.json` | only small, opt-in changes (rule 8) | owns |
 | `docs/STRATEGY.md`, `docs/LAB_PLAN.md`, `AGENTS.md`, `CLAUDE.md` | propose in your README | owns |
 | The live runtime, `agent/champion.py`, `lab/champions.json`, `recordings/` | never | only with the user's go |
@@ -89,7 +89,7 @@ cd /workspace/.worktrees/<family> && claude            # or codex; give it its b
 .venv/bin/python scripts/session.py list              # all family sessions: branches, bots, games
 ```
 
-`new` creates the worktree and branch, `bots/<family>/` with a README template, and
+`new` creates the worktree and branch, `bots/<package>/` with a README template, and
 `lab/bots.d/<family>.json`. The lab finds the shared database by itself. Nothing needs setting.
 
 **Codex:** its own sandbox can't run in this container. Its sandboxing tool (bubblewrap) needs
@@ -103,11 +103,12 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
 ## Working in a family session
 
 **Your area.**
-- Your bots live in `bots/<family>/`.
-- A module bot's factory is `bots.<family>.<module>:create_agent`. It can build on the scripted
+- Your bots live in `bots/<package>/`: the family's name with underscores, because Python packages
+  can't have hyphens (family `rush-wave`: `bots/rush_wave/`, bots named `rush-wave-...`).
+- A module bot's factory is `bots.<package>.<module>:create_agent`. It can build on the scripted
   bot (`agent/redalert_bot.py`, `Knobs`) or on the champion's code (`bots/jev_bot.py`,
   `bots/jev_council.py`).
-- Register with `lab bots add <family>-<name> --kind module --factory bots.<family>.x:create_agent
+- Register with `lab bots add <family>-<name> --kind module --factory bots.<package>.x:create_agent
   [--kwargs '{...}']`. Names must start with `<family>-` (*enforced*). The entry goes to
   `lab/bots.d/<family>.json` by itself.
 - Name your moment sets and experiments `<family>-...` too. Sets without a prefix are shared
@@ -129,7 +130,7 @@ deny rules don't apply to it, so the hard rules above are Codex's to keep.
 - Run one big run at a time. Check `lab status` first.
 
 **Recording what you learn.**
-- Keep `bots/<family>/README.md` current. It holds the idea, the bots, each result with its run
+- Keep `bots/<package>/README.md` current. It holds the idea, the bots, each result with its run
   ids, and the open questions.
 - Use `lab note --experiment ...` for findings. Notes are shared and show in `lab status`.
 - Commit often on `family/<family>`. That branch is your only branch: never commit to `main`.
