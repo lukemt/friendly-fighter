@@ -128,7 +128,10 @@ configuration is replaced, and an engine left unused for 10 minutes exits
 (`FF_LANE_IDLE_EXIT`). **Memory:** an engine grows with the games it hosts (~320 MB fresh, 900+ MB
 after ~60), so one bigger than `FF_LANE_MAX_RSS_MB` (600) is restarted before its next game. A lab
 worker waiting for a game slot lets go of its lane, and a run takes lanes with a running engine
-first, so the machine holds about one engine per slot (the RAM is ~8 GB). `python scripts/ffsim.py lanes` lists them, `--stop` stops them,
+first, so the machine holds about one engine per slot (the RAM is ~8 GB). Measured over 3 hours
+(27 engines, 2026-10-16): they grow by a median 9 MB a game (4-18), so each restarts after 20-90
+games, and RAM available never went below 1.3 GB. The growth looks like a leak (it never shrinks when
+idle), cause not found; a heap dump (dotnet-dump) would show it. `python scripts/ffsim.py lanes` lists them, `--stop` stops them,
 and `run --fresh-engines` uses new engines that end with the run. One game at a time per process: concurrent sessions in one process slowed each
 other's economies when OpenRA's AI played (half of six parallel sessions harvested their
 first 1000 ore ~1500 ticks late), which showed as 3 kills a game instead of 29 vs the AI.

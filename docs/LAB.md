@@ -494,6 +494,15 @@ lab probe NAME --report [--stop-after 300] [--stop-quiet 45] [--runs 119,120]
   - `at`: every game at `--at`, for situations that aren't events (standoffs).
 - **The control** is the bot that played the moment, with the same fresh memory as the variants
   (see Branching), so the comparison is fair. Moments of different bots share one control row.
+- **A placebo on selected moments** (the jev family's finding, run 185, 2026-10-16). Sets found by
+  an outcome (`wiped`, `building-lost`, `swing`) are moments where the control went badly, and the
+  control branch replays exactly that bad outcome. So *any* change, even one that does nothing,
+  sends the game down another path and regresses toward the mean: a no-op variant gained +3,383 and
+  was better in 10 of 15 moments on `@normal-fight`. Always add a placebo variant to such probes
+  and judge a variant against the placebo, not the control:
+  `ff-council-champ-v10-placebo` is v10 with each decision landing one tick later (think 45 ms).
+  Or use unselected moments (`--kind at`), and confirm with whole games either way. The same goes
+  for hand-played moments (stage 1a): they too are compared with a selected bad outcome.
 - **The report** per variant: the mean score change since the moment, the paired difference to the
   control at the same moments with a 95% t-interval (a verdict, BETTER/WORSE/unclear, from 3 pairs
   on), in how many moments it did better, how often the seat was wiped, W-D-L at the stop, and how

@@ -81,6 +81,15 @@ The platform plays 20 minutes; everything up to run 114 was 10. Same bots, suite
 `lab h history` shows these per opponent and map during a game (where it built, what units it
 used).
 
+- **Tanya isn't the problem against the Allied Normal AIs** (jev family, run 187: 21 unselected
+  moments at 13:00, 240 s). They field Tanya (e7) in 25 of 25 games from ~13.5 min (the Soviet
+  ones never), and v10 loses 13 of the 25. Attacking her on sight (+1,174, CI -3,370..+5,717) or
+  building tanks once she appears (+640) gains nothing measurable: the 13-15 min wave is.
+- **A lead: regrouping idle units** at v10's own staging point after a defence (units that chased
+  something stay scattered in v10) gained +5,219 net (CI +838..+9,600, better in 15 of 21) on the
+  same unselected moments (jev, run 187). Being tested on 47 unselected moments across 7 opponent
+  types to the end of the game (run 190).
+
 ### How the AIs decide (read from the engine's code, 2026-10-16)
 
 From `mods/ra/rules/ai.yaml` and `OpenRA.Mods.Common/Traits/BotModules/SquadManagerBotModule.cs`
@@ -136,6 +145,9 @@ test before relying on them.
     when judging bots. Since 2026-10-16 the lab plays without superweapons (docs/LAB.md), and
     `lab superweapons` lists the older games a nuke likely decided: for v10, 9 of 44 games against
     Normal, 5 of 24 against Turtle, 9 of 104 against Rush.
+  - **The board without superweapons (run 177):** v10 83% (was 73%): Normal 6/8 (was 3/8), Turtle
+    8/8 (5/8), Rush 3/8 (4/8), the exploiters and ext-ryan unchanged. The Rush AI is now clearly v10's
+    weak spot; the greedy turtle 79% (-0.04, even), ff-default 19%.
   - **Selling books no loss:** a sold building isn't counted in losses, pays 50% of its value
     (times its health) and gives infantry worth 40%. A player is out only with no building and no
     MCV (jev runs 148-149). The jev family is testing "bank the lead": sell before the nuke while
