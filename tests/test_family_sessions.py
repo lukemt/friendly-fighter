@@ -113,3 +113,43 @@ def test_a_game_waits_for_a_free_slot(slots, monkeypatch):
     first.__exit__(None, None, None)
     t.join(5)
     assert got and got[0] >= released - 0.05
+
+
+def _quiet(**k):
+    return batch.GameSlot(log=lambda *a, **kw: None, poll=0.02, **k)
+
+
+def test_slots_go_first_come_first_served(slots, monkeypatch):
+    """A worker that has just finished a game queues behind those already waiting (2026-10-16: runs
+    holding slots took them back within milliseconds, and others waited for an hour)."""
+    monkeypatch.setenv("FF_LAB_SLOTS", "1")
+    order = []
+    held = _quiet(run_id=1).__enter__()
+
+    def wait(run):
+        with _quiet(run_id=run):
+            order.append(run)
+            time.sleep(0.05)
+
+    first = threading.Thread(target=wait, args=(2,))
+    first.start()
+    deadline = time.monotonic() + 5
+    while not batch.waiting() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert [w["run"] for w in batch.waiting()] == [2]
+    held.__exit__(None, None, None)
+    again = threading.Thread(target=wait, args=(1,))  # (run 1's worker, back for its next game at once)
+    again.start()
+    first.join(5)
+    again.join(5)
+    assert order == [2, 1] and batch.waiting() == []
+
+
+def test_a_dead_waiters_ticket_is_dropped(slots, monkeypatch):
+    monkeypatch.setenv("FF_LAB_SLOTS", "1")
+    q = slots / batch.QUEUE_DIR_NAME
+    q.mkdir(parents=True)
+    (q / "00000000000000000001-999999-1").write_text('{"run": 5}')  # (nobody holds its lock)
+    assert batch.waiting() == [] and not any(q.iterdir())
+    with _quiet(run_id=6):
+        assert [h["run"] for h in batch.slots_in_use()] == [6]

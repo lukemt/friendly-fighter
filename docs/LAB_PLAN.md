@@ -245,6 +245,56 @@ one fixed schedule (6 baselines × 8 games, 20 min), played from each family's w
 shared lab, whole games reused when played the same way (verified, runs 126-127), standings paired
 with the reference, snapshots over time. The coordinator runs it (AGENTS.md, duty 9).
 
+### L16. Decide with fewer games (the user's question, 2026-10-16: "test hypotheses and find the next champion in the fastest, most resource-efficient way")
+
+**Where the machine goes** (measured 2026-10-16, experiment `lab-speed`):
+- **The slots are the limit.** Since 06:00 all 5 are busy (4.9 of 5 an hour), the CPUs too (load
+  9.3 on 6). More workers would not help: only fewer games per decision, and cheaper games.
+- **A 20-minute game takes ~60 s** of a slot (15x real time); with ext-henry ~206 s (its Python;
+  ext-henry-rusher 130 s, yuriko 143 s). A branch: ~34 s.
+- **A third of the 20-minute games played in a day were the champion's** (567 of 1,647), mostly
+  on seeds no other run used: each family's own `--seed`, and compare's seeds depended on the
+  baseline's place in `--baselines`.
+- **The noise:** v10 and a candidate on the same game differ in points with sd 0.52 (994 pairs);
+  73% of pairs are equal. A 95% interval of +-0.1 points a game needs ~100 pairs, +-0.05 ~400.
+  The board (48) sees +-0.15. The improvements we find are 0.05-0.2 (rush-wave-k-v1 +0.07,
+  jev-st5-v1 +0.10, jev-rifr-v1 +0.19).
+- **Games that tell nothing:** against ext-henry-rusher, ext-henry-yuriko, chaotic, counter (100%
+  of pairs equal), ff-turtle (94%), ext-ryan (83%) every good bot wins.
+- **Net (kills minus losses) is a slightly sharper measure than points**: its t-value was higher
+  for 5 of 7 candidates (median x1.17, ~1.4x fewer games for the same certainty), and it predicts
+  the points on held-out games as well (r 0.92 vs 0.93). Points stay the decision (the tournament
+  counts wins); net can screen.
+
+**Built (2026-10-16):**
+1. **The same seeds everywhere** (`league.game_seed`): the champion's game against an opponent on a
+   seed is played once, then reused by every compare, gate and the board. Screen on seed 2026 (the
+   board's): the reference's games are already there, so a compare plays only the candidate's. With
+   one candidate that halves the games.
+2. **`lab compare --sprt`** (lab/sprt.py): the sequential test chess engines are tested with
+   (Fishtest, OpenBench). Simulated on our pairs: a +0.1 candidate called better 78% of the time
+   (a fixed 56-pair compare: 31%), a no-gain one 4%; clearly worse ones stop after 20-50 pairs.
+   `--games` is the cap.
+3. **`@screen`** (the opponents where bots differ) and **`@smoke`** (2 games each where they
+   don't: catches breakage).
+
+**The funnel with these** (stages 2-3 of Part 0): `lab compare ff-council-champ-v10,X --baselines
+@screen --seed 2026 --games 40 --sprt`, plus `--baselines @smoke --games 2`. A BETTER goes to the gate on
+a fresh seed (the holdout: many families screening on one seed will find its lucky games, and
+a fresh seed doesn't share them).
+
+**Next, by expected gain:**
+- **`--sprt` for gates** (the h2h and the baselines as one test; non-regression bounds
+  `-0.05,0` for a change aimed at one opponent: "no worse elsewhere", Fishtest's second test).
+- **Engine snapshots** (L14): a late-game idea (the Tanya, the last stand, salvage) branches at
+  15:00 from saved states instead of replaying 15 minutes (~2/3 of a branch's time).
+- **Profile ext-henry's 206 s** (our wrapper or theirs: `bots/external.py` copies, logs, clocks).
+  It is the opponent we most need to play.
+- **Tune numbers with SPSA** (Fishtest's tuner): for a knob bot, nudge all settings at once by
+  random +-steps, 2 games per step, move towards the better side. Many settings in the games one
+  hand-made variant takes now.
+- **A screen on net**: `--sprt` on net (in thousands) for stage 2, points for the gate.
+
 ---
 
 ## Part 2: bots to add
@@ -291,6 +341,23 @@ paired seeds, maps rotated, seats swapped, a second seed before anything is crow
 | E9 | **Is v10 robust?** (L8) | latency ×1/×2/×4, refused orders, a real-time batch, one platform Testing match | ~60 games | needed before the live switch |
 | E11 | **Does a controlled Tanya pay?** (the user's idea, 2026-10-16; experiment `tanya-sniper`, details below) | a Tanya setting on v10's rules when Allied: build her, keep her behind the army, shoot infantry from range, pull her back from vehicles and turrets | 1a by hand vs ai-rush and ext-henry; 1 on unselected moments (`--kind at`, Allied seats only); 2-3 whole games on 2 seeds | keep it if net gains on Allied seats with no loss elsewhere |
 | E10 | **Switch the live bot?** | gate v10 vs `ff-default` on `@gate` | already clear on `@standard`; confirm on `@field` | user decides |
+
+### Jev experiments, with the budget (2026-10-16)
+
+The user allows paid Jev at $1 an hour (AGENTS.md rule 11): ~$0.005 a Jev seat in a 20-minute
+game, so the money no longer limits these. What does: one paid run per family at a time, and
+`think: measured` (Jev's ~230 ms a call is charged to the game clock, as on the platform). In
+order:
+
+| # | Question | Design | Cost |
+|---|---|---|---|
+| J1 | **Does Jev answering beat the rules on the same loops?** The question v10 left open (Jev council = v7 = the rules council, runs 59-60, before the economy fix). | `ff-council-champ-v10-jev` (v10's frozen code, `oracle: jev`) vs `ff-council-champ-v10`: `lab compare ff-council-champ-v10,ff-council-champ-v10-jev --baselines @ais,@exploiters,ext-ryan,ext-henry --games 8`, 2 seeds | 64 Jev seats a seed, ~$0.35 |
+| J2 | **One decision at a time:** where does Jev beat a rule? | the jev family's split bots: `jev-sjj` (Jev decides the quartermaster) vs `jev-sjs` (shadow: the rules decide, Jev's answer logged) vs `jev-rifr`; the shadow logs give the disagreements | as J1 |
+| J3 | **The decisions the rules get wrong:** boom or hold after a raid (v10 locks greed 0 after one raid: the jev family, run 195), and hold or fight when outnumbered in the last 3 minutes (ext-henry's last stand at 18:00) | a Jev question for each, against the rule and the jev family's coded fixes (`greed_hold`, `macro`); probe at unselected moments, then whole games vs ext-henry and @ais | a probe ~$0.05; whole games as J1 |
+| J4 | **At the disagreements:** branch every point where Jev's shadow answer differs from the rule (L5), play both | `jev-sjs` logs, `lab branch` | ~100 short branches, <$0.10 |
+
+J1 decides whether the live bot should ask Jev at all: if v10-jev wins on 2 seeds (and `lab jev`
+shows answers in every game, none frozen), it goes to a gate, and the switch is the user's call.
 
 ### E11 in detail: a controlled Tanya
 

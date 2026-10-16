@@ -98,7 +98,9 @@ def _check_bots(names: list[str]) -> None:
         registry.get(n, table)
 
 
-def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
+def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict, sequential=None) -> int:
+    """``sequential(run_id, jobs)``: a test (lab/sprt.py ``Sequential``) that decides after every game
+    which jobs still need playing."""
     from lab import batch
 
     jev_bots = sorted({n for j in jobs for n in j["bots"] if _uses_jev(n)})
@@ -159,10 +161,22 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
               f"{report._res(s0['result'])}-{report._res(s1['result'])} {s1['bot']} ({(s1['faction'] or '?')[:3]})  "
               f"net {s0['net']:+d}  {clock(g['game_seconds'])} {g['termination']}  {msg['wall']:.0f}s", flush=True)
 
+    test = _play.last_sequential = sequential(run_id, jobs) if sequential else None
+    if test is not None:
+        def progress(msg, k, n, _show=progress):
+            _show(msg, k, n)
+            before = dict(test.verdict)
+            test.update()
+            for c, v in test.verdict.items():
+                if v and not before.get(c):
+                    print(f"[lab] --sprt: {c} is {v.upper()} after {test.pairs[c]} pairs: its remaining games are "
+                          f"not played", flush=True)
+
     status = "done"
     try:
         if jobs:
-            batch.run(jobs, workers=workers, run_id=run_id, record=a.record, on_result=progress)
+            batch.run(jobs, workers=workers, run_id=run_id, record=a.record, on_result=progress,
+                      keep=test.keep if test is not None else None)
     except KeyboardInterrupt:
         status = "interrupted"
         print("[lab] interrupted", flush=True)
@@ -186,15 +200,17 @@ REUSE_KINDS = {"play", "league", "gate", "compare", "exploit"}  # (whole games: 
 
 
 def _uses_jev(name: str) -> bool:
-    """A bot that asks Jev (a module bot built on bots/jev_bot.py, frozen or not; not a forced one)."""
+    """A bot that asks Jev (a module bot built on bots/jev_bot.py, frozen or not; not a forced one). A
+    frozen council's factory path needn't say "jev" (bots.frozen.ff_council_champ_v10): ``oracle: jev``
+    in its kwargs does."""
     try:
         bot = registry.get(name)
     except KeyError:
         return False
     factory = str(bot.params.get("factory", "")) if bot.kind == "module" else ""
     kwargs = bot.params.get("kwargs") or {}
-    return ("jev" in factory and not kwargs.get("force") and kwargs.get("use_jev", True)
-            and kwargs.get("oracle", "jev") == "jev")
+    return (("jev" in factory or (factory and kwargs.get("oracle") == "jev")) and not kwargs.get("force")
+            and kwargs.get("use_jev", True) and kwargs.get("oracle", "jev") == "jev")
 
 
 # -- commands ------------------------------------------------------------------------------------
@@ -306,13 +322,38 @@ def cmd_league(a, db) -> int:
     return 0
 
 
+def sprt_args(s) -> None:
+    s.add_argument("--sprt", action="store_true",
+                   help="stop when clear: a sequential test of each candidate's paired points against the reference "
+                        "(the champion) after every game (lab/sprt.py); --games is then the cap")
+    s.add_argument("--bounds", default="0,0.1", help="--sprt: H0,H1 in points a game over the reference (default 0,0.1; "
+                                                     "'no worse': -0.1,0)")
+    s.add_argument("--alpha", type=float, default=0.05, help="--sprt: false 'better' rate")
+    s.add_argument("--beta", type=float, default=0.05, help="--sprt: missed 'better' rate (at H1)")
+
+
+def _sequential(a, db, candidates: list[str]):
+    """``--sprt``: the test _play runs after every game (None without it)."""
+    if not a.sprt:
+        return None
+    from lab import sprt
+
+    t0, t1 = sprt.parse_bounds(a.bounds)
+    return lambda run_id, jobs: sprt.Sequential(db, run_id, jobs, candidates, t0, t1, a.alpha, a.beta)
+
+
 def cmd_gate(a, db) -> int:
     baselines = _expand(_split(a.baselines))
     _check_bots([a.candidate, a.champion] + baselines)
-    jobs = schedule.gate(a.candidate, a.champion, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes)
-    run_id = _play(db, jobs, a, "gate", vars(a))
+    jobs = schedule.gate(a.candidate, a.champion, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes,
+                         interleaved=bool(a.sprt))
+    run_id = _play(db, jobs, a, "gate", vars(a), sequential=_sequential(a, db, [a.champion, a.candidate]))
     print()
     print(report.gate_report(db, run_id, a.candidate, a.champion))
+    if a.sprt:
+        print(_play.last_sequential.summary())
+        print("(with --sprt the gate's answer is the test's, on the pairs against the baselines; the head-to-head "
+              "games and each baseline's own interval above must not say worse)")
     return 0
 
 
@@ -320,10 +361,16 @@ def cmd_compare(a, db) -> int:
     candidates = _expand(_split(a.candidates))
     baselines = _expand(_split(a.baselines))
     _check_bots(candidates + baselines)
-    jobs = schedule.compare(candidates, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes)
-    run_id = _play(db, jobs, a, "compare", vars(a))
+    if a.sprt and len(candidates) < 2:
+        raise SystemExit("--sprt tests candidates against the first (the reference): name two or more")
+    sequential = _sequential(a, db, candidates)
+    jobs = schedule.compare(candidates, baselines, a.games, maps=_maps(a.map), seed=a.seed, minutes=a.minutes,
+                            interleaved=bool(a.sprt))
+    run_id = _play(db, jobs, a, "compare", vars(a), sequential=sequential)
     print()
     print(report.compare_report(db, run_id, candidates, baselines))
+    if a.sprt:
+        print(_play.last_sequential.summary())
     return 0
 
 
@@ -983,7 +1030,7 @@ def cmd_status(a, db) -> int:
     for pid in live_runtimes():
         print(f"the live tournament runtime is running (pid {pid}): lab games run at a lower priority (nice 10)")
     from lab import FAMILY, MAIN_ROOT
-    from lab.batch import slot_count, slots_in_use
+    from lab.batch import slot_count, slots_in_use, waiting
 
     print(f"this session: {'family ' + FAMILY if FAMILY else 'the main checkout'} ({ROOT}); lab shared at {LAB_DIR}"
           + (f" (main checkout {MAIN_ROOT})" if MAIN_ROOT != ROOT else ""))
@@ -992,6 +1039,12 @@ def cmd_status(a, db) -> int:
     for h in held:
         since = f"{(time.time() - h['since']) / 60:.0f} min" if h.get("since") else "?"
         print(f"  slot {h['slot']}: {h.get('family', '?')}, run {h.get('run')}, {h.get('label', '')[:50]} (pid {h.get('pid')}, {since})")
+    queue = waiting()
+    if queue:
+        print(f"waiting for a slot, first come first served: {len(queue)}")
+        for k, w in enumerate(queue, 1):
+            since = f"{(time.time() - w['since']) / 60:.0f} min" if w.get("since") else "?"
+            print(f"  {k}. {w.get('family', '?')}, run {w.get('run')}, {w.get('label', '')[:50]} (pid {w.get('pid')}, {since})")
     notes = db.q("SELECT * FROM notes ORDER BY id DESC LIMIT 5")
     if notes:
         print("recent notes (lab note; every session's):")
@@ -1244,13 +1297,15 @@ def main() -> int:
     s.add_argument("candidate")
     s.add_argument("--champion", default="ff-default")
     s.add_argument("--baselines", default="@ais", help="bots or @suites (lab/suites.json), separated by commas")
-    s.add_argument("--games", type=int, default=6, help="per opponent")
+    s.add_argument("--games", type=int, default=6, help="per opponent (with --sprt: at most)")
+    sprt_args(s)
     playing(s)
 
     s = sub.add_parser("compare", help="several candidates against the same baselines on the same seeds")
     s.add_argument("candidates", help="bots separated by commas; the first is the reference")
     s.add_argument("--baselines", default="@standard", help="bots or @suites (lab/suites.json), separated by commas")
-    s.add_argument("--games", type=int, default=6, help="per baseline and candidate")
+    s.add_argument("--games", type=int, default=6, help="per baseline and candidate (with --sprt: at most)")
+    sprt_args(s)
     playing(s)
 
     s = sub.add_parser("exploit", help="search settings of our scripted bot that beat a target bot")

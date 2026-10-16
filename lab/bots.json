@@ -801,6 +801,26 @@
    ]
   },
   {
+   "name": "ff-council-champ-v10-jev",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_council_champ_v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "jev",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": "measured",
+   "description": "the champion's frozen code with Jev (TypeSafe, paid) answering the council's three loops instead of the code rules; think measured (Jev's latency charged to the game clock, as on the platform). The test of what Jev adds over the rules (docs/LAB_PLAN.md J1)",
+   "tags": [
+    "council",
+    "frozen",
+    "jev"
+   ]
+  },
+  {
    "name": "ext-ryan",
    "kind": "module",
    "params": {
