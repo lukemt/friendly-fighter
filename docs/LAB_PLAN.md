@@ -412,7 +412,7 @@ shows answers in every game, none frozen), it goes to a gate, and the switch is 
 
 **Idea (the user's):** Tanya under deliberate control instead of not at all. Our bots have never
 built her: v10 is Allied in ~half its lab games (england/france/germany 489 of 986 seats) but
-builds a tech center in 19 games.
+never builds a tech center (the `atek` events of v10's games are all the enemy's, spotted).
 
 **What she can and can't do here** (`~/openra-sim/fork/mods/ra/rules/infantry.yaml` `E7`, weapons
 `smallcaliber.yaml` `Colt45`, the API's attack in `OpenRA.Mods.Common/Traits/Player/ActionHandler.cs`):
