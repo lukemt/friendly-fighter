@@ -42,3 +42,4 @@ sim/traces/
 
 # the lab (lab/): its database, traces and logs
 sim/lab/
+sim/external/

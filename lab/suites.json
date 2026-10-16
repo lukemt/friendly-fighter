@@ -39,5 +39,22 @@
  "exploiters": [
   "exploit-eco-waves",
   "exploit-eco-tanks"
+ ],
+ "field": [
+  "ext-ryan"
+ ],
+ "ais-all": [
+  "ai-normal",
+  "ai-rush",
+  "ai-turtle",
+  "ai-naval",
+  "ai-beginner",
+  "ai-easy",
+  "ai-medium"
+ ],
+ "exploiters2": [
+  "exploit-eco-waves",
+  "exploit-eco-tanks",
+  "exploit-ryan-plan"
  ]
 }

@@ -33,3 +33,7 @@ include = ["altruagent*", "agent*", "ffsim*"]
 
 [tool.setuptools.package-data]
 ffsim = ["data/*.json", "proto/*.proto"]
+
+[tool.pytest.ini_options]
+# sim/ holds local outputs and contestants' cloned repositories (sim/external/), with tests of their own.
+norecursedirs = ["sim", ".git", ".venv", "node_modules", "build", "dist", "*.egg"]

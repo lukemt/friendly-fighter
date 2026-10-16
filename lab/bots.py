@@ -5,7 +5,7 @@ A bot is a ``kind`` and its settings:
 - ``ff``: our agent (``agent.agent.create_agent``) with ``params.knobs`` (posture, attack_threshold,
   unit_focus, target);
 - ``module``: any agent factory, ``params.factory`` = ``"package.module:function"`` (plus ``kwargs``);
-- ``ai``: one of OpenRA's own AIs, ``params.type`` = normal / rush / turtle / naval;
+- ``ai``: one of OpenRA's own AIs, ``params.type`` = normal / rush / turtle / naval / beginner / easy / medium;
 - ``human``: a person or Claude at the controls (``lab human``), the game paused between moves.
 
 ``think`` is how much game time each decision costs the bot (virtual time): seconds, ``"measured"``
@@ -30,7 +30,7 @@ from . import ROOT
 
 REGISTRY = ROOT / "lab" / "bots.json"
 KINDS = ("ff", "module", "ai", "human")
-AI_TYPES = ("normal", "rush", "turtle", "naval")
+AI_TYPES = ("normal", "rush", "turtle", "naval", "beginner", "easy", "medium")
 DEFAULT_THINK = 0.005  # seconds of game time per decision: what our agent spends (it decides in ~2-5 ms)
 # The code each kind of bot runs (relative to the repository): its version changes with it.
 CODE = {
@@ -67,6 +67,10 @@ class Bot:
         files = list(CODE.get(self.kind, []))
         if self.kind == "module":
             module = str(self.params.get("factory", "")).split(":", 1)[0]
+            if module == "bots.external":  # (a contestant's bot: its commit is in the settings)
+                advisor = str((self.params.get("kwargs") or {}).get("advisor") or "")
+                scripted = (advisor.partition(":")[0].replace(".", "/") + ".py",) if ":" in advisor else ()
+                return _files_hash(("bots/external.py", "lab/advise.py", "altruagent/runner.py") + scripted)
             if module.startswith("bots.frozen."):  # (a frozen copy carries all of its code)
                 package = ROOT / Path(*module.split(".")[:3])
                 files += sorted(str(f.relative_to(ROOT)) for f in package.iterdir() if f.suffix in (".py", ".json"))
@@ -98,6 +102,8 @@ def freeze(table: dict, name: str, new_name: str, *, commit: str = "") -> "Bot":
     """A copy of a module bot that never changes: its module and the scripted bot it builds on
     (agent/redalert_bot.py) copied to ``bots/frozen/<new_name>/``, registered as ``new_name``."""
     bot = table[name]
+    if str(bot.params.get("factory", "")).startswith("bots.external:"):
+        raise ValueError(f"{name} is a contestant's bot, already pinned to a commit: copy its entry instead")
     if bot.kind != "module":
         raise ValueError(f"{name} is a {bot.kind} bot: only module bots can be frozen (ff bots are knobs: copy the entry)")
     module, _, func = str(bot.params["factory"]).partition(":")

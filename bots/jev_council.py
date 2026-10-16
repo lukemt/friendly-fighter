@@ -144,14 +144,19 @@ def loop_request(loop: str, words: dict[str, str], *, seconds: float, plan: str 
 class CouncilBot(JevBot):
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = True, scout: bool = False,
                  plan: str = "hold", gate: float = 0.55, attack_gate: float = 0.6, use_jev: bool = True,
-                 boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev", **kwargs) -> None:
+                 boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev",
+                 comeback_army: int = 25, blind_production: str = "rockets", **kwargs) -> None:
         """``gate``: the probability a new plan needs; ``attack_gate``: the same for attack and boom.
         ``boom_until``: no boom from this time; ``keep_first``: the first plan stands until then unless
         the base is raided or an attack is expected (for experiments). ``oracle="rules"``: code answers
-        the loops' questions (``Rules``), no Jev at all."""
+        the loops' questions (``Rules``), no Jev at all. ``comeback_army``: the rules attack when behind
+        late with at least this many combat units (v10: 25); ``blind_production``: what the rules train
+        when the enemy army has not been seen by 5:00 (v10: rockets)."""
         super().__init__(log_dir=log_dir, model=model, push=push, scout=scout, use_jev=use_jev, **kwargs)
         if oracle == "rules":
             self.jev = Rules(self)
+        self.comeback_army = comeback_army
+        self.blind_production = blind_production
         self.plan = plan
         self.plan_since = 0.0
         self.gate, self.attack_gate = gate, attack_gate
@@ -362,7 +367,7 @@ class Rules:
         left = (raw.get("time") or {}).get("remaining_seconds")
         left = left if isinstance(left, (int, float)) else 600 - now
         opp = self.opponent(facts, now, raw)
-        if opp == "passive" or (net <= -500 and left < 180 and len(facts["combat"]) >= 25):
+        if opp == "passive" or (net <= -500 and left < 180 and len(facts["combat"]) >= b.comeback_army):
             return "attack"
         if facts["threat"] or (self._raid_just_beaten(now) and opp in ("rusher", "aggressive")):
             return "fortify"
@@ -386,8 +391,10 @@ class Rules:
         seen = self._seen()
         if now < 240:
             return "infantry" if b.raids else "mixed"
-        if seen & VEHICLES or b.enemy_air or (now >= 300 and b.enemy_max_army == 0):
+        if seen & VEHICLES or b.enemy_air:
             return "rockets"
+        if now >= 300 and b.enemy_max_army == 0:
+            return b.blind_production
         cash = int(((raw.get("observation") or {}).get("economy") or {}).get("cash") or 0)
         if cash > 2000 and seen and not seen & VEHICLES:
             return "vehicles"
@@ -398,7 +405,7 @@ class Rules:
         if facts["away"] and (facts["near_defenses"] or (facts["fight"] and 0 < b.odds < 0.8)):
             return "retreat"
         if b.plan == "attack":
-            return "commit" if len(facts["combat"]) >= 15 else "gather"
+            return "commit" if len(facts["combat"]) >= min(15, b.comeback_army) else "gather"
         return "defend"
 
 

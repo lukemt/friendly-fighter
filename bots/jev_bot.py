@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from agent.redalert_bot import Knobs, RedAlertBot, is_combat
+from agent.redalert_bot import SURPLUS_CASH, Knobs, RedAlertBot, is_combat
 from altruagent import WAIT, WithReasoning
 
 API_URL = "https://api.typesafe.ai/v1/systemone"
@@ -285,7 +285,9 @@ class JevBot:
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = False,
                  commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True,
                  force: str | None = None, economy: str | int = "off", guard_end: float | None = None,
-                 greed_floor: int = 0, defenses: int = 2, early_refineries: int = 0) -> None:
+                 greed_floor: int = 0, defenses: int = 2, early_refineries: int = 0,
+                 commit_min_army: int = COMMIT_MIN_ARMY, surplus: int = SURPLUS_CASH, extra_barracks: int = 0,
+                 fallback: float = 0.0) -> None:
         """``force``: a posture held whatever Jev says and past every rail (for the coach: what would
         each posture have scored from this moment?)."""
         self.push = push
@@ -298,6 +300,9 @@ class JevBot:
         self.greed_floor = greed_floor  # Jev's "greedy" only with at least this many combat units
         self.defenses = defenses        # the scripted bot's cap on defenses
         self.early_refineries = early_refineries  # refineries before the war factory beyond the first
+        self.commit_min_army = commit_min_army    # the rail: no attack with fewer combat units than this
+        self.surplus, self.extra_barracks = surplus, extra_barracks  # (the scripted bot's factory knobs)
+        self.fallback = fallback  # (outnumbered at home: meet them at our defenses)
         self.scout = scout
         self.questions = load_questions(questions)
         if economy == "jev":
@@ -305,7 +310,8 @@ class JevBot:
         self.commit_deficit = commit_deficit
         self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60,
                                            greed=economy if isinstance(economy, int) else 2 if economy == "read" else 0,
-                                           defenses=defenses, early_refineries=early_refineries),
+                                           defenses=defenses, early_refineries=early_refineries,
+                                           surplus=surplus, extra_barracks=extra_barracks, fallback=fallback),
                                log=lambda line: None)
         self.jev = Jev(model=model)
         if not use_jev:  # (the control: the same bot with the decisions frozen at the start)
@@ -638,7 +644,7 @@ class JevBot:
         # Rails from what we learned (docs/STRATEGY.md).
         passive = self.opponent == "passive" and self.enemy_max_army < 5  # (a read the facts must back)
         if posture == "commit" and self.posture != "commit":
-            if n < (8 if passive else COMMIT_MIN_ARMY) or (now < COMMIT_MIN_SECONDS and not passive):
+            if n < (8 if passive else self.commit_min_army) or (now < COMMIT_MIN_SECONDS and not passive):
                 posture = "gather"
                 rails.append("too small/early to attack")
             elif not passive and not (net <= -self.commit_deficit or
@@ -725,6 +731,9 @@ class JevBot:
             greed=self.greed,
             defenses=self.defenses,
             early_refineries=self.early_refineries,
+            surplus=self.surplus,
+            extra_barracks=self.extra_barracks,
+            fallback=self.fallback,
             note=self.posture,
         )
         self.bot.set_knobs(knobs)

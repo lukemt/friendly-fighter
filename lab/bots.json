@@ -799,6 +799,253 @@
     "frozen",
     "rules"
    ]
+  },
+  {
+   "name": "ext-ryan",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "ryanxxhuang-altruagent-redalert",
+     "url": "https://github.com/ryanxxhuang/altruagent-redalert",
+     "commit": "8047e75da137",
+     "name": "ext-ryan",
+     "stubs": {
+      "agent.agent:dump_dir_from_env": null
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "contestant ryanxxhuang/altruagent-redalert @8047e75 (2026-10-10): rule-based waves, kiting, focus fire, retreats; its Claude advisor off (rules only)",
+   "tags": [
+    "external",
+    "field"
+   ]
+  },
+  {
+   "name": "ext-ryan-claude",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "ryanxxhuang-altruagent-redalert",
+     "url": "https://github.com/ryanxxhuang/altruagent-redalert",
+     "commit": "8047e75da137",
+     "name": "ext-ryan-claude",
+     "stubs": {
+      "agent.agent:dump_dir_from_env": null
+     },
+     "advisor": "desk",
+     "env": {
+      "STRATEGY_EVERY": "60",
+      "TACTICAL_EVERY": "20",
+      "FAST_MODEL": "off"
+     }
+    }
+   },
+   "think": "paused",
+   "description": "ext-ryan with Claude as its advisor at the desk (lab advise): strategy every 60 s, tactics every 20 s, micro off; the game waits for each answer",
+   "tags": [
+    "external",
+    "advisor"
+   ]
+  },
+  {
+   "name": "ai-beginner",
+   "kind": "ai",
+   "params": {
+    "type": "beginner"
+   },
+   "think": 0.005,
+   "tags": [
+    "baseline",
+    "openra",
+    "weak"
+   ]
+  },
+  {
+   "name": "ai-easy",
+   "kind": "ai",
+   "params": {
+    "type": "easy"
+   },
+   "think": 0.005,
+   "tags": [
+    "baseline",
+    "openra",
+    "weak"
+   ]
+  },
+  {
+   "name": "ai-medium",
+   "kind": "ai",
+   "params": {
+    "type": "medium"
+   },
+   "think": 0.005,
+   "tags": [
+    "baseline",
+    "openra",
+    "weak"
+   ]
+  },
+  {
+   "name": "exploit-ryan-plan",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "ryanxxhuang-altruagent-redalert",
+     "url": "https://github.com/ryanxxhuang/altruagent-redalert",
+     "commit": "8047e75da137",
+     "name": "exploit-ryan-plan",
+     "stubs": {
+      "agent.agent:dump_dir_from_env": null
+     },
+     "advisor": "bots.ryan_plan:PlanDesk",
+     "env": {
+      "STRATEGY_EVERY": "60",
+      "TACTICAL_EVERY": "20",
+      "FAST_MODEL": "off"
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "ext-ryan advised by a script of the plan Claude played against v10 (runs 75-77): economy first, one massed strike on the ore-field guard, hold the lead, all-in when behind late",
+   "tags": [
+    "exploiter",
+    "external"
+   ]
+  },
+  {
+   "name": "ff-council-v11",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "comeback_army": 10,
+     "blind_production": "mixed",
+     "commit_min_army": 10
+    }
+   },
+   "think": 0.005,
+   "description": "v11 candidate: ff-council-rules-eco + comes back from behind late with 10+ units (v10: 25), trains a mix instead of rockets when the enemy army is unseen after 5:00",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11b",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "comeback_army": 10,
+     "blind_production": "mixed",
+     "commit_min_army": 10,
+     "surplus": 800,
+     "extra_barracks": 1
+    }
+   },
+   "think": 0.005,
+   "description": "v11 + spends piled-up money: factories once cash+ore passes 800 (v10: 1500) and a second barracks after the war factory",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11c",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "fallback": 1.3
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + falls back to its defenses when attackers at the base are worth 1.3x its army",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11d",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "fallback": 1.3,
+     "comeback_army": 10,
+     "blind_production": "mixed",
+     "commit_min_army": 10
+    }
+   },
+   "think": 0.005,
+   "description": "v11 (comeback with 10+ units, mixed blind production) + the fallback to defenses at 1.3x",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11-mixed",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "mixed"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + trains a mix instead of rockets when the enemy army is unseen after 5:00 (v11's first change alone)",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11-comeback",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "comeback_army": 10,
+     "commit_min_army": 10
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + comes back from behind late with 10+ combat units (v11's second change alone)",
+   "tags": [
+    "council",
+    "rules"
+   ]
   }
  ]
 }

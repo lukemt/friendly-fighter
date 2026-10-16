@@ -124,6 +124,9 @@ class Knobs:
     defenses: int = 2                # at most this many defenses (once the economy is up)
     greed: int = 0                   # extra refineries (up to 2 + greed) before the rest, and as many more harvesters
     early_refineries: int = 0        # refineries before the war factory beyond the first (income sooner, tanks later)
+    surplus: int = SURPLUS_CASH      # unspent money (cash + ore) above this buys more factories
+    extra_barracks: int = 0          # barracks beyond the first once the war factory stands and money piles up
+    fallback: float = 0.0            # attackers at the base worth this many times our army: meet them at our defenses
     aim: tuple[int, int] | None = None  # attack here (the commander's pick), unless enemies are in the way
     note: str = ""
 
@@ -426,7 +429,7 @@ class RedAlertBot:
         combat = [u for u in units if is_combat(u)]
         threats = self._threats(obs, home)
         if threats:
-            self._defend(add, combat, threats, home, now, notes)
+            self._defend(add, combat, threats, home, now, notes, obs=obs, buildings=buildings, knobs=knobs)
         else:
             self._attack(add, combat, raw, home, enemy_base, stage, knobs, now, notes)
 
@@ -465,7 +468,10 @@ class RedAlertBot:
             plan.append("dome")
         if knobs.posture == "eco" and have.get("proc", 0) < 3:
             plan.append("proc")
-        if cash > SURPLUS_CASH and have.get("weap", 0) < 2 and have.get("proc", 0) >= 2:
+        if (knobs.extra_barracks and cash > knobs.surplus and has_barracks and have.get("weap")
+                and sum(have.get(b, 0) for b in BARRACKS) < 1 + knobs.extra_barracks):
+            plan.append(barracks)
+        if cash > knobs.surplus and have.get("weap", 0) < 2 and have.get("proc", 0) >= 2:
             plan.append("weap")
         if cash > 3000 and have.get("proc", 0) < 3:
             plan.append("proc")
@@ -559,8 +565,11 @@ class RedAlertBot:
                     cells.append(cell)
         return cells
 
-    def _defend(self, add, combat, threats, home, now, notes) -> None:
+    def _defend(self, add, combat, threats, home, now, notes, *, obs=None, buildings=None, knobs: Knobs | None = None) -> None:
         target = min(threats, key=lambda c: _dist(c, home))
+        rally = self._fallback_spot(combat, home, obs, buildings, knobs)
+        if rally is not None:  # (outnumbered: fight where our defenses and the yard's repairs help)
+            target = rally
         def near_home(u: dict[str, Any]) -> bool:
             cell = _cell(u)
             return cell is not None and _dist(cell, home) <= HOME_RADIUS
@@ -572,6 +581,22 @@ class RedAlertBot:
         ]
         if self._order_units(add, "attack_move", helpers, target, now):
             notes.append(f"defend base vs {len(threats)} enemies at {list(target)}")
+
+    def _fallback_spot(self, combat, home, obs, buildings, knobs: Knobs | None) -> tuple[int, int] | None:
+        """Where an outnumbered army meets attackers at the base: the middle of our defenses (or the
+        base center), when the attackers in sight are worth ``knobs.fallback`` times our army."""
+        if not knobs or not knobs.fallback or obs is None:
+            return None
+        def worth(t: str) -> int:
+            return self._costs.get(t, 300)
+        theirs = sum(worth(str(e.get("type") or "").lower()) for e in _list(obs.get("visible_enemies"))
+                     if (c := _cell(e)) and _dist(c, home) <= DEFEND_RADIUS and not e.get("wreck")
+                     and str(e.get("type") or "").lower() not in ("harv", "mcv"))
+        ours = sum(worth(str(u.get("type") or "").lower()) for u in combat)
+        if theirs <= knobs.fallback * max(ours, 1):
+            return None
+        towers = [c for b in buildings or [] if str(b.get("type") or "").lower() in DEFENSES and (c := _cell(b))]
+        return _centroid(towers) if towers else home
 
     def _attack(self, add, combat, raw, home, enemy_base, stage, knobs: Knobs, now, notes) -> None:
         time_info = _dict(raw.get("time"))

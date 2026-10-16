@@ -116,3 +116,30 @@ def test_the_rules_council_needs_no_jev(tmp_path):
     bot.last_call = -1e9
     bot.choose_action(state(time=at(450), units=army(20)), CTX)  # (7:30, nobody came: a standoff)
     assert bot.plan == "boom"  # (the read turns over a few calls: a running belief)
+
+
+def test_v11_comes_back_from_behind_and_does_not_train_rockets_blind(tmp_path):
+    v10 = CouncilBot(log_dir=str(tmp_path), oracle="rules", plan="boom", keep_first=240)
+    v11 = CouncilBot(log_dir=str(tmp_path), oracle="rules", plan="boom", keep_first=240, comeback_army=10,
+                     blind_production="mixed", commit_min_army=10)
+    behind = {"kills": 0, "losses": 600, "combat": [{}] * 12, "threat": False}
+    late = {"time": {"remaining_seconds": 150}}
+    assert v10.jev.plan(behind, 450, late) != "attack"  # (v10 needs 25 combat units to come back)
+    assert v11.jev.plan(behind, 450, late) == "attack"
+    v11.plan = "attack"
+    assert v11.jev.posture(dict(behind, away=[], near_defenses=[], fight=False), 450, late) == "commit"
+    v11.choose_action(state(time=at(330), units=army(14)), CTX)  # (5:30, no enemy army ever seen)
+    assert v11.production == "mixed"
+
+
+def test_an_outnumbered_army_meets_attackers_at_its_defenses():
+    from agent.redalert_bot import Knobs, RedAlertBot
+
+    bot = RedAlertBot(log=lambda line: None)
+    combat = [{"id": 1, "type": "e1", "x": 30, "y": 30}]
+    obs = {"visible_enemies": [{"id": 9, "type": "3tnk", "x": 34, "y": 30}, {"id": 8, "type": "harv", "x": 33, "y": 30}]}
+    towers = [{"type": "pbox", "x": 26, "y": 30}, {"type": "gun", "x": 28, "y": 32}, {"type": "powr", "x": 40, "y": 40}]
+    assert bot._fallback_spot(combat, (30, 30), obs, towers, Knobs()) is None  # (off by default: v10 as it was)
+    assert bot._fallback_spot(combat, (30, 30), obs, towers, Knobs(fallback=1.3)) == (27, 31)
+    strong = combat + [{"id": i, "type": "3tnk", "x": 30, "y": 30} for i in range(2, 5)]
+    assert bot._fallback_spot(strong, (30, 30), obs, towers, Knobs(fallback=1.3)) is None
