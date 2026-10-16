@@ -122,6 +122,123 @@
     "rules",
     "laststand"
    ]
+  },
+  {
+   "name": "jev-ls3",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 720,
+     "sell_mode": "overrun",
+     "cashout_at": 960,
+     "cashout_net": 2000,
+     "stand_army": "hide"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 12:00 hiding on the map + sells the base when overrun + banks the lead at 16:00 (ahead by 2000+): sells everything, army and harvesters go to the MCV",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls4s",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 720,
+     "cashout_at": 1020,
+     "cashout_net": 2000,
+     "stand_army": "split"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 12:00 (hides, no flee) + cash-out at 17:00 (ahead by 2000+), army/harvesters: split",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls4m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 720,
+     "cashout_at": 1020,
+     "cashout_net": 2000,
+     "stand_army": "mcv"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 12:00 (hides, no flee) + cash-out at 17:00 (ahead by 2000+), army/harvesters: mcv",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls4t",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 720,
+     "cashout_at": 1020,
+     "cashout_net": 2000,
+     "stand_army": "stay"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 12:00 (hides, no flee) + cash-out at 17:00 (ahead by 2000+), army/harvesters: stay",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-timed",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.timing:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "v10 (bots/jev/v10) timing every decision (wall and CPU): FF_TIMING_LOG",
+   "tags": [
+    "jev",
+    "test",
+    "timing"
+   ]
   }
  ]
 }

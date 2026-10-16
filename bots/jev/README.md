@@ -79,31 +79,119 @@ waits: a 1.2 s answer is 30 ticks of game the bot plays on old decisions.
 
 ## The idea
 
-(What these bots do differently, and why it could beat the champion or a part of the field.)
+> **Parked (2026-10-16, the coordinator with the user; lab note 54).** The platform has no support-power
+> order, so no tournament opponent can nuke, parabomb or spy-plane us; only the OpenRA AIs in the lab do.
+> "Bank the lead" defends against a lab artifact, so it stops here. What stays useful is the *analysis*:
+> **late wipes in the AI games are noise for judging a bot**, and the facts about the engine below.
+> The code (`bots/jev/laststand.py`, off by default) and the sets `@jev-ls-wipes`, `@jev-ls-holds` stay.
+
+*Added 2026-10-16 by the jev session after the user's go to "make the best champion possible".*
+
+**v10 mostly loses by a late wipe while it is ahead on the score, and the wipe is one second long.**
+- Of v10's 20-minute games against the AIs, the losses that end by `victory` of the AI all come
+  after 12:00, and in 12 of 18 the score was *positive* when the first building fell (+9,400,
+  +13,000, +17,150, +19,400 against the Normal AI; +24,050 against the Turtle AI; one game +45,100).
+- The fall is not a siege. `lab watch 38de5f1a --seat 1 --every 0:01 --from 17:44 --to 17:47`: at
+  17:45 the base stands (18 buildings, net +43,300); at 17:46 17 buildings are gone and nothing
+  hostile is in sight (net +28,800). In run 156 (`367635db`, 18:52 to 18:56) the army went from 60
+  units to 8 and the buildings from 17 to 4 in four seconds, net +16,650 to -17,550.
+- **What does it** (engine, `mods/ra/rules/ai.yaml` `SupportPowerBotModule` and the Soviet airfield
+  and missile silo in `structures.yaml`; `badr.bomber` is in sight at 18:54 in `367635db`): the
+  Soviet AIs fire their support powers at the densest structures. The nuke (missile silo, charge 9
+  minutes) goes for any region with structures worth 3,000 or more, parabombs (Ukraine's airfield,
+  every 5 minutes) for any structure, the spy plane (every 2.5 minutes) too. The opponent factions
+  of the big drops: 12 of 16 Soviet (ukraine, russia). The Allied AIs have no such decisions.
+  `docs/STRATEGY.md` says nothing of this yet; the codex family found the bombers from the other
+  side (AA, evacuation, repair: `bots/codex/README.md`).
+
+**What the engine rules allow** (all measured, runs 148 and 149, game `2e110913`):
+- A **sold building is no loss.** `deaths_cost` only counts what is destroyed. A sale pays 50% of the
+  cost times the building's health and spawns infantry worth up to 40% more (`SpawnActorsOnSell`):
+  selling 16 buildings gave 6,500 cash and 75 units at no loss.
+- A player is **defeated only when no building and no MCV is left.** Units don't count: a game with
+  an MCV alone and 109 units went on to 10:00 (`2e110913`); with no MCV and 0 buildings it ended at
+  once (`38df204f`, the deployed MCV sold as a yard).
+- The **AI's squads aim at the nearest actor of ours, fog or not** (`FindClosestEnemy` over
+  `World.Actors`), so a hiding place buys only the time the AI needs to walk there.
+
+**So: bank the lead.** A Soviet AI cannot nuke what is not there: with all buildings sold there is no
+structure value for its decisions, no loss is booked, and a spare MCV keeps us in the game. The
+bots below test it, in parts, on top of a copy of v10 (`bots/jev/v10/`, `jev-base`):
+1. **Insurance:** one MCV (2,000, 40 s) from a given time, sent to a hiding place chosen from the
+   map picture (far by path from both bases), running from enemies that come near.
+2. **Overrun sale:** the whole base is sold when the enemy at home is worth 3,000+ and 1.3 times ours
+   and buildings are falling, while the score is not lost.
+3. **Cash-out:** at a set time, ahead by 2,000+, the whole base is sold; the army and the
+   harvesters go to the MCV.
+
+These are decisions of *when*, so they are also what Jev could be asked. The rules version comes
+first; Jev is tried against it afterwards (paid games, a handful: AGENTS.md rule 11).
 
 ## Bots
 
 | Bot | What it is | Status |
 |---|---|---|
-| `jev-council-m` | `ff-jev-council` (`bots.jev_council:create_agent`) with `--think measured` | registered; local-server check failed (below) |
+| `jev-council-m` | `ff-jev-council` (`bots.jev_council:create_agent`) with `--think measured`, for the Jev check | played 1 game (run 151) |
+| `jev-base` | a copy of frozen v10 (`bots/jev/v10/`), the base of the family and the control | registered; parity with v10 not yet checked |
+| `jev-selltest` | mechanics test: second MCV at 6:00, then sells every building | runs 147-149 |
+| `jev-ls1` | `jev-base` + insurance MCV from 10:30 + overrun sale | probe run 156 (smoke) |
+| `jev-ls2`, `jev-ls2h` | `jev-base` + insurance from 10:30 + cash-out at 18:00 (`h`: the army goes to the MCV) | `jev-ls2h` probe run 161 |
+| `jev-ls3` | insurance from 12:00 + overrun sale + cash-out at 16:00, the army hides | probe run 163 |
+| `jev-ls4s`, `jev-ls4m`, `jev-ls4t` | no fleeing; cash-out at 17:00; army and harvesters split / with the MCV / stay | run 166, stopped after 5 of 33 games (below) |
+| `jev-lsj` code: `laststand_jev.py` | Jev decides when to bank (asks every 15 s from 14:00) | written and unit-tested, never played; **parked** |
+| `jev-timed` | v10 timing every `choose_action` (wall and CPU) | experiment `jev-think` |
 
 ## Results
 
-(Each claim with its evidence: run ids, `lab probe` / `lab compare` output, games to look at.)
+**The Jev check (the brief's first task).**
+- **Local server (`JEV_URL=http://100.93.0.5:8090`): down.** Run 138 (`jev-council-m` against
+  `ai-normal`, 1 game, seed 7): every one of the 247 requests timed out (latency median 6,094 ms =
+  the client's 6 s timeout); the game played on frozen decisions and counts for nothing. By hand,
+  `GET /` answered 404 in 0.14 s, but a `POST /v1/systemone` with a one-word state hung for 60 s,
+  with the local model name and with `jev-1.13.0`.
+- **Paid Jev (TypeSafe), 1 paid game: works.** Run 151 (`jev-council-m`, `ai-normal`, 10 minutes: a
+  connectivity check, not a result): 52 requests, 53,855 input tokens ($0.0023), all answered,
+  latency median 231 ms (p95 295 ms), a win at +1,200. `--think measured` is charged to the game
+  clock: the seat made 59 batches in 10 minutes, against 101 for v10 at a fixed 5 ms (285 games).
+  The measured think includes the bot's own Python time, so it is not only Jev's latency.
+  Paid games used so far: 1 (run 151).
 
-**2026-10-16, local Jev check: FAILED, the server does not answer.** Run 138
-(`lab compare jev-council-m --baselines ai-normal --games 1 --seed 7`, game a03112ee, 19:37 game
-time, lost, 758 s wall): every one of the 247 requests got no answer (latency median 6094 ms, p95
-6145 ms = the client's 6 s timeout, `TIMEOUT_SECONDS` in `bots/jev_bot.py`), so the bot played on
-frozen decisions and the game counts for nothing. Checked by hand afterwards: `GET
-http://100.93.0.5:8090/` answers 404 in 0.14 s (host up), but `POST /v1/systemone` with a one-word
-state hangs for 60 s with no reply, for model `jevk5-9b-v0.3.3` and for `jev-1.13.0`. So the model
-behind the server is not loaded or is stuck, or the server is busy. Not measured yet: whether
-`--think measured` charges latency to the game clock (needs a working server). Also to check once
-it works: the council pins `MODEL = "jev-1.13.0"`, but the local model is `jevk5-9b-v0.3.3`, and
-the client's 6 s timeout is above the ~1.2 s expected but would drop the first ~7 s call.
+**The mechanics** (`jev-selltest`, 10-minute games against `ai-normal`, seed 77, trapped):
+- Run 148 (`38df204f`): the inner bot deployed the new MCV as a yard after the sale, and the test
+  sold that too: no building, no MCV, 109 units: defeat at 7:14.
+- Run 149 (`2e110913`): no redeploying. At 7:14 sold 16 buildings: `deaths_cost` 0 before and after,
+  cash 6,500, units 34 to 109, the MCV alone left; the game went on to 10:00 (draw against the AI).
+
+**Bank the lead, first probes** (moment sets `@jev-ls-wipes`: 11 of v10's late-wipe games at 10:00, to the
+end of the game, and `@jev-ls-holds`: 24 games v10 did not lose by a wipe; experiment `jev-laststand`):
+
+| run | bot | moments | what | result |
+|---|---|---|---|---|
+| 156 | `jev-ls1` (insurance 10:30, overrun sale) | 2 | smoke | no sale fired; the spare MCV alone kept the game alive to 20:00 (both lost on the score) |
+| 161 | `jev-ls2h` (cash-out 18:00, army hides) | 4 | first cash-out | 1 win, 3 losses; found a bug: a probe branch starts at 10:00, so `spawn_home` (set only before 0:05) was never learned and nothing hid; the nuke of `38de5f1a` came at 17:46, before the 18:00 cash-out |
+| 163 | `jev-ls3` (insurance 12:00, cash-out 16:00, army and harvesters to the MCV's corner) | 11 | the same, fixed | score change -500 against -13,123 for v10 (+12,623, CI -5,049..+30,295, better in 7/11) but **1 win in 11 against 3: ten wiped (v10: six)** |
+
+- **Why the spare MCV died** (run 163, `events` of the branches): the AI found it 1.7-2.8 minutes after
+  the cash-out (`28690cba` sold 16:00, MCV lost 17:41; `166949ad` 18:33; `258f03bd` 18:50). The AI's squads
+  pick the nearest actor of ours *whatever it sees*: `HiddenUnderFog` is an `IDefaultVisibility`, and the
+  AI's `IsNotHiddenUnit` only looks at `IVisibilityModifier`s (cloaks), so fog hides nothing from it.
+  Two avoidable causes on top: the flee rule sent MCVs across the map through the enemy's side
+  (`5f085d67`, `213f88ad`: lost at (61,28) and (36,52) on the way), and the army and the harvesters
+  went to the MCV's corner (`9177b81e`: the MCV died in one burst with nine harvesters at 19:18).
+  Fixed in `bots/jev/laststand.py`: no fleeing; each spare MCV has a place of its own; the army and the
+  harvesters may go to other places (`stand_army`: stay / mcv / split).
+- **A cash-out at 16:00 was early for a 1.7-2.8 minute hunt, late for some nukes.** First mass losses of
+  v10's games against the AIs: 34 of its 117 decided 20-minute games (24 of the 34 lost) lose 6+ buildings
+  within 5-16 s, first at 14.3 min; cumulative: by 17:00 4 games, 17:30 8, 18:00 11, 18:30 14, 19:00 24, 19:30 27.
+- **Run 166** (`jev-ls4s/m/t`, no fleeing, cash-out 17:00): **stopped by hand after 5 of 33 games** when the work was
+  parked. The first moment (`eb7dec67`, wiped at 19:44 in the original game): all three variants win at 20:00
+  (+7,500 split, +15,450 with the MCV, +11,100 stay; v10's control is wiped). The second (`b58db8cf`): `ls4s` and
+  `ls4m` lose at 18:39 (the MCV found, as in run 163). Nothing more can be said.
+- The overrun sale (`sell_mode="overrun"`) never fired in run 163: the cash-out came first or its test
+  (enemy value at home 3,000+ and 1.3 times ours, buildings falling) did not hold.
 
 ## Core changes
+
 
 (Every change to shared code, rule 8: the file, what it adds, that it is off by default, its test.)
 

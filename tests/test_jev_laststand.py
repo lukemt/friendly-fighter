@@ -83,3 +83,74 @@ def test_without_a_spare_mcv_nothing_is_sold():
     raw = {"observation": obs, "time": {"game_seconds": 1000.0}, "legal_actions": {"enemy_base": [60, 60]}}
     mine, _, _ = bot._last_stand(raw, obs, 1000.0, None, [])
     assert not any(o["cmd"] == "sell" for o in mine)
+
+
+def test_the_cash_out_waits_for_its_time_the_lead_and_a_spare_mcv():
+    def state(now, net, mcv=True, faction="ukraine"):
+        obs = {"units": ([{"id": 9, "type": "mcv", "x": 50, "y": 50, "idle": True}] if mcv else [])
+               + [{"id": 5, "type": "3tnk", "x": 12, "y": 12}],
+               "buildings": [_building(1), _building(2, "fact")],
+               "military": {"kills_cost": 5000 + max(net, 0), "deaths_cost": 5000 + max(-net, 0)},
+               "economy": {"cash": 0, "ore": 0}, "base_center": [10, 10], "visible_enemies": [],
+               "enemy_faction": faction}
+        return {"observation": obs, "time": {"game_seconds": now}, "legal_actions": {"enemy_base": [60, 60]}}, obs
+
+    bot = _bot(cashout_at=960, cashout_net=2000)
+    for now, net, mcv in ((900, 9000, True), (1000, 500, True), (1000, 9000, False)):
+        raw, obs = state(now, net, mcv)
+        mine, _, _ = bot._last_stand(raw, obs, float(now), None, [])
+        assert not bot.stand and not any(o["cmd"] == "sell" for o in mine)
+    raw, obs = state(1000, 9000)
+    mine, _, tags = bot._last_stand(raw, obs, 1000.0, None, [])
+    assert bot.stand and "[ls CASHOUT]" in tags
+    assert {o["building"] for o in mine if o["cmd"] == "sell"} == {1, 2}
+
+
+def test_the_cash_out_can_be_kept_for_soviet_opponents():
+    bot = _bot(cashout_at=960, cashout_net=0, cashout_vs="soviet")
+    obs = {"units": [{"id": 9, "type": "mcv", "x": 50, "y": 50, "idle": True}], "buildings": [_building(1)],
+           "military": {"kills_cost": 9000, "deaths_cost": 0}, "economy": {}, "base_center": [10, 10],
+           "visible_enemies": [], "enemy_faction": "england"}
+    raw = {"observation": obs, "time": {"game_seconds": 1000.0}, "legal_actions": {"enemy_base": [60, 60]}}
+    bot._last_stand(raw, obs, 1000.0, None, [])
+    assert not bot.stand
+    obs["enemy_faction"] = "russia"
+    bot._last_stand(raw, obs, 1000.0, None, [])
+    assert bot.stand
+
+
+def test_a_branch_that_starts_late_still_learns_its_home():
+    bot = _bot(insure_from=720)
+    obs = {"units": [], "buildings": [_building(1)], "military": {}, "economy": {}, "base_center": [66, 72],
+           "visible_enemies": []}
+    raw = {"observation": obs, "time": {"game_seconds": 600.0}, "legal_actions": {"enemy_base": [26, 32]}}
+    bot._last_stand(raw, obs, 600.0, None, [])
+    assert bot.spawn_home == (66, 72)
+
+
+def test_jev_decides_the_bank_and_code_keeps_its_gates(monkeypatch):
+    from bots.jev.laststand_jev import LastStandJevBot
+
+    bot = LastStandJevBot(plan="boom", keep_first=240, early_refineries=1, cashout_net=2000, ask_from=840.0)
+    assert bot.cashout_at is None
+    asked = []
+
+    def fake(state, questions):
+        asked.append(state)
+        return {"bank": {"type": "choice", "choice": "bank_now", "probabilities": {"bank_now": 0.9, "wait": 0.1}}}, 700
+
+    monkeypatch.setattr(bot.bank_jev, "ask_counted", fake)
+    obs = {"units": [{"id": 9, "type": "mcv", "x": 50, "y": 50, "idle": True}, {"id": 5, "type": "3tnk", "x": 12, "y": 12}],
+           "buildings": [_building(1), _building(2, "fact")],
+           "military": {"kills_cost": 12000, "deaths_cost": 1000}, "economy": {"cash": 0, "ore": 0},
+           "base_center": [10, 10], "visible_enemies": [{"id": 77, "type": "u2", "x": 30, "y": 30}], "enemy_faction": "ukraine"}
+    raw = {"observation": obs, "time": {"game_seconds": 1000.0, "remaining_seconds": 200.0}, "legal_actions": {"enemy_base": [60, 60]}}
+    mine, _, tags = bot._last_stand(raw, obs, 1000.0, None, [])
+    assert len(asked) == 1 and "briefing" in asked[0] and "we are ahead by 11000" in asked[0]["score"]
+    assert "u2" in asked[0]["opponent"] or "seen" in asked[0]["opponent"]
+    assert bot.stand and {o["building"] for o in mine if o["cmd"] == "sell"} == {1, 2}
+    # too early: never asked
+    bot2 = LastStandJevBot(plan="boom", keep_first=240, early_refineries=1)
+    monkeypatch.setattr(bot2.bank_jev, "ask_counted", fake)
+    bot2._last_stand({**raw, "time": {"game_seconds": 600.0}}, obs, 600.0, None, [])
+    assert len(asked) == 1 and not bot2.stand

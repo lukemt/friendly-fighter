@@ -36,6 +36,7 @@ from .v10.jev_bot import NONCOMBAT
 
 MAX_ORDERS = 20
 PASSABLE = set(".,=$*MS")
+SOVIET = {"russia", "ukraine", "soviet"}
 UNSEEN = 10 ** 6
 
 
@@ -119,8 +120,8 @@ class LastStandBot(CouncilBot):
     def __init__(self, *, insure_from: float | None = None, insure_net_min: int = -500, insure_cash: int = 0,
                  sell_mode: str = "off", sell_net_min: int = -1500, overrun_value: int = 3000,
                  overrun_ratio: float = 1.3, overrun_seconds: float = 3.0, sell_dying: int = 0,
-                 flee_radius: float = 16.0, cashout_at: float | None = None, cashout_net: int = 2000,
-                 stand_army: str = "stay", **kwargs) -> None:
+                 cashout_at: float | None = None, cashout_net: int = 2000, stand_army: str = "stay",
+                 cashout_vs: str = "any", insure_count: int = 1, insure_gap: float = 120.0, **kwargs) -> None:
         """``insure_from``: game seconds from which one spare MCV is bought (None: never);
         ``insure_net_min``/``insure_cash``: only with the score at least this and this much money.
         ``sell_mode``: "overrun" sells the whole base when it is overrun (enemy value within 18 cells of
@@ -129,14 +130,18 @@ class LastStandBot(CouncilBot):
         spare MCV lives. ``sell_dying``: a building under fire below this health percent is sold.
         ``cashout_at``: from this game time, with a spare MCV alive and the score at least ``cashout_net``,
         the whole base is sold at once (the lead is banked: no building left to lose).
-        ``stand_army``: after the sale the army "stay"s where it is or goes to "hide" with the MCV."""
+        ``stand_army``: after the sale the army and the harvesters "stay" where they are, go to the
+        MCV's hiding place ("mcv"), or to places of their own, apart from the MCV and each other ("split").
+        ``insure_count``: how many spare MCVs (``insure_gap`` seconds apart), each to a place of its own.
+        ``cashout_vs``: "soviet" cashes out only against a Soviet opponent (the AIs' nukes and bombers)."""
         super().__init__(**kwargs)
         self.insure_from, self.insure_net_min, self.insure_cash = insure_from, insure_net_min, insure_cash
         self.sell_mode, self.sell_net_min = sell_mode, sell_net_min
         self.overrun_value, self.overrun_ratio, self.overrun_seconds = overrun_value, overrun_ratio, overrun_seconds
         self.sell_dying = sell_dying
-        self.flee_radius = flee_radius
+        self.insure_count, self.insure_gap = insure_count, insure_gap
         self.cashout_at, self.cashout_net, self.stand_army = cashout_at, cashout_net, stand_army
+        self.cashout_vs = cashout_vs
         self.army_moved_at = -1e9
         self.terrain: Terrain | None = None
         self.places: list[tuple[int, int]] = []
@@ -151,6 +156,7 @@ class LastStandBot(CouncilBot):
         self.stand_at: float | None = None
         self.mcv_target: dict[int, tuple[int, int]] = {}
         self.mcv_moved_at: dict[int, float] = {}
+        self.group_moved_at = -1e9
         self.tags: list[str] = []
 
     # -- the runner's hook ------------------------------------------------------------------------
@@ -188,8 +194,8 @@ class LastStandBot(CouncilBot):
         mcvs = [u for u in units if str(u.get("type") or "").lower() == "mcv"] if now > 30 else []
         home = _cell(obs.get("base_center"))
         enemy_base = _cell((raw.get("legal_actions") or {}).get("enemy_base"))
-        if self.spawn_home is None and home and now < 5:
-            self.spawn_home = home
+        if self.spawn_home is None and home:
+            self.spawn_home = home  # (a branch starts mid-game: our base then is as good as the spawn)
         self._track_buildings(buildings, now)
         if self.terrain is None and self.spawn_home and enemy_base:
             self._learn_terrain(context, raw)
@@ -197,10 +203,11 @@ class LastStandBot(CouncilBot):
                    if not e.get("wreck") and str(e.get("type") or "").lower() not in NONCOMBAT | {"thf", "mech", "truk"}]
 
         # 1. insurance: one spare MCV, bought once there is money and the score isn't lost
-        if self.insure_from is not None and now >= self.insure_from and self.mcv_bought < 2:
+        if self.insure_from is not None and now >= self.insure_from and self.mcv_bought < self.insure_count + 1:
             in_production = any(str(p.get("item") or "").lower() == "mcv" for p in obs.get("production") or [])
-            if (not mcvs and not in_production and "fix" in types and "weap" in types and net >= self.insure_net_min
-                    and cash >= self.insure_cash and now - self.mcv_order_at > 20):
+            if (len(mcvs) < self.insure_count and not in_production and "fix" in types and "weap" in types
+                    and net >= self.insure_net_min and cash >= self.insure_cash
+                    and now - self.mcv_order_at > max(20.0, self.insure_gap if mcvs else 20.0)):
                 mine.append({"cmd": "train", "item": "mcv", "count": 1})
                 self.mcv_order_at = now
                 self.mcv_bought += 1
@@ -218,17 +225,26 @@ class LastStandBot(CouncilBot):
                     tags.append("[ls STAND]")
             else:
                 self.overrun_since = None
+        enemy_faction = str(obs.get("enemy_faction") or "").lower()
         if (self.cashout_at is not None and not self.stand and mcvs and buildings and now >= self.cashout_at
-                and net >= self.cashout_net):
+                and net >= self.cashout_net and (self.cashout_vs != "soviet" or enemy_faction in SOVIET)):
             self.stand, self.stand_at = True, now
             tags.append("[ls CASHOUT]")
-        if self.stand and self.stand_army == "hide" and self.places and now - self.army_moved_at >= 12:
-            spot = self.places[0]
-            far = [u["id"] for u in units if str(u.get("type") or "").lower() not in NONCOMBAT | {"mcv", "harv", "tecn", "tecn2", "c10"}
-                   and (c := _cell(u)) and _dist(c, spot) > 10]
-            self.army_moved_at = now
-            for i in range(0, min(len(far), 100), 50):
-                mine.append({"cmd": "move", "units": far[i:i + 50], "to": list(spot)})
+        if self.stand and self.stand_army != "stay" and self.places and now - self.group_moved_at >= 12:
+            self.group_moved_at = now
+            n = len(self.places)
+            mcv_spot = self.places[0]
+            if self.stand_army == "mcv":
+                army_spot = harv_spot = mcv_spot
+            else:  # (apart from the MCV and from each other)
+                army_spot, harv_spot = self.places[1 % n], self.places[2 % n]
+            for kind, spot in (("army", army_spot), ("harv", harv_spot)):
+                ids = [u["id"] for u in units if (c := _cell(u)) and _dist(c, spot) > 10 and (
+                    str(u.get("type") or "").lower() == "harv" if kind == "harv" else
+                    str(u.get("type") or "").lower() not in {"mcv", "harv", "tecn", "tecn2", "c10", "e6"})]
+                for i in range(0, min(len(ids), 100), 50):
+                    mine.append({"cmd": "move", "units": ids[i:i + 50], "to": list(spot)})
+            inner = [o for o in inner if o.get("cmd") != "harvest"]
         if self.stand and buildings:
             inner = [o for o in inner if o.get("cmd") not in ("build", "place", "train", "deploy")]
             near = enemies or [{"x": enemy_base[0], "y": enemy_base[1]}] if enemy_base else enemies
@@ -275,27 +291,21 @@ class LastStandBot(CouncilBot):
             self.terrain, self.places = Terrain({"rows": []}), []
 
     def _hide(self, mcvs: list[dict], enemies: list[dict], now: float) -> list[dict[str, Any]]:
-        """Send each spare MCV to a hiding place; run to another when enemies come within reach."""
+        """Send each spare MCV to a hiding place of its own and leave it there (no running about: it was
+        seen and caught crossing the map). A new order only for an MCV that is idle and not there yet."""
         out: list[dict[str, Any]] = []
         if not self.places:
             return out
-        for u in mcvs:
+        for u in sorted(mcvs, key=lambda m: m["id"]):
             here = _cell(u)
             if here is None:
                 continue
-            threats = [c for e in enemies if (c := _cell(e)) and _dist(c, here) <= self.flee_radius]
-            target = self.mcv_target.get(u["id"])
-            if threats:
-                pick = max(self.places, key=lambda p: min(_dist(p, c) for c in threats) - 0.2 * _dist(p, here))
-                if pick != target and now - self.mcv_moved_at.get(u["id"], -1e9) >= 4:
-                    target = pick
-            elif target is None:
-                target = self.places[0]
-            if target is None:
-                continue
-            idle = bool(u.get("idle"))
-            if target != self.mcv_target.get(u["id"]) or (idle and _dist(here, target) > 4 and now - self.mcv_moved_at.get(u["id"], -1e9) >= 10):
-                self.mcv_target[u["id"]] = target
+            if u["id"] not in self.mcv_target:
+                taken = set(self.mcv_target.values())
+                self.mcv_target[u["id"]] = next((p for p in self.places if p not in taken), self.places[0])
+                self.mcv_moved_at[u["id"]] = -1e9
+            target = self.mcv_target[u["id"]]
+            if _dist(here, target) > 4 and (now - self.mcv_moved_at[u["id"]] >= 20 or (u.get("idle") and now - self.mcv_moved_at[u["id"]] >= 6)):
                 self.mcv_moved_at[u["id"]] = now
                 out.append({"cmd": "move", "units": [u["id"]], "to": list(target)})
         return out
