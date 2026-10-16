@@ -37,7 +37,8 @@ HERE = Path(__file__).resolve().parent
 SHOWDOWN_DIR = Path(os.environ.get("SHOWDOWN_DIR", "/home/dev/showdown"))
 FORMAT = "gen9vgc2025regi"
 CARDS = HERE.parent / "data" / "sim_cards.json"
-# The 18 cards of the first live test match (2026-10-16): standard VGC sets, items shared.
+# Every card seen in live test matches so far (2026-10-16: 30 of them). A live pool is 18 of the
+# platform's list, with items shared; a species' card is the same set in every pool.
 LIVE_CARDS = HERE.parent / "data" / "live_cards.json"
 GAME = "pokemon_vgc_doubles_draft"
 SNAKE = [0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0]
@@ -557,11 +558,12 @@ class Result:
     first: int
 
 
-def play_game(agent_factories: list[Callable[[], Any]], seed: int, showdown: Showdown, cards: list[dict]) -> Result:
+def play_game(agent_factories: list[Callable[[], Any]], seed: int, showdown: Showdown, cards: list[dict],
+              live_pool: bool = False) -> Result:
     rng = random.Random(seed)
     seats = [Seat(agent_factories[0](), "agent-a", "p1"), Seat(agent_factories[1](), "agent-b", "p2")]
-    # A list of 18 is a whole pool (the live one), dealt as it is; a bigger list is drawn from.
-    pool = rng.sample(cards, len(cards)) if len(cards) <= 18 else draw_pool(cards, rng)
+    # A live pool shares items, as the platform's do; the Item Clause is the draft's to enforce.
+    pool = rng.sample(cards, min(18, len(cards))) if live_pool else draw_pool(cards, rng)
     first = seed % 2
     run_draft(seats, pool, first, rng)
     orders = [run_preview(seats[0], seats[1], rng), run_preview(seats[1], seats[0], rng)]
@@ -678,7 +680,7 @@ def _worker(args: tuple[str, str, list[int], str]) -> list[tuple[int, Result | s
             # Alternate seats so neither side always sits in p1.
             names = [a, b] if seed % 4 < 2 else [b, a]
             try:
-                r = play_game([factory(names[0]), factory(names[1])], seed, sd, cards)
+                r = play_game([factory(names[0]), factory(names[1])], seed, sd, cards, card_pool == "live")
             except Exception as exc:  # noqa: BLE001
                 out.append((seed, f"error: {exc!r}"))
                 sd.close()
@@ -737,7 +739,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--workers", type=int, default=1)
     p.add_argument("--pool", choices=("sim", "live"), default="sim",
-                   help="sim: 18 of data/sim_cards.json's 447; live: the 18 cards of the live test match")
+                   help="sim: 18 of data/sim_cards.json's 447; live: 18 of the cards seen live (data/live_cards.json)")
     args = p.parse_args(argv)
     start = time.time()
     out = run(args.a, args.b, args.games, args.seed, args.workers, args.pool)

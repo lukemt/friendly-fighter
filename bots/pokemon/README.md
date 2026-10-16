@@ -115,26 +115,33 @@ On the harness's stand-in pool (seeds 1000-1199, 200 games each, seats alternati
 The max-damage row is from the build after the live match; the release `b4ec5f0` won 149 of the
 same 200. The other rows are `b4ec5f0`'s.
 
-On the live match's 18 cards (`--pool live`, seeds 1000-1199):
+On live-style pools (`--pool live`, seeds 1000-1199): 18 cards drawn from the 30 seen in live
+matches, with items shared as on the platform.
 
 | Bot | Opponent | Games | Wins | Losses | Win rate | Refused answers |
 |---|---|---|---|---|---|---|
-| bot | maxdamage | 200 | 195 | 5 | 97.5% | 0 |
-| bot+bstdraft (battle alone) | maxdamage | 200 | 150 | 50 | 75% | 0 |
+| bot | maxdamage | 200 | 169 | 31 | 84.5% | 0 |
+| bot+bstdraft (battle alone) | maxdamage | 200 | 156 | 44 | 78% | 0 |
 
-On that pool the bot always drafts Iron Hands, Incineroar, Basculegion and Iron Treads, then
-Gyarados or Dondozo.
+- The draft adds about 6 points over max-damage's base-stat draft.
+- The bot's favourite picks: Great Tusk, Chi-Yu, Iron Hands, Basculegion, Dondozo, Gyarados and
+  Incineroar.
+- Its slowest decision took 0.9 s.
+- On the first match's own 18 cards alone, it won 195 of 200, drafting Iron Hands, Incineroar,
+  Basculegion and Iron Treads every time.
 
-- **Speed:** a mean of about 50 ms a decision, with a maximum of 0.5 s (a full draft pick on a
-  2-CPU container running two games at once).
+- **Speed:** a mean of about 50 ms a decision, with a maximum of 0.5 s on the stand-in pool and
+  0.9 s on the live one (a full draft pick on a 2-CPU container running two games at once).
 - **Battle length:** about 4 turns on the stand-in pool and 6 on the live one. Level-50 sets with
   full attack EVs hit hard.
 
-## The live match
+## The live matches
 
-The first live test match was session `df1f2177` on 2026-10-16: self-play, release `b4ec5f0`.
-- It played all three phases on both seats: 12 picks, 2 lineups, 7 turns.
-- Every answer was accepted, with 0 fallbacks. The player-1 seat won.
+Two live test matches were played on 2026-10-16, both on release `b4ec5f0`, both with every
+answer accepted and 0 fallbacks:
+- `df1f2177`: self-play. All three phases on both seats: 12 picks, 2 lineups, 7 turns. The
+  player-1 seat won.
+- `a7cbacde`: against another agent. We won in 6 turns.
 - `harness/replay.py` replays a recording through the bot and prints each decision next to the
   live one (`--why` lists each slot's best options and their pair scores):
 
@@ -142,7 +149,8 @@ The first live test match was session `df1f2177` on 2026-10-16: self-play, relea
 .venv/bin/python -m bots.pokemon.harness.replay <recordings>/<session_id>/seat0.jsonl.gz --why
 ```
 
-Replaying release `b4ec5f0` gave the same 32 decisions as live. What the payload showed:
+Replaying the first match through `b4ec5f0` gave the same 32 decisions as live. The fixed build
+replays the second match unchanged, 14 of 14. What the payload showed:
 - The draft's `available_cards` carry full sets: item, ability, nature, EVs and moves. `rosters`
   is keyed by seat id, which is `context.agent_id`.
 - At Team Preview:
@@ -163,17 +171,19 @@ Replaying release `b4ec5f0` gave the same 32 decisions as live. What the payload
   Fake Out + Earthquake (halved by Grassy Terrain) to Wood Hammer + Wave Crash into Iron Hands.
   `tests/data/pokemon_live.json` holds five of the match's states (ids replaced), and the tests
   play them.
-- The live pool had 18 cards: Thundurus, Iron Valiant, Dondozo, Cresselia, Basculegion, Gyarados,
-  Farigiraf, Incineroar, Wo-Chien, Rillaboom, Archaludon, Lucario, Tyranitar, Iron Hands, Iron
-  Treads, Chien-Pao, Klefki and Grimmsnarl. They are standard VGC sets (Life Orb Timid Thundurus,
-  Assault Vest Iron Hands...).
+- **The pool.** Each match draws 18 cards from a larger list. The two pools shared 6 species, and
+  a species' card was the same set in both, so each species seems to have one fixed card.
+  - The cards are standard VGC sets (Life Orb Timid Thundurus, Assault Vest Iron Hands...).
+  - Items repeat inside a pool: 10 and 11 distinct items among 18 cards. The draft enforces the
+    Item Clause by leaving clashing cards out of the legal picks.
+  - All 30 cards seen so far are in `data/live_cards.json`.
 
 ## Open questions
 
-- **The real card pool.** Is the live pool the same 18 cards every match, or drawn from a larger
-  list? More test matches will tell. If it is fixed, the draft can be tuned on exactly those cards
-  (and `data/sim_cards.json` replaced by them). Draft weights (staples, denial 0.45) are untuned so
-  far.
+- **The full card list.** 30 cards have been seen so far. Adding each new match's
+  `available_cards` to `data/live_cards.json` makes `--pool live` closer to the platform.
+- **Draft tuning.** The weights (staples, denial 0.45) are untuned. The draft doesn't yet count
+  the Item Clause: taking a Sitrus Berry card can lock us out of the other two.
 - **Memory across a worker restart.** If the match's worker restarts mid-battle, the draft memory
   is gone and sets are guessed (252/252 spreads, STAB placeholder moves).
 - **Not modelled yet:**
