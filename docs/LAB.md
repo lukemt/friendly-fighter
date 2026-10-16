@@ -177,6 +177,13 @@ the strategist first. `lab jev` shows a council's requests and tokens by loop.
 a run with Jev bots and say why. After a run they warn, and leave a note on it, when Jev bots went
 without answers: those games played on frozen decisions, so drop them from conclusions.
 
+**Paid Jev is off in the lab unless a run asks for it** (AGENTS.md rule 11). Lab processes get the
+key `off`, frozen Jev bots included, so they can't spend credits by accident. A run that needs
+Jev's answers names how many games may use it: `FF_LAB_PAID_JEV=4 lab compare ...`. A run with
+more Jev games than that is refused before it starts, and the run's parameters record
+`paid_jev_games`. `lab jev eval` needs `FF_LAB_PAID_JEV=1`. A local server (`JEV_URL`) is free and
+needs none of this.
+
 Jev answers vary by about 0.02 in probability between identical calls, but the choices (and so the
 seeded games) replay the same. `ff-jev-off` is the same code with Jev switched off (a control);
 `ff-jev-v6-measured` charges its real decision time, Jev calls included, as game time, as the

@@ -103,8 +103,19 @@ def _play(db: LabDB, jobs: list[dict], a, kind: str, params: dict) -> int:
 
     jev_bots = sorted({n for j in jobs for n in j["bots"] if _uses_jev(n)})
     if jev_bots:
-        from bots.jev_bot import Jev
+        from bots.jev_bot import API_URL, Jev
 
+        if Jev().url == API_URL:  # (paid: TypeSafe's credits; a local server, JEV_URL, is free)
+            paid = sum(1 for j in jobs if any(_uses_jev(n) for n in j["bots"]))
+            allowed = batch.paid_jev_allowed()
+            if paid > allowed:
+                print(f"[lab] {paid} game(s) would ask paid Jev ({', '.join(jev_bots)}; ~250 calls a seat in a 20-minute "
+                      f"game), and this run may play {allowed}. Paid credits are for experiments that need Jev's "
+                      f"answers: probe a moment or play a few games, not a suite. To go ahead: "
+                      f"{batch.PAID_JEV}={paid} lab ... (or point JEV_URL at a local server). Not starting.", flush=True)
+                raise SystemExit(2)
+            params = {**params, "paid_jev_games": paid}
+            print(f"[lab] paid Jev: {paid} game(s) (allowed {allowed})", flush=True)
         problem = Jev().check()
         if problem:
             print(f"[lab] {', '.join(jev_bots)} need Jev, and {problem}: they would play on frozen decisions. "
@@ -806,7 +817,15 @@ def cmd_jev(a, db) -> int:
     if a.game == "eval":
         from lab import jev_eval
 
+        from bots.jev_bot import API_URL, Jev
+        from lab import batch
+
         cases = jev_eval.load_cases()
+        if Jev().url == API_URL and not batch.paid_jev_allowed():
+            print(f"lab jev eval asks paid Jev once a case ({len(cases)} cases"
+                  f"{', x3 loops' if a.council else ''}): run it as {batch.PAID_JEV}=1 lab jev eval ... "
+                  f"(or point JEV_URL at a local server)")
+            return 2
         variant = json.loads(Path(a.questions).read_text()) if a.questions else None
         print(f"{len(cases)} cases" + (f", variant {a.questions}" if a.questions else "")
               + (", asked as the council (bots/jev_council.py)" if a.council else ""))
