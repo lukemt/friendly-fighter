@@ -89,6 +89,7 @@ PRODUCTION = {
     "rockets": "Infantry are all rocket infantry, plus tanks: right when enemy tanks or aircraft have been seen, or when it is past 5:00 and the enemy army has never been seen",
     "vehicles": "Tanks first: right when money is piling up unspent and the enemy army is mostly infantry",
     "mixed": "Rifle and rocket infantry and tanks: the default; right when the enemy army has not been seen yet and it is before 5:00, or when it is a mix of infantry and tanks",
+    "rifles": "Rifle infantry only, plus tanks and artillery: right when most of the enemy army is infantry, because rocket infantry are poor against infantry",
 }
 OPENING = {
     "guard": "A defense and about 10 infantry at home first: safe against an early rush, slower economy",
@@ -107,7 +108,7 @@ VIEWS = {
 
 
 def loop_request(loop: str, words: dict[str, str], *, seconds: float, plan: str = "hold", events: list[str] | None = None,
-                 read: str | None = None) -> tuple[dict, dict]:
+                 read: str | None = None, rifles: bool = False) -> tuple[dict, dict]:
     """One loop's (state, questions), from the shared description: also used by ``lab jev eval``."""
     state: dict[str, Any] = {k: words[k] for k in VIEWS[loop] if k in words}
     plan_text = f"{plan}: {PLAN[plan].split('. Right')[0].lower()}"
@@ -130,7 +131,7 @@ def loop_request(loop: str, words: dict[str, str], *, seconds: float, plan: str 
         return state, questions
     if loop == "supply":
         state = {"briefing": SUPPLY_BRIEF, **state, "current_plan": plan_text}
-        options = ("infantry", "rockets", "mixed") if seconds < 240 else ("rockets", "vehicles", "mixed")
+        options = ("infantry", "rockets", "mixed") if seconds < 240 else ("rockets", "vehicles", "mixed") + (("rifles",) if rifles else ())
         return state, {"production": {"type": "choice", "instructions": "Using `briefing`, what should our factories train now?",
                                       "criteria": {k: PRODUCTION[k] for k in options}}}
     if loop == "field":
@@ -145,7 +146,9 @@ def loop_request(loop: str, words: dict[str, str], *, seconds: float, plan: str 
 class CouncilBot(JevBot):
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = True, scout: bool = False,
                  plan: str = "hold", gate: float = 0.55, attack_gate: float = 0.6, use_jev: bool = True,
-                 boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev", **kwargs) -> None:
+                 boom_until: float = 600.0, keep_first: float = 0.0, oracle: str = "jev",
+                 blind_production: str = "rockets", rifle_rule: bool = False, rifle_hi: float = 0.6, rifle_lo: float = 0.35,
+                 **kwargs) -> None:
         """``gate``: the probability a new plan needs; ``attack_gate``: the same for attack and boom.
         ``boom_until``: no boom from this time; ``keep_first``: the first plan stands until then unless
         the base is raided or an attack is expected (for experiments). ``oracle="rules"``: code answers
@@ -153,6 +156,8 @@ class CouncilBot(JevBot):
         super().__init__(log_dir=log_dir, model=model, push=push, scout=scout, use_jev=use_jev, **kwargs)
         if oracle == "rules":
             self.jev = Rules(self)
+        self.blind_production = blind_production  # (jev family: what the rules train while the enemy army is unseen; v10: rockets)
+        self.rifle_rule, self.rifle_hi, self.rifle_lo = rifle_rule, rifle_hi, rifle_lo
         self.plan = plan
         self.plan_since = 0.0
         self.gate, self.attack_gate = gate, attack_gate
@@ -248,7 +253,8 @@ class CouncilBot(JevBot):
     def _run(self, loops: list[str], words: dict, now: float) -> tuple[dict, dict[str, int], float]:
         """The loops' requests, all at once (one thread each): the answers together, each loop's
         tokens, the wall time."""
-        requests = {loop: loop_request(loop, words, seconds=now, plan=self.plan, events=self.events, read=self._read())
+        requests = {loop: loop_request(loop, words, seconds=now, plan=self.plan, events=self.events, read=self._read(),
+                                       rifles=self.rifle_rule or self.blind_production == "rifles")
                     for loop in loops}
         start = time.monotonic()
         futures = {loop: self.pool.submit(self._ask, state, questions) for loop, (state, questions) in requests.items()}
@@ -304,6 +310,7 @@ class CouncilBot(JevBot):
 
 
 VEHICLES = {"1tnk", "2tnk", "3tnk", "4tnk", "ttnk", "v2rl", "arty", "apc", "jeep", "ftrk", "mnly"}
+INFANTRY = {"e1", "e2", "e3", "e4", "e6", "e7", "dog", "shok", "spy", "thf", "medi", "mech", "tecn", "tecn2"}
 
 
 class Rules:
@@ -387,12 +394,29 @@ class Rules:
         seen = self._seen()
         if now < 240:
             return "infantry" if b.raids else "mixed"
-        if seen & VEHICLES or b.enemy_air or (now >= 300 and b.enemy_max_army == 0):
+        if b.rifle_rule:
+            share = self._infantry_share(now)
+            if share is not None:
+                if share >= b.rifle_hi:
+                    return "rifles"
+                if share <= b.rifle_lo and (seen & VEHICLES or b.enemy_air):
+                    return "rockets"
+                return "mixed"
+        if seen & VEHICLES or b.enemy_air:
             return "rockets"
+        if now >= 300 and b.enemy_max_army == 0:
+            return b.blind_production
         cash = int(((raw.get("observation") or {}).get("economy") or {}).get("cash") or 0)
         if cash > 2000 and seen and not seen & VEHICLES:
             return "vehicles"
         return "mixed"
+
+    def _infantry_share(self, now: float) -> float | None:
+        """The infantry part of the enemy units seen in the last 90 s, or None when too few were seen."""
+        recent = [t for t, seen in self.bot.enemy_seen.values() if now - seen <= 90 and t not in NONCOMBAT]
+        if len(recent) < 8:
+            return None
+        return sum(1 for t in recent if t in INFANTRY) / len(recent)
 
     def posture(self, facts, now, raw) -> str:
         b = self.bot

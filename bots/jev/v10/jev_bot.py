@@ -285,7 +285,8 @@ class JevBot:
     def __init__(self, *, log_dir: str | None = None, model: str = MODEL, push: bool = False,
                  commit_deficit: int = COMMIT_DEFICIT, use_jev: bool = True, questions: str | None = None, scout: bool = True,
                  force: str | None = None, economy: str | int = "off", guard_end: float | None = None,
-                 greed_floor: int = 0, defenses: int = 2, early_refineries: int = 0) -> None:
+                 greed_floor: int = 0, defenses: int = 2, early_refineries: int = 0,
+                 stage_cells: float = 0.0, regroup: bool = False, focus: bool = False) -> None:
         """``force``: a posture held whatever Jev says and past every rail (for the coach: what would
         each posture have scored from this moment?)."""
         self.push = push
@@ -297,6 +298,7 @@ class JevBot:
         self.guard_end = guard_end      # the guard opening ends here when no raid has come (else at 6:00)
         self.greed_floor = greed_floor  # Jev's "greedy" only with at least this many combat units
         self.defenses = defenses        # the scripted bot's cap on defenses
+        self.stage_cells, self.regroup, self.focus = stage_cells, regroup, focus  # (jev family: where the army waits, how it fires; off = v10)
         self.early_refineries = early_refineries  # refineries before the war factory beyond the first
         self.scout = scout
         self.questions = load_questions(questions)
@@ -305,7 +307,8 @@ class JevBot:
         self.commit_deficit = commit_deficit
         self.bot = RedAlertBot(knobs=Knobs(opening="guard", posture="defend", attack_threshold=60,
                                            greed=economy if isinstance(economy, int) else 2 if economy == "read" else 0,
-                                           defenses=defenses, early_refineries=early_refineries),
+                                           defenses=defenses, early_refineries=early_refineries,
+                                           stage_cells=stage_cells, regroup=regroup, focus=focus),
                                log=lambda line: None)
         self.jev = Jev(model=model)
         if not use_jev:  # (the control: the same bot with the decisions frozen at the start)
@@ -699,7 +702,7 @@ class JevBot:
             ids = [u["id"] for u in facts["away"]][:50]
             if ids:
                 extra.append({"cmd": "move", "units": ids, "to": list(facts["home"])})
-        if production in ("infantry", "rockets", "vehicles", "mixed"):
+        if production in ("infantry", "rockets", "vehicles", "mixed", "rifles"):
             self.production = production
         economy, _ = choice("economy")
         if self.economy == "read":
@@ -725,6 +728,9 @@ class JevBot:
             greed=self.greed,
             defenses=self.defenses,
             early_refineries=self.early_refineries,
+            stage_cells=self.stage_cells,
+            regroup=self.regroup,
+            focus=self.focus,
             note=self.posture,
         )
         self.bot.set_knobs(knobs)

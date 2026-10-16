@@ -55,6 +55,8 @@ INFANTRY_PRIORITY = ("e1", "e3")  # alternated
 # defenses, then production, then refineries, then the rest. Walls are ignored.
 FOCUS_PRIORITY = (("fact",), DEFENSES, ("weap", "tent", "barr"), ("proc",))
 WALLS = {"fenc", "brik", "sbag", "cycl", "barb", "wood"}
+INFANTRY_TYPES = frozenset({"e1", "e2", "e3", "e4", "e6", "e7", "dog", "shok", "spy", "thf", "medi", "mech", "tecn", "tecn2"})
+FOCUS_IGNORE = frozenset({"harv", "mcv", "mnly", "truk", "u2", "tran", "mine", "minv", "minp"})  # (not worth a focus order)
 DEFAULT_QUEUES = {
     "Infantry": {"e1", "e2", "e3", "e4", "e6", "e7", "medi", "mech", "spy", "thf", "dog", "shok"},
     "Vehicle": {"mcv", "harv", "1tnk", "2tnk", "3tnk", "4tnk", "jeep", "apc", "arty", "v2rl", "ftrk",
@@ -92,6 +94,7 @@ FIRST_WAVE_SECONDS = 360      # ...or until this much game time has passed
 DEFEND_RADIUS = 16            # enemies this close to home are a threat
 HOME_RADIUS = 25              # our units this close to home help defend
 REORDER_SECONDS = 6.0         # don't re-order the same unit more often than this
+REGROUP_SECONDS = 15.0        # (jev family) idle units are sent back to the staging point at most this often
 DEFEND_REORDER_SECONDS = 3.0
 WAVE_REORDER_SECONDS = 8.0
 REFUSAL_COOLDOWN_SECONDS = 4.0
@@ -118,7 +121,7 @@ class Knobs:
 
     posture: str = "attack"          # "eco" | "defend" | "attack"
     attack_threshold: int = 8        # combat units needed to launch a wave
-    unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only)
+    unit_focus: str = "mixed"        # "infantry" | "vehicles" | "mixed" | "rockets" (mixed, rocket infantry only) | "rifles" (jev family: riflemen only, support vehicles every other one)
     target: str = "nearest"          # "nearest" | "enemy_base" | "harvesters"
     opening: str = "standard"        # "standard" | "guard": a defense and infantry at home through the rush window
     defenses: int = 2                # at most this many defenses (once the economy is up)
@@ -126,6 +129,9 @@ class Knobs:
     early_refineries: int = 0        # refineries before the war factory beyond the first (income sooner, tanks later)
     aim: tuple[int, int] | None = None  # attack here (the commander's pick), unless enemies are in the way
     note: str = ""
+    stage_cells: float = 0.0         # (jev family) the staging point this many cells from home toward the enemy; 0: a fifth of the way (v10)
+    regroup: bool = False            # (jev family) idle combat units walk to the staging point even in the defend posture
+    focus: bool = False              # (jev family) defending: each kind of unit attacks the enemy it hurts most (an `attack` order with a target)
 
 
 @dataclass
@@ -397,7 +403,7 @@ class RedAlertBot:
 
         # Rally new units to a staging point on the way to the enemy (the guard opening: next to the
         # base's defense until its window ends; buildings are rallied again when the point moves).
-        stage = self._staging(home, enemy_base, raw)
+        stage = self._staging(home, enemy_base, raw, knobs.stage_cells)
         if knobs.opening == "guard" and now < GUARD_SECONDS and enemy_base:
             dx, dy = enemy_base[0] - home[0], enemy_base[1] - home[1]
             length = math.hypot(dx, dy) or 1.0
@@ -426,7 +432,7 @@ class RedAlertBot:
         combat = [u for u in units if is_combat(u)]
         threats = self._threats(obs, home)
         if threats:
-            self._defend(add, combat, threats, home, now, notes)
+            self._defend(add, combat, threats, home, now, notes, obs=obs, knobs=knobs)
         else:
             self._attack(add, combat, raw, home, enemy_base, stage, knobs, now, notes)
 
@@ -515,6 +521,8 @@ class RedAlertBot:
         infantry = [i for i in INFANTRY_PRIORITY if i in available]
         if knobs.unit_focus == "rockets" and "e3" in available:  # (against aircraft and armor)
             infantry = ["e3"]
+        if knobs.unit_focus == "rifles" and "e1" in available:  # (against infantry: the best value per credit in the model)
+            infantry = ["e1"]
         surplus = free - reserve > SURPLUS_CASH
         want_infantry = knobs.unit_focus != "vehicles" or "weap" not in types or surplus
         if (knobs.opening == "guard" and now < GUARD_SECONDS and infantry and queued["Infantry"] == 0 and has_proc
@@ -541,7 +549,8 @@ class RedAlertBot:
         if vehicles and queued["Vehicle"] == 0 and knobs.unit_focus != "infantry":
             pick = vehicles[0]
             support = [v for v in SUPPORT_VEHICLES if v in available]
-            if support and self._vehicles_ordered % SUPPORT_EVERY == SUPPORT_EVERY - 1:
+            every = 2 if knobs.unit_focus == "rifles" else SUPPORT_EVERY
+            if support and self._vehicles_ordered % every == every - 1:
                 pick = support[0]
             cost = self._costs.get(pick, 800)
             if free >= cost * 0.6:
@@ -559,7 +568,7 @@ class RedAlertBot:
                     cells.append(cell)
         return cells
 
-    def _defend(self, add, combat, threats, home, now, notes) -> None:
+    def _defend(self, add, combat, threats, home, now, notes, obs=None, knobs: Knobs | None = None) -> None:
         target = min(threats, key=lambda c: _dist(c, home))
         def near_home(u: dict[str, Any]) -> bool:
             cell = _cell(u)
@@ -570,8 +579,56 @@ class RedAlertBot:
             if (near_home(u) or not self._wave_active)
             and now - self._unit_ordered.get(u["id"], -1e9) >= DEFEND_REORDER_SECONDS
         ]
+        if knobs is not None and knobs.focus and obs is not None and self._focus_defend(add, combat, set(helpers), obs, home, now):
+            notes.append(f"defend base vs {len(threats)} enemies: focus fire")
+            return
         if self._order_units(add, "attack_move", helpers, target, now):
             notes.append(f"defend base vs {len(threats)} enemies at {list(target)}")
+
+    def _focus_defend(self, add, combat, helper_ids, obs, home, now) -> bool:
+        """Each kind of unit attacks the nearest enemy of the kind it hurts most (PakledAgent's matchup model:
+        'targeting is worth as much as composition'): rocket soldiers the aircraft and vehicles, riflemen and
+        grenadiers the infantry, tanks the vehicles, artillery whatever is nearest."""
+        enemies = [e for e in _list(obs.get("visible_enemies"))
+                   if not e.get("wreck") and not str(e.get("type") or "").endswith("husk") and isinstance(e.get("id"), int)
+                   and (c := _cell(e)) and _dist(c, home) <= DEFEND_RADIUS + 4
+                   and str(e.get("type") or "").lower() not in FOCUS_IGNORE]
+        if not enemies:
+            return False
+        def kind(e) -> str:
+            t = str(e.get("type") or "").lower()
+            return "air" if t in AIR else "infantry" if t in INFANTRY_TYPES else "vehicle"
+        groups: dict[str, list[dict]] = {"rocket": [], "infantry_killer": [], "armor": [], "support": []}
+        for u in combat:
+            if u["id"] not in helper_ids:
+                continue
+            t = str(u.get("type") or "").lower()
+            role = ("rocket" if t == "e3" else "infantry_killer" if t in ("e1", "e2", "e4", "dog", "e7", "shok") else
+                    "support" if t in ("arty", "v2rl") else "armor")
+            groups[role].append(u)
+        prefer = {"rocket": ("air", "vehicle", "infantry"), "infantry_killer": ("infantry", "vehicle"),
+                  "armor": ("vehicle", "infantry"), "support": ("infantry", "vehicle")}
+        sent = False
+        for role, units in groups.items():
+            if not units:
+                continue
+            centre = _centroid([c for u in units if (c := _cell(u))]) or home
+            pick = None
+            for want in prefer[role]:
+                pool = [e for e in enemies if kind(e) == want]
+                if pool:
+                    pick = min(pool, key=lambda e: _dist(_cell(e), centre))
+                    break
+            if pick is None:
+                continue
+            ids = [u["id"] for u in units]
+            for start in range(0, len(ids), MAX_UNITS_PER_ORDER):
+                chunk = ids[start:start + MAX_UNITS_PER_ORDER]
+                if add({"cmd": "attack", "units": chunk, "target": pick["id"]}):
+                    for uid in chunk:
+                        self._unit_ordered[uid] = now
+                    sent = True
+        return sent
 
     def _attack(self, add, combat, raw, home, enemy_base, stage, knobs: Knobs, now, notes) -> None:
         time_info = _dict(raw.get("time"))
@@ -586,6 +643,10 @@ class RedAlertBot:
                     and time_info["game_seconds"] < GUARD_SECONDS)
         if knobs.posture == "defend" or hold or guarding:
             self._wave_active = False
+            if knobs.regroup and not guarding:
+                idle = [u["id"] for u in combat if u.get("idle") and _cell(u) and _dist(_cell(u), stage) > 7
+                        and now - self._unit_ordered.get(u["id"], -1e9) >= REGROUP_SECONDS]
+                self._order_units(add, "move", idle, stage, now)
             return
         vehicles = sum(1 for u in combat if self._queue_of(str(u.get("type") or "").lower()) == "Vehicle")
         game_seconds = time_info.get("game_seconds")
@@ -841,10 +902,13 @@ class RedAlertBot:
             return None
         return max(self._spawns, key=lambda c: _dist(c, home))
 
-    def _staging(self, home, enemy_base, raw) -> tuple[int, int]:
+    def _staging(self, home, enemy_base, raw, cells: float = 0.0) -> tuple[int, int]:
         if not enemy_base:
             return home
-        spot = (round(home[0] + (enemy_base[0] - home[0]) * 0.2), round(home[1] + (enemy_base[1] - home[1]) * 0.2))
+        fraction = 0.2
+        if cells > 0:
+            fraction = min(1.0, cells / (math.hypot(enemy_base[0] - home[0], enemy_base[1] - home[1]) or 1.0))
+        spot = (round(home[0] + (enemy_base[0] - home[0]) * fraction), round(home[1] + (enemy_base[1] - home[1]) * fraction))
         return self._clamp(spot, raw)
 
     def _clamp(self, cell: tuple[int, int], raw: dict[str, Any]) -> tuple[int, int]:
