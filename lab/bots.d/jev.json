@@ -544,6 +544,28 @@
     "rules",
     "tanya"
    ]
+  },
+  {
+   "name": "jev-regroup-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_regroup_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "regroup": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-plc jev-plc@9f7dc537 at af73e86: PLACEBO for the staging probes: jev-base with regroup only (idle units walk to v10's own staging point): a perturbation that should do nothing, to measure what any change gains on outcome-selected moments",
+   "tags": [
+    "frozen",
+    "jev",
+    "placebo",
+    "rules"
+   ]
   }
  ]
 }
