@@ -98,6 +98,7 @@ class FriendlyFighter:
     # -- moves ----------------------------------------------------------------------
 
     def choose_action(self, state: GameState, context: DecisionContext):
+        self._game = context.game_type  # _other() routes Werewolf by it
         self._recorder.state(state, context)
         if self._think_seconds:
             time.sleep(self._think_seconds)  # FF_THINK_MS: play like a slower agent (local test games)
@@ -158,6 +159,7 @@ class FriendlyFighter:
             self._bot.on_action_result(result, context)
 
     def choose_message(self, state: GameState, context: DecisionContext):
+        self._game = context.game_type
         other = self._other()
         if other is not None and hasattr(other, "choose_message"):
             return other.choose_message(state, context)
@@ -185,12 +187,23 @@ class FriendlyFighter:
         return self._pokemon_bot
 
     def _other(self) -> Any:
+        if getattr(self, "_game", None) == "werewolf":
+            return self._werewolf()
         if not self._fallback_ready:
             self._fallback_ready = True
             if os.environ.get("OPENAI_API_KEY"):
                 from examples.llm_agent import create_agent as create_llm_agent
 
                 self._fallback = create_llm_agent()
+        return self._fallback
+
+    def _werewolf(self) -> Any:
+        """The scripted Werewolf bot (bots.werewolf); kept in ``_fallback`` so on_action_result reaches it."""
+        if self._fallback is None:
+            from bots.werewolf import create_agent as create_werewolf_agent
+
+            self._fallback = create_werewolf_agent(record=self._recorder._write)
+            print_line("[ff] werewolf: scripted bot (bots.werewolf)")
         return self._fallback
 
 
