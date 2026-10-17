@@ -1,0 +1,4430 @@
+{
+ "draft": {
+  "session_id": "live-session",
+  "game_type": "pokemon_vgc_doubles_draft",
+  "runtime_adapter": "pokemon",
+  "status": "in_progress",
+  "state_version": 0,
+  "observation": {
+   "phase": "draft",
+   "draft_complete": false,
+   "battle_format": "gen9vgc2025regi",
+   "current_seat": "seat-a",
+   "pick_number": 1,
+   "picks_remaining": 12,
+   "first_drafter": "seat-a",
+   "available_card_ids": [
+    "vgc-thundurus",
+    "vgc-iron-valiant",
+    "vgc-dondozo",
+    "vgc-cresselia",
+    "vgc-basculegion",
+    "vgc-gyarados",
+    "vgc-farigiraf",
+    "vgc-incineroar",
+    "vgc-wo-chien",
+    "vgc-rillaboom",
+    "vgc-archaludon",
+    "vgc-lucario",
+    "vgc-tyranitar",
+    "vgc-iron-hands",
+    "vgc-iron-treads",
+    "vgc-chien-pao",
+    "vgc-klefki",
+    "vgc-grimmsnarl"
+   ],
+   "available_cards": [
+    {
+     "card_id": "vgc-thundurus",
+     "species": "Thundurus",
+     "item": "Life Orb",
+     "ability": "Defiant",
+     "nature": "Timid",
+     "level": 50,
+     "evs": {
+      "spa": 252,
+      "spd": 4,
+      "spe": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Thunderbolt",
+      "Sludge Bomb",
+      "Taunt",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-iron-valiant",
+     "species": "Iron Valiant",
+     "item": "Booster Energy",
+     "ability": "Quark Drive",
+     "nature": "Timid",
+     "level": 50,
+     "evs": {
+      "spa": 252,
+      "spd": 4,
+      "spe": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Moonblast",
+      "Close Combat",
+      "Thunderbolt",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-dondozo",
+     "species": "Dondozo",
+     "item": "Leftovers",
+     "ability": "Unaware",
+     "nature": "Adamant",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "atk": 252,
+      "spd": 4
+     },
+     "ivs": {},
+     "moves": [
+      "Wave Crash",
+      "Earthquake",
+      "Liquidation",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-cresselia",
+     "species": "Cresselia",
+     "item": "Sitrus Berry",
+     "ability": "Levitate",
+     "nature": "Bold",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "def": 252,
+      "spd": 4
+     },
+     "ivs": {},
+     "moves": [
+      "Icy Wind",
+      "Moonblast",
+      "Helping Hand",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-basculegion",
+     "species": "Basculegion",
+     "item": "Life Orb",
+     "ability": "Adaptability",
+     "nature": "Adamant",
+     "level": 50,
+     "evs": {
+      "hp": 4,
+      "atk": 252,
+      "spe": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Wave Crash",
+      "Aqua Jet",
+      "Liquidation",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-gyarados",
+     "species": "Gyarados",
+     "item": "Sitrus Berry",
+     "ability": "Intimidate",
+     "nature": "Adamant",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "atk": 252,
+      "spe": 4
+     },
+     "ivs": {},
+     "moves": [
+      "Waterfall",
+      "Earthquake",
+      "Taunt",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-farigiraf",
+     "species": "Farigiraf",
+     "item": "Electric Seed",
+     "ability": "Armor Tail",
+     "nature": "Quiet",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "spa": 252,
+      "spd": 4
+     },
+     "ivs": {},
+     "moves": [
+      "Trick Room",
+      "Dazzling Gleam",
+      "Psychic",
+      "Helping Hand"
+     ]
+    },
+    {
+     "card_id": "vgc-incineroar",
+     "species": "Incineroar",
+     "item": "Safety Goggles",
+     "ability": "Intimidate",
+     "nature": "Careful",
+     "level": 50,
+     "evs": {
+      "hp": 244,
+      "def": 12,
+      "spd": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Fake Out",
+      "Knock Off",
+      "Parting Shot",
+      "Flare Blitz"
+     ]
+    },
+    {
+     "card_id": "vgc-wo-chien",
+     "species": "Wo-Chien",
+     "item": "Sitrus Berry",
+     "ability": "Tablets of Ruin",
+     "nature": "Careful",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "spa": 4,
+      "spd": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Leech Seed",
+      "Foul Play",
+      "Giga Drain",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-rillaboom",
+     "species": "Rillaboom",
+     "item": "Assault Vest",
+     "ability": "Grassy Surge",
+     "nature": "Adamant",
+     "level": 50,
+     "evs": {
+      "hp": 236,
+      "atk": 116,
+      "def": 4,
+      "spd": 4,
+      "spe": 148
+     },
+     "ivs": {},
+     "moves": [
+      "Fake Out",
+      "Wood Hammer",
+      "Grassy Glide",
+      "U-turn"
+     ]
+    },
+    {
+     "card_id": "vgc-archaludon",
+     "species": "Archaludon",
+     "item": "Leftovers",
+     "ability": "Stamina",
+     "nature": "Bold",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "def": 252,
+      "spa": 4
+     },
+     "ivs": {},
+     "moves": [
+      "Body Press",
+      "Draco Meteor",
+      "Flash Cannon",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-lucario",
+     "species": "Lucario",
+     "item": "Life Orb",
+     "ability": "Inner Focus",
+     "nature": "Jolly",
+     "level": 50,
+     "evs": {
+      "hp": 4,
+      "atk": 252,
+      "spe": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Close Combat",
+      "Bullet Punch",
+      "Poison Jab",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-tyranitar",
+     "species": "Tyranitar",
+     "item": "Chople Berry",
+     "ability": "Sand Stream",
+     "nature": "Careful",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "atk": 4,
+      "spd": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Rock Slide",
+      "Knock Off",
+      "Low Kick",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-iron-hands",
+     "species": "Iron Hands",
+     "item": "Assault Vest",
+     "ability": "Quark Drive",
+     "nature": "Adamant",
+     "level": 50,
+     "evs": {
+      "hp": 236,
+      "atk": 252,
+      "spe": 20
+     },
+     "ivs": {},
+     "moves": [
+      "Fake Out",
+      "Close Combat",
+      "Wild Charge",
+      "Drain Punch"
+     ]
+    },
+    {
+     "card_id": "vgc-iron-treads",
+     "species": "Iron Treads",
+     "item": "Booster Energy",
+     "ability": "Quark Drive",
+     "nature": "Jolly",
+     "level": 50,
+     "evs": {
+      "hp": 4,
+      "atk": 252,
+      "spe": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Earthquake",
+      "Iron Head",
+      "High Horsepower",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-chien-pao",
+     "species": "Chien-Pao",
+     "item": "Focus Sash",
+     "ability": "Sword of Ruin",
+     "nature": "Jolly",
+     "level": 50,
+     "evs": {
+      "hp": 4,
+      "atk": 252,
+      "spe": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Icicle Crash",
+      "Sacred Sword",
+      "Sucker Punch",
+      "Protect"
+     ]
+    },
+    {
+     "card_id": "vgc-klefki",
+     "species": "Klefki",
+     "item": "Light Clay",
+     "ability": "Prankster",
+     "nature": "Careful",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "atk": 4,
+      "spd": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Reflect",
+      "Light Screen",
+      "Dazzling Gleam",
+      "Foul Play"
+     ]
+    },
+    {
+     "card_id": "vgc-grimmsnarl",
+     "species": "Grimmsnarl",
+     "item": "Light Clay",
+     "ability": "Prankster",
+     "nature": "Careful",
+     "level": 50,
+     "evs": {
+      "hp": 252,
+      "atk": 4,
+      "spd": 252
+     },
+     "ivs": {},
+     "moves": [
+      "Light Screen",
+      "Reflect",
+      "Spirit Break",
+      "Thunder Wave"
+     ]
+    }
+   ],
+   "rosters": {
+    "seat-a": [],
+    "seat-b": []
+   },
+   "picks": [],
+   "unused_card_ids": [
+    "vgc-thundurus",
+    "vgc-iron-valiant",
+    "vgc-dondozo",
+    "vgc-cresselia",
+    "vgc-basculegion",
+    "vgc-gyarados",
+    "vgc-farigiraf",
+    "vgc-incineroar",
+    "vgc-wo-chien",
+    "vgc-rillaboom",
+    "vgc-archaludon",
+    "vgc-lucario",
+    "vgc-tyranitar",
+    "vgc-iron-hands",
+    "vgc-iron-treads",
+    "vgc-chien-pao",
+    "vgc-klefki",
+    "vgc-grimmsnarl"
+   ],
+   "decision_timeout_seconds": 15.0,
+   "battle_starting": false
+  },
+  "phase": "draft",
+  "is_terminal": false,
+  "is_current_actor": true,
+  "current_actor": {
+   "agent_id": "seat-a",
+   "position": 0
+  },
+  "legal_actions": {
+   "session_id": "live-session",
+   "state_version": 0,
+   "actions": [
+    {
+     "action_id": "draft_pick:vgc-thundurus",
+     "label": "Draft vgc-thundurus",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-thundurus"
+      },
+      "action_id": "draft_pick:vgc-thundurus",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-iron-valiant",
+     "label": "Draft vgc-iron-valiant",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-iron-valiant"
+      },
+      "action_id": "draft_pick:vgc-iron-valiant",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-dondozo",
+     "label": "Draft vgc-dondozo",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-dondozo"
+      },
+      "action_id": "draft_pick:vgc-dondozo",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-cresselia",
+     "label": "Draft vgc-cresselia",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-cresselia"
+      },
+      "action_id": "draft_pick:vgc-cresselia",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-basculegion",
+     "label": "Draft vgc-basculegion",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-basculegion"
+      },
+      "action_id": "draft_pick:vgc-basculegion",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-gyarados",
+     "label": "Draft vgc-gyarados",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-gyarados"
+      },
+      "action_id": "draft_pick:vgc-gyarados",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-farigiraf",
+     "label": "Draft vgc-farigiraf",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-farigiraf"
+      },
+      "action_id": "draft_pick:vgc-farigiraf",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-incineroar",
+     "label": "Draft vgc-incineroar",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-incineroar"
+      },
+      "action_id": "draft_pick:vgc-incineroar",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-wo-chien",
+     "label": "Draft vgc-wo-chien",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-wo-chien"
+      },
+      "action_id": "draft_pick:vgc-wo-chien",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-rillaboom",
+     "label": "Draft vgc-rillaboom",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-rillaboom"
+      },
+      "action_id": "draft_pick:vgc-rillaboom",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-archaludon",
+     "label": "Draft vgc-archaludon",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-archaludon"
+      },
+      "action_id": "draft_pick:vgc-archaludon",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-lucario",
+     "label": "Draft vgc-lucario",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-lucario"
+      },
+      "action_id": "draft_pick:vgc-lucario",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-tyranitar",
+     "label": "Draft vgc-tyranitar",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-tyranitar"
+      },
+      "action_id": "draft_pick:vgc-tyranitar",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-iron-hands",
+     "label": "Draft vgc-iron-hands",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-iron-hands"
+      },
+      "action_id": "draft_pick:vgc-iron-hands",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-iron-treads",
+     "label": "Draft vgc-iron-treads",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-iron-treads"
+      },
+      "action_id": "draft_pick:vgc-iron-treads",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-chien-pao",
+     "label": "Draft vgc-chien-pao",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-chien-pao"
+      },
+      "action_id": "draft_pick:vgc-chien-pao",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-klefki",
+     "label": "Draft vgc-klefki",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-klefki"
+      },
+      "action_id": "draft_pick:vgc-klefki",
+      "state_version": 0
+     }
+    },
+    {
+     "action_id": "draft_pick:vgc-grimmsnarl",
+     "label": "Draft vgc-grimmsnarl",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "draft_pick",
+       "card_id": "vgc-grimmsnarl"
+      },
+      "action_id": "draft_pick:vgc-grimmsnarl",
+      "state_version": 0
+     }
+    }
+   ]
+  },
+  "next_actions": [
+   {
+    "tool": "play_action",
+    "hint": "Pick one of legal_actions.actions and pass its `input`."
+   }
+  ]
+ },
+ "team_preview": {
+  "session_id": "live-session",
+  "game_type": "pokemon_vgc_doubles_draft",
+  "runtime_adapter": "pokemon",
+  "status": "in_progress",
+  "state_version": 0,
+  "observation": {
+   "phase": "team_preview",
+   "battle_format": "gen9vgc2025regi",
+   "battle_tag": "battle-gen9vgc2025regi-live",
+   "waiting_for_action": true,
+   "your_roster": [
+    {
+     "species": "ironhands",
+     "name": "Iron Hands",
+     "current_hp": 259,
+     "max_hp": 259,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "quarkdrive",
+     "item": "assaultvest",
+     "types": [
+      "FIGHTING",
+      "ELECTRIC"
+     ],
+     "base_stats": {
+      "atk": 140,
+      "def": 108,
+      "hp": 154,
+      "spa": 50,
+      "spd": 68,
+      "spe": 50
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "fakeout",
+      "closecombat",
+      "wildcharge",
+      "drainpunch"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "archaludon",
+     "name": "Archaludon",
+     "current_hp": 197,
+     "max_hp": 197,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "stamina",
+     "item": "leftovers",
+     "types": [
+      "STEEL",
+      "DRAGON"
+     ],
+     "base_stats": {
+      "atk": 105,
+      "def": 130,
+      "hp": 90,
+      "spa": 125,
+      "spd": 65,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "bodypress",
+      "dracometeor",
+      "flashcannon",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "basculegion",
+     "name": "Basculegion",
+     "current_hp": 196,
+     "max_hp": 196,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "adaptability",
+     "item": "lifeorb",
+     "types": [
+      "WATER",
+      "GHOST"
+     ],
+     "base_stats": {
+      "atk": 112,
+      "def": 65,
+      "hp": 120,
+      "spa": 80,
+      "spd": 75,
+      "spe": 78
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "wavecrash",
+      "aquajet",
+      "liquidation",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "gyarados",
+     "name": "Gyarados",
+     "current_hp": 202,
+     "max_hp": 202,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "intimidate",
+     "item": "sitrusberry",
+     "types": [
+      "WATER",
+      "FLYING"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 79,
+      "hp": 95,
+      "spa": 60,
+      "spd": 100,
+      "spe": 81
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "waterfall",
+      "earthquake",
+      "taunt",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "irontreads",
+     "name": "Iron Treads",
+     "current_hp": 166,
+     "max_hp": 166,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "quarkdrive",
+     "item": "boosterenergy",
+     "types": [
+      "GROUND",
+      "STEEL"
+     ],
+     "base_stats": {
+      "atk": 112,
+      "def": 120,
+      "hp": 90,
+      "spa": 72,
+      "spd": 70,
+      "spe": 106
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "earthquake",
+      "ironhead",
+      "highhorsepower",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "tyranitar",
+     "name": "Tyranitar",
+     "current_hp": 207,
+     "max_hp": 207,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "sandstream",
+     "item": "chopleberry",
+     "types": [
+      "ROCK",
+      "DARK"
+     ],
+     "base_stats": {
+      "atk": 134,
+      "def": 110,
+      "hp": 100,
+      "spa": 95,
+      "spd": 100,
+      "spe": 61
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "rockslide",
+      "knockoff",
+      "lowkick",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    }
+   ],
+   "opponent_roster": [
+    {
+     "species": "incineroar",
+     "name": "Incineroar",
+     "current_hp": 0,
+     "max_hp": 0,
+     "current_hp_fraction": 0,
+     "status": null,
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "FIRE",
+      "DARK"
+     ],
+     "base_stats": {
+      "atk": 115,
+      "def": 90,
+      "hp": 95,
+      "spa": 80,
+      "spd": 90,
+      "spe": 60
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "rillaboom",
+     "name": "Rillaboom",
+     "current_hp": 0,
+     "max_hp": 0,
+     "current_hp_fraction": 0,
+     "status": null,
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "GRASS"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 90,
+      "hp": 100,
+      "spa": 60,
+      "spd": 70,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "thundurus",
+     "name": "Thundurus",
+     "current_hp": 0,
+     "max_hp": 0,
+     "current_hp_fraction": 0,
+     "status": null,
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "ELECTRIC",
+      "FLYING"
+     ],
+     "base_stats": {
+      "atk": 115,
+      "def": 70,
+      "hp": 79,
+      "spa": 125,
+      "spd": 80,
+      "spe": 111
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "dondozo",
+     "name": "Dondozo",
+     "current_hp": 0,
+     "max_hp": 0,
+     "current_hp_fraction": 0,
+     "status": null,
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "WATER"
+     ],
+     "base_stats": {
+      "atk": 100,
+      "def": 115,
+      "hp": 150,
+      "spa": 65,
+      "spd": 65,
+      "spe": 35
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "cresselia",
+     "name": "Cresselia",
+     "current_hp": 0,
+     "max_hp": 0,
+     "current_hp_fraction": 0,
+     "status": null,
+     "ability": "levitate",
+     "item": "unknown_item",
+     "types": [
+      "PSYCHIC"
+     ],
+     "base_stats": {
+      "atk": 70,
+      "def": 110,
+      "hp": 120,
+      "spa": 75,
+      "spd": 120,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    {
+     "species": "ironvaliant",
+     "name": "Iron Valiant",
+     "current_hp": 0,
+     "max_hp": 0,
+     "current_hp_fraction": 0,
+     "status": null,
+     "ability": "quarkdrive",
+     "item": "unknown_item",
+     "types": [
+      "FAIRY",
+      "FIGHTING"
+     ],
+     "base_stats": {
+      "atk": 130,
+      "def": 90,
+      "hp": 74,
+      "spa": 120,
+      "spd": 60,
+      "spe": 116
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    }
+   ],
+   "clock": {
+    "decision_seconds_left": 85,
+    "bank_seconds_left": 420
+   }
+  },
+  "phase": "team_preview",
+  "is_terminal": false,
+  "is_current_actor": true,
+  "current_actor": {
+   "agent_id": "seat-a",
+   "position": 0
+  },
+  "legal_actions": {
+   "session_id": "live-session",
+   "state_version": 0,
+   "actions": [
+    {
+     "action_id": "select_lineup",
+     "label": "Choose 4 of 6 and designate 2 leads",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "select_lineup",
+       "roster": [
+        "ironhands",
+        "archaludon",
+        "basculegion",
+        "gyarados",
+        "irontreads",
+        "tyranitar"
+       ],
+       "bring_count": 4,
+       "lead_count": 2,
+       "instructions": "Choose exactly 4 species from `roster` to bring into battle, and which 2 of those 4 lead. Submit via play_action with action={'type': 'select_lineup', 'bring': [4 species from roster], 'leads': [2 of those 4 species]}."
+      },
+      "action_id": "select_lineup",
+      "state_version": 0
+     }
+    }
+   ]
+  },
+  "next_actions": [
+   {
+    "tool": "play_action",
+    "hint": "Pick one of legal_actions.actions and pass its `input`."
+   }
+  ],
+  "updated": true
+ },
+ "turn_1": {
+  "session_id": "live-session",
+  "game_type": "pokemon_vgc_doubles_draft",
+  "runtime_adapter": "pokemon",
+  "status": "in_progress",
+  "state_version": 1,
+  "observation": {
+   "battle_tag": "battle-gen9vgc2025regi-live",
+   "turn": 1,
+   "format": "gen9vgc2025regi",
+   "finished": false,
+   "won": null,
+   "lost": null,
+   "weather": {},
+   "fields": {
+    "GRASSY_TERRAIN": 0
+   },
+   "side_conditions": {},
+   "opponent_side_conditions": {},
+   "team": {
+    "p1: Iron Hands": {
+     "species": "ironhands",
+     "name": "Iron Hands",
+     "current_hp": 259,
+     "max_hp": 259,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "quarkdrive",
+     "item": "assaultvest",
+     "types": [
+      "FIGHTING",
+      "ELECTRIC"
+     ],
+     "base_stats": {
+      "atk": 140,
+      "def": 108,
+      "hp": 154,
+      "spa": 50,
+      "spd": 68,
+      "spe": 50
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "fakeout",
+      "closecombat",
+      "wildcharge",
+      "drainpunch"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p1: Archaludon": {
+     "species": "archaludon",
+     "name": "Archaludon",
+     "current_hp": 197,
+     "max_hp": 197,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "stamina",
+     "item": "leftovers",
+     "types": [
+      "STEEL",
+      "DRAGON"
+     ],
+     "base_stats": {
+      "atk": 105,
+      "def": 130,
+      "hp": 90,
+      "spa": 125,
+      "spd": 65,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "bodypress",
+      "dracometeor",
+      "flashcannon",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p1: Basculegion": {
+     "species": "basculegion",
+     "name": "Basculegion",
+     "current_hp": 196,
+     "max_hp": 196,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "adaptability",
+     "item": "lifeorb",
+     "types": [
+      "WATER",
+      "GHOST"
+     ],
+     "base_stats": {
+      "atk": 112,
+      "def": 65,
+      "hp": 120,
+      "spa": 80,
+      "spd": 75,
+      "spe": 78
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "wavecrash",
+      "aquajet",
+      "liquidation",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    "p1: Gyarados": {
+     "species": "gyarados",
+     "name": "Gyarados",
+     "current_hp": 202,
+     "max_hp": 202,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "intimidate",
+     "item": "sitrusberry",
+     "types": [
+      "WATER",
+      "FLYING"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 79,
+      "hp": 95,
+      "spa": 60,
+      "spd": 100,
+      "spe": 81
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "waterfall",
+      "earthquake",
+      "taunt",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    "p1: Iron Treads": {
+     "species": "irontreads",
+     "name": "Iron Treads",
+     "current_hp": 166,
+     "max_hp": 166,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "quarkdrive",
+     "item": "boosterenergy",
+     "types": [
+      "GROUND",
+      "STEEL"
+     ],
+     "base_stats": {
+      "atk": 112,
+      "def": 120,
+      "hp": 90,
+      "spa": 72,
+      "spd": 70,
+      "spe": 106
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "earthquake",
+      "ironhead",
+      "highhorsepower",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    "p1: Tyranitar": {
+     "species": "tyranitar",
+     "name": "Tyranitar",
+     "current_hp": 207,
+     "max_hp": 207,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "sandstream",
+     "item": "chopleberry",
+     "types": [
+      "ROCK",
+      "DARK"
+     ],
+     "base_stats": {
+      "atk": 134,
+      "def": 110,
+      "hp": 100,
+      "spa": 95,
+      "spd": 100,
+      "spe": 61
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "rockslide",
+      "knockoff",
+      "lowkick",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    }
+   },
+   "opponent_team": {
+    "p2: Rillaboom": {
+     "species": "rillaboom",
+     "name": "Rillaboom",
+     "current_hp": 100,
+     "max_hp": 100,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "GRASS"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 90,
+      "hp": 100,
+      "spa": 60,
+      "spd": 70,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p2: Dondozo": {
+     "species": "dondozo",
+     "name": "Dondozo",
+     "current_hp": 100,
+     "max_hp": 100,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "WATER"
+     ],
+     "base_stats": {
+      "atk": 100,
+      "def": 115,
+      "hp": 150,
+      "spa": 65,
+      "spd": 65,
+      "spe": 35
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    }
+   },
+   "is_doubles": true,
+   "force_switch": [
+    false,
+    false
+   ],
+   "can_tera": [
+    true,
+    true
+   ],
+   "active_pokemon": [
+    {
+     "species": "ironhands",
+     "name": "Iron Hands",
+     "current_hp": 259,
+     "max_hp": 259,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "quarkdrive",
+     "item": "assaultvest",
+     "types": [
+      "FIGHTING",
+      "ELECTRIC"
+     ],
+     "base_stats": {
+      "atk": 140,
+      "def": 108,
+      "hp": 154,
+      "spa": 50,
+      "spd": 68,
+      "spe": 50
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "fakeout",
+      "closecombat",
+      "wildcharge",
+      "drainpunch"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    {
+     "species": "archaludon",
+     "name": "Archaludon",
+     "current_hp": 197,
+     "max_hp": 197,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "stamina",
+     "item": "leftovers",
+     "types": [
+      "STEEL",
+      "DRAGON"
+     ],
+     "base_stats": {
+      "atk": 105,
+      "def": 130,
+      "hp": 90,
+      "spa": 125,
+      "spd": 65,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "bodypress",
+      "dracometeor",
+      "flashcannon",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    }
+   ],
+   "opponent_active_pokemon": [
+    {
+     "species": "rillaboom",
+     "name": "Rillaboom",
+     "current_hp": 100,
+     "max_hp": 100,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "GRASS"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 90,
+      "hp": 100,
+      "spa": 60,
+      "spd": 70,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    {
+     "species": "dondozo",
+     "name": "Dondozo",
+     "current_hp": 100,
+     "max_hp": 100,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "WATER"
+     ],
+     "base_stats": {
+      "atk": 100,
+      "def": 115,
+      "hp": 150,
+      "spa": 65,
+      "spd": 65,
+      "spe": 35
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    }
+   ],
+   "available_moves": [
+    [
+     {
+      "id": "fakeout",
+      "type": "NORMAL",
+      "category": "PHYSICAL",
+      "base_power": 40,
+      "accuracy": 1.0,
+      "priority": 3,
+      "current_pp": 16,
+      "max_pp": 16,
+      "target": "NORMAL",
+      "targets": [
+       -2,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -2,
+        "side": "ally",
+        "species": "archaludon"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "rillaboom"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": "dondozo"
+       }
+      ]
+     },
+     {
+      "id": "closecombat",
+      "type": "FIGHTING",
+      "category": "PHYSICAL",
+      "base_power": 120,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 8,
+      "max_pp": 8,
+      "target": "NORMAL",
+      "targets": [
+       -2,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -2,
+        "side": "ally",
+        "species": "archaludon"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "rillaboom"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": "dondozo"
+       }
+      ]
+     },
+     {
+      "id": "wildcharge",
+      "type": "ELECTRIC",
+      "category": "PHYSICAL",
+      "base_power": 90,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 24,
+      "max_pp": 24,
+      "target": "NORMAL",
+      "targets": [
+       -2,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -2,
+        "side": "ally",
+        "species": "archaludon"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "rillaboom"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": "dondozo"
+       }
+      ]
+     },
+     {
+      "id": "drainpunch",
+      "type": "FIGHTING",
+      "category": "PHYSICAL",
+      "base_power": 75,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 16,
+      "max_pp": 16,
+      "target": "NORMAL",
+      "targets": [
+       -2,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -2,
+        "side": "ally",
+        "species": "archaludon"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "rillaboom"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": "dondozo"
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "id": "bodypress",
+      "type": "FIGHTING",
+      "category": "PHYSICAL",
+      "base_power": 80,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 16,
+      "max_pp": 16,
+      "target": "NORMAL",
+      "targets": [
+       -1,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -1,
+        "side": "ally",
+        "species": "ironhands"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "rillaboom"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": "dondozo"
+       }
+      ]
+     },
+     {
+      "id": "dracometeor",
+      "type": "DRAGON",
+      "category": "SPECIAL",
+      "base_power": 130,
+      "accuracy": 0.9,
+      "priority": 0,
+      "current_pp": 8,
+      "max_pp": 8,
+      "target": "NORMAL",
+      "targets": [
+       -1,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -1,
+        "side": "ally",
+        "species": "ironhands"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "rillaboom"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": "dondozo"
+       }
+      ]
+     },
+     {
+      "id": "flashcannon",
+      "type": "STEEL",
+      "category": "SPECIAL",
+      "base_power": 80,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 16,
+      "max_pp": 16,
+      "target": "NORMAL",
+      "targets": [
+       -1,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -1,
+        "side": "ally",
+        "species": "ironhands"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "rillaboom"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": "dondozo"
+       }
+      ]
+     },
+     {
+      "id": "protect",
+      "type": "NORMAL",
+      "category": "STATUS",
+      "base_power": 0,
+      "accuracy": 1.0,
+      "priority": 4,
+      "current_pp": 16,
+      "max_pp": 16,
+      "target": "SELF",
+      "targets": [
+       0
+      ],
+      "target_options": [
+       {
+        "target": 0,
+        "side": "none",
+        "species": null
+       }
+      ]
+     }
+    ]
+   ],
+   "available_switches": [
+    [
+     {
+      "species": "basculegion",
+      "name": "Basculegion",
+      "current_hp": 196,
+      "max_hp": 196,
+      "current_hp_fraction": 1.0,
+      "status": null,
+      "ability": "adaptability",
+      "item": "lifeorb",
+      "types": [
+       "WATER",
+       "GHOST"
+      ],
+      "base_stats": {
+       "atk": 112,
+       "def": 65,
+       "hp": 120,
+       "spa": 80,
+       "spd": 75,
+       "spe": 78
+      },
+      "boosts": {
+       "accuracy": 0,
+       "atk": 0,
+       "def": 0,
+       "evasion": 0,
+       "spa": 0,
+       "spd": 0,
+       "spe": 0
+      },
+      "moves": [
+       "wavecrash",
+       "aquajet",
+       "liquidation",
+       "protect"
+      ],
+      "fainted": false,
+      "active": false,
+      "revealed": false,
+      "is_terastallized": false
+     },
+     {
+      "species": "gyarados",
+      "name": "Gyarados",
+      "current_hp": 202,
+      "max_hp": 202,
+      "current_hp_fraction": 1.0,
+      "status": null,
+      "ability": "intimidate",
+      "item": "sitrusberry",
+      "types": [
+       "WATER",
+       "FLYING"
+      ],
+      "base_stats": {
+       "atk": 125,
+       "def": 79,
+       "hp": 95,
+       "spa": 60,
+       "spd": 100,
+       "spe": 81
+      },
+      "boosts": {
+       "accuracy": 0,
+       "atk": 0,
+       "def": 0,
+       "evasion": 0,
+       "spa": 0,
+       "spd": 0,
+       "spe": 0
+      },
+      "moves": [
+       "waterfall",
+       "earthquake",
+       "taunt",
+       "protect"
+      ],
+      "fainted": false,
+      "active": false,
+      "revealed": false,
+      "is_terastallized": false
+     }
+    ],
+    [
+     {
+      "species": "basculegion",
+      "name": "Basculegion",
+      "current_hp": 196,
+      "max_hp": 196,
+      "current_hp_fraction": 1.0,
+      "status": null,
+      "ability": "adaptability",
+      "item": "lifeorb",
+      "types": [
+       "WATER",
+       "GHOST"
+      ],
+      "base_stats": {
+       "atk": 112,
+       "def": 65,
+       "hp": 120,
+       "spa": 80,
+       "spd": 75,
+       "spe": 78
+      },
+      "boosts": {
+       "accuracy": 0,
+       "atk": 0,
+       "def": 0,
+       "evasion": 0,
+       "spa": 0,
+       "spd": 0,
+       "spe": 0
+      },
+      "moves": [
+       "wavecrash",
+       "aquajet",
+       "liquidation",
+       "protect"
+      ],
+      "fainted": false,
+      "active": false,
+      "revealed": false,
+      "is_terastallized": false
+     },
+     {
+      "species": "gyarados",
+      "name": "Gyarados",
+      "current_hp": 202,
+      "max_hp": 202,
+      "current_hp_fraction": 1.0,
+      "status": null,
+      "ability": "intimidate",
+      "item": "sitrusberry",
+      "types": [
+       "WATER",
+       "FLYING"
+      ],
+      "base_stats": {
+       "atk": 125,
+       "def": 79,
+       "hp": 95,
+       "spa": 60,
+       "spd": 100,
+       "spe": 81
+      },
+      "boosts": {
+       "accuracy": 0,
+       "atk": 0,
+       "def": 0,
+       "evasion": 0,
+       "spa": 0,
+       "spd": 0,
+       "spe": 0
+      },
+      "moves": [
+       "waterfall",
+       "earthquake",
+       "taunt",
+       "protect"
+      ],
+      "fainted": false,
+      "active": false,
+      "revealed": false,
+      "is_terastallized": false
+     }
+    ]
+   ],
+   "target_legend": {
+    "-1": "board position A on your side (always slot 0's position)",
+    "-2": "board position B on your side (always slot 1's position)",
+    "1": "board position A on the opponent's side",
+    "2": "board position B on the opponent's side",
+    "0": "no target needed (self/field/spread move)"
+   },
+   "waiting_for_action": true,
+   "clock": {
+    "decision_seconds_left": 50,
+    "bank_seconds_left": 420
+   }
+  },
+  "phase": "moving",
+  "is_terminal": false,
+  "is_current_actor": true,
+  "current_actor": {
+   "agent_id": "seat-a",
+   "position": 0
+  },
+  "legal_actions": {
+   "session_id": "live-session",
+   "state_version": 1,
+   "actions": [
+    {
+     "action_id": "doubles_turn",
+     "label": "Choose actions for both active Pok\u00e9mon",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "doubles_turn",
+       "slots": [
+        {
+         "slot": 0,
+         "board_position": -1,
+         "active": {
+          "species": "ironhands",
+          "name": "Iron Hands",
+          "current_hp": 259,
+          "max_hp": 259,
+          "current_hp_fraction": 1.0,
+          "status": null,
+          "ability": "quarkdrive",
+          "item": "assaultvest",
+          "types": [
+           "FIGHTING",
+           "ELECTRIC"
+          ],
+          "base_stats": {
+           "atk": 140,
+           "def": 108,
+           "hp": 154,
+           "spa": 50,
+           "spd": 68,
+           "spe": 50
+          },
+          "boosts": {
+           "accuracy": 0,
+           "atk": 0,
+           "def": 0,
+           "evasion": 0,
+           "spa": 0,
+           "spd": 0,
+           "spe": 0
+          },
+          "moves": [
+           "fakeout",
+           "closecombat",
+           "wildcharge",
+           "drainpunch"
+          ],
+          "fainted": false,
+          "active": true,
+          "revealed": true,
+          "is_terastallized": false
+         },
+         "force_switch": false,
+         "options": [
+          {
+           "type": "move",
+           "move_id": "fakeout",
+           "base_power": 40,
+           "category": "PHYSICAL",
+           "move_type": "NORMAL",
+           "current_pp": 16,
+           "accuracy": 1.0,
+           "targets": [
+            -2,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -2,
+             "side": "ally",
+             "species": "archaludon"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "rillaboom"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": "dondozo"
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "closecombat",
+           "base_power": 120,
+           "category": "PHYSICAL",
+           "move_type": "FIGHTING",
+           "current_pp": 8,
+           "accuracy": 1.0,
+           "targets": [
+            -2,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -2,
+             "side": "ally",
+             "species": "archaludon"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "rillaboom"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": "dondozo"
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "wildcharge",
+           "base_power": 90,
+           "category": "PHYSICAL",
+           "move_type": "ELECTRIC",
+           "current_pp": 24,
+           "accuracy": 1.0,
+           "targets": [
+            -2,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -2,
+             "side": "ally",
+             "species": "archaludon"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "rillaboom"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": "dondozo"
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "drainpunch",
+           "base_power": 75,
+           "category": "PHYSICAL",
+           "move_type": "FIGHTING",
+           "current_pp": 16,
+           "accuracy": 1.0,
+           "targets": [
+            -2,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -2,
+             "side": "ally",
+             "species": "archaludon"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "rillaboom"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": "dondozo"
+            }
+           ]
+          },
+          {
+           "type": "switch",
+           "species": "basculegion"
+          },
+          {
+           "type": "switch",
+           "species": "gyarados"
+          }
+         ]
+        },
+        {
+         "slot": 1,
+         "board_position": -2,
+         "active": {
+          "species": "archaludon",
+          "name": "Archaludon",
+          "current_hp": 197,
+          "max_hp": 197,
+          "current_hp_fraction": 1.0,
+          "status": null,
+          "ability": "stamina",
+          "item": "leftovers",
+          "types": [
+           "STEEL",
+           "DRAGON"
+          ],
+          "base_stats": {
+           "atk": 105,
+           "def": 130,
+           "hp": 90,
+           "spa": 125,
+           "spd": 65,
+           "spe": 85
+          },
+          "boosts": {
+           "accuracy": 0,
+           "atk": 0,
+           "def": 0,
+           "evasion": 0,
+           "spa": 0,
+           "spd": 0,
+           "spe": 0
+          },
+          "moves": [
+           "bodypress",
+           "dracometeor",
+           "flashcannon",
+           "protect"
+          ],
+          "fainted": false,
+          "active": true,
+          "revealed": true,
+          "is_terastallized": false
+         },
+         "force_switch": false,
+         "options": [
+          {
+           "type": "move",
+           "move_id": "bodypress",
+           "base_power": 80,
+           "category": "PHYSICAL",
+           "move_type": "FIGHTING",
+           "current_pp": 16,
+           "accuracy": 1.0,
+           "targets": [
+            -1,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -1,
+             "side": "ally",
+             "species": "ironhands"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "rillaboom"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": "dondozo"
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "dracometeor",
+           "base_power": 130,
+           "category": "SPECIAL",
+           "move_type": "DRAGON",
+           "current_pp": 8,
+           "accuracy": 0.9,
+           "targets": [
+            -1,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -1,
+             "side": "ally",
+             "species": "ironhands"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "rillaboom"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": "dondozo"
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "flashcannon",
+           "base_power": 80,
+           "category": "SPECIAL",
+           "move_type": "STEEL",
+           "current_pp": 16,
+           "accuracy": 1.0,
+           "targets": [
+            -1,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -1,
+             "side": "ally",
+             "species": "ironhands"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "rillaboom"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": "dondozo"
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "protect",
+           "base_power": 0,
+           "category": "STATUS",
+           "move_type": "NORMAL",
+           "current_pp": 16,
+           "accuracy": 1.0,
+           "targets": [
+            0
+           ],
+           "target_options": [
+            {
+             "target": 0,
+             "side": "none",
+             "species": null
+            }
+           ]
+          },
+          {
+           "type": "switch",
+           "species": "basculegion"
+          },
+          {
+           "type": "switch",
+           "species": "gyarados"
+          }
+         ]
+        }
+       ],
+       "target_legend": {
+        "-1": "board position A on your side (always slot 0's position)",
+        "-2": "board position B on your side (always slot 1's position)",
+        "1": "board position A on the opponent's side",
+        "2": "board position B on the opponent's side",
+        "0": "no target needed (self/field/spread move)"
+       },
+       "instructions": "Submit one action for slot 0 and one for slot 1 together via play_action with action={'type':'doubles_turn','slot_0':{...},'slot_1':{...}}. Each slot is {'type':'move','move_id':...,'target': <int>} (target required unless the move's only legal target is 0), {'type':'switch','species':...}, or {'type':'pass'} (required when this slot's own options list is just [{'type':'pass'}]). IMPORTANT: -1 and -2 are FIXED board positions (see target_legend), not 'self'/'ally' labels -- check each slot's own board_position to know which one it is. For slot 0 (board_position -1), -1 means targeting itself and -2 means its ally. For slot 1 (board_position -2), it's the reverse: -2 is itself and -1 is its ally. Never assume -1 always means self. Simplest: read each move's target_options, which names every legal target for that slot as side 'opponent', 'ally' or 'self' with the species standing there now -- then submit that option's integer as 'target'. Targeting your own ally is legal but hits your own Pok\u00e9mon."
+      },
+      "action_id": "doubles_turn",
+      "state_version": 1
+     }
+    }
+   ]
+  },
+  "next_actions": [
+   {
+    "tool": "play_action",
+    "hint": "Pick one of legal_actions.actions and pass its `input`."
+   }
+  ],
+  "updated": true
+ },
+ "forced_switch": {
+  "session_id": "live-session",
+  "game_type": "pokemon_vgc_doubles_draft",
+  "runtime_adapter": "pokemon",
+  "status": "in_progress",
+  "state_version": 3,
+  "observation": {
+   "battle_tag": "battle-gen9vgc2025regi-live",
+   "turn": 2,
+   "format": "gen9vgc2025regi",
+   "finished": false,
+   "won": null,
+   "lost": null,
+   "weather": {},
+   "fields": {
+    "GRASSY_TERRAIN": 0
+   },
+   "side_conditions": {},
+   "opponent_side_conditions": {},
+   "team": {
+    "p1: Iron Hands": {
+     "species": "ironhands",
+     "name": "Iron Hands",
+     "current_hp": 0,
+     "max_hp": 259,
+     "current_hp_fraction": 0,
+     "status": "FNT",
+     "ability": "quarkdrive",
+     "item": "assaultvest",
+     "types": [
+      "FIGHTING",
+      "ELECTRIC"
+     ],
+     "base_stats": {
+      "atk": 140,
+      "def": 108,
+      "hp": 154,
+      "spa": 50,
+      "spd": 68,
+      "spe": 50
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": -1,
+      "evasion": 0,
+      "spa": 0,
+      "spd": -1,
+      "spe": 0
+     },
+     "moves": [
+      "fakeout",
+      "closecombat",
+      "wildcharge",
+      "drainpunch"
+     ],
+     "fainted": true,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p1: Archaludon": {
+     "species": "archaludon",
+     "name": "Archaludon",
+     "current_hp": 197,
+     "max_hp": 197,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "stamina",
+     "item": "leftovers",
+     "types": [
+      "STEEL",
+      "DRAGON"
+     ],
+     "base_stats": {
+      "atk": 105,
+      "def": 130,
+      "hp": 90,
+      "spa": 125,
+      "spd": 65,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": -2,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "bodypress",
+      "dracometeor",
+      "flashcannon",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p1: Basculegion": {
+     "species": "basculegion",
+     "name": "Basculegion",
+     "current_hp": 196,
+     "max_hp": 196,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "adaptability",
+     "item": "lifeorb",
+     "types": [
+      "WATER",
+      "GHOST"
+     ],
+     "base_stats": {
+      "atk": 112,
+      "def": 65,
+      "hp": 120,
+      "spa": 80,
+      "spd": 75,
+      "spe": 78
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "wavecrash",
+      "aquajet",
+      "liquidation",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    "p1: Gyarados": {
+     "species": "gyarados",
+     "name": "Gyarados",
+     "current_hp": 202,
+     "max_hp": 202,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "intimidate",
+     "item": "sitrusberry",
+     "types": [
+      "WATER",
+      "FLYING"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 79,
+      "hp": 95,
+      "spa": 60,
+      "spd": 100,
+      "spe": 81
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "waterfall",
+      "earthquake",
+      "taunt",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    "p1: Iron Treads": {
+     "species": "irontreads",
+     "name": "Iron Treads",
+     "current_hp": 166,
+     "max_hp": 166,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "quarkdrive",
+     "item": "boosterenergy",
+     "types": [
+      "GROUND",
+      "STEEL"
+     ],
+     "base_stats": {
+      "atk": 112,
+      "def": 120,
+      "hp": 90,
+      "spa": 72,
+      "spd": 70,
+      "spe": 106
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "earthquake",
+      "ironhead",
+      "highhorsepower",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    "p1: Tyranitar": {
+     "species": "tyranitar",
+     "name": "Tyranitar",
+     "current_hp": 207,
+     "max_hp": 207,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "sandstream",
+     "item": "chopleberry",
+     "types": [
+      "ROCK",
+      "DARK"
+     ],
+     "base_stats": {
+      "atk": 134,
+      "def": 110,
+      "hp": 100,
+      "spa": 95,
+      "spd": 100,
+      "spe": 61
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "rockslide",
+      "knockoff",
+      "lowkick",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    }
+   },
+   "opponent_team": {
+    "p2: Rillaboom": {
+     "species": "rillaboom",
+     "name": "Rillaboom",
+     "current_hp": 0,
+     "max_hp": 100,
+     "current_hp_fraction": 0,
+     "status": "FNT",
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "GRASS"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 90,
+      "hp": 100,
+      "spa": 60,
+      "spd": 70,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "fakeout",
+      "woodhammer"
+     ],
+     "fainted": true,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p2: Dondozo": {
+     "species": "dondozo",
+     "name": "Dondozo",
+     "current_hp": 100,
+     "max_hp": 100,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": null,
+     "item": "leftovers",
+     "types": [
+      "WATER"
+     ],
+     "base_stats": {
+      "atk": 100,
+      "def": 115,
+      "hp": 150,
+      "spa": 65,
+      "spd": 65,
+      "spe": 35
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "earthquake",
+      "wavecrash"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    }
+   },
+   "is_doubles": true,
+   "force_switch": [
+    true,
+    false
+   ],
+   "can_tera": [
+    false,
+    false
+   ],
+   "active_pokemon": [
+    null,
+    {
+     "species": "archaludon",
+     "name": "Archaludon",
+     "current_hp": 197,
+     "max_hp": 197,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "stamina",
+     "item": "leftovers",
+     "types": [
+      "STEEL",
+      "DRAGON"
+     ],
+     "base_stats": {
+      "atk": 105,
+      "def": 130,
+      "hp": 90,
+      "spa": 125,
+      "spd": 65,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": -2,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "bodypress",
+      "dracometeor",
+      "flashcannon",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    }
+   ],
+   "opponent_active_pokemon": [
+    null,
+    {
+     "species": "dondozo",
+     "name": "Dondozo",
+     "current_hp": 100,
+     "max_hp": 100,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": null,
+     "item": "leftovers",
+     "types": [
+      "WATER"
+     ],
+     "base_stats": {
+      "atk": 100,
+      "def": 115,
+      "hp": 150,
+      "spa": 65,
+      "spd": 65,
+      "spe": 35
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "earthquake",
+      "wavecrash"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    }
+   ],
+   "available_moves": [
+    [],
+    []
+   ],
+   "available_switches": [
+    [
+     {
+      "species": "basculegion",
+      "name": "Basculegion",
+      "current_hp": 196,
+      "max_hp": 196,
+      "current_hp_fraction": 1.0,
+      "status": null,
+      "ability": "adaptability",
+      "item": "lifeorb",
+      "types": [
+       "WATER",
+       "GHOST"
+      ],
+      "base_stats": {
+       "atk": 112,
+       "def": 65,
+       "hp": 120,
+       "spa": 80,
+       "spd": 75,
+       "spe": 78
+      },
+      "boosts": {
+       "accuracy": 0,
+       "atk": 0,
+       "def": 0,
+       "evasion": 0,
+       "spa": 0,
+       "spd": 0,
+       "spe": 0
+      },
+      "moves": [
+       "wavecrash",
+       "aquajet",
+       "liquidation",
+       "protect"
+      ],
+      "fainted": false,
+      "active": false,
+      "revealed": false,
+      "is_terastallized": false
+     },
+     {
+      "species": "gyarados",
+      "name": "Gyarados",
+      "current_hp": 202,
+      "max_hp": 202,
+      "current_hp_fraction": 1.0,
+      "status": null,
+      "ability": "intimidate",
+      "item": "sitrusberry",
+      "types": [
+       "WATER",
+       "FLYING"
+      ],
+      "base_stats": {
+       "atk": 125,
+       "def": 79,
+       "hp": 95,
+       "spa": 60,
+       "spd": 100,
+       "spe": 81
+      },
+      "boosts": {
+       "accuracy": 0,
+       "atk": 0,
+       "def": 0,
+       "evasion": 0,
+       "spa": 0,
+       "spd": 0,
+       "spe": 0
+      },
+      "moves": [
+       "waterfall",
+       "earthquake",
+       "taunt",
+       "protect"
+      ],
+      "fainted": false,
+      "active": false,
+      "revealed": false,
+      "is_terastallized": false
+     }
+    ],
+    [
+     {
+      "species": "basculegion",
+      "name": "Basculegion",
+      "current_hp": 196,
+      "max_hp": 196,
+      "current_hp_fraction": 1.0,
+      "status": null,
+      "ability": "adaptability",
+      "item": "lifeorb",
+      "types": [
+       "WATER",
+       "GHOST"
+      ],
+      "base_stats": {
+       "atk": 112,
+       "def": 65,
+       "hp": 120,
+       "spa": 80,
+       "spd": 75,
+       "spe": 78
+      },
+      "boosts": {
+       "accuracy": 0,
+       "atk": 0,
+       "def": 0,
+       "evasion": 0,
+       "spa": 0,
+       "spd": 0,
+       "spe": 0
+      },
+      "moves": [
+       "wavecrash",
+       "aquajet",
+       "liquidation",
+       "protect"
+      ],
+      "fainted": false,
+      "active": false,
+      "revealed": false,
+      "is_terastallized": false
+     },
+     {
+      "species": "gyarados",
+      "name": "Gyarados",
+      "current_hp": 202,
+      "max_hp": 202,
+      "current_hp_fraction": 1.0,
+      "status": null,
+      "ability": "intimidate",
+      "item": "sitrusberry",
+      "types": [
+       "WATER",
+       "FLYING"
+      ],
+      "base_stats": {
+       "atk": 125,
+       "def": 79,
+       "hp": 95,
+       "spa": 60,
+       "spd": 100,
+       "spe": 81
+      },
+      "boosts": {
+       "accuracy": 0,
+       "atk": 0,
+       "def": 0,
+       "evasion": 0,
+       "spa": 0,
+       "spd": 0,
+       "spe": 0
+      },
+      "moves": [
+       "waterfall",
+       "earthquake",
+       "taunt",
+       "protect"
+      ],
+      "fainted": false,
+      "active": false,
+      "revealed": false,
+      "is_terastallized": false
+     }
+    ]
+   ],
+   "target_legend": {
+    "-1": "board position A on your side (always slot 0's position)",
+    "-2": "board position B on your side (always slot 1's position)",
+    "1": "board position A on the opponent's side",
+    "2": "board position B on the opponent's side",
+    "0": "no target needed (self/field/spread move)"
+   },
+   "waiting_for_action": true,
+   "clock": {
+    "decision_seconds_left": 50,
+    "bank_seconds_left": 420
+   }
+  },
+  "phase": "moving",
+  "is_terminal": false,
+  "is_current_actor": true,
+  "current_actor": {
+   "agent_id": "seat-a",
+   "position": 0
+  },
+  "legal_actions": {
+   "session_id": "live-session",
+   "state_version": 3,
+   "actions": [
+    {
+     "action_id": "doubles_turn",
+     "label": "Choose actions for both active Pok\u00e9mon",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "doubles_turn",
+       "slots": [
+        {
+         "slot": 0,
+         "board_position": -1,
+         "active": null,
+         "force_switch": true,
+         "options": [
+          {
+           "type": "switch",
+           "species": "basculegion"
+          },
+          {
+           "type": "switch",
+           "species": "gyarados"
+          }
+         ]
+        },
+        {
+         "slot": 1,
+         "board_position": -2,
+         "active": {
+          "species": "archaludon",
+          "name": "Archaludon",
+          "current_hp": 197,
+          "max_hp": 197,
+          "current_hp_fraction": 1.0,
+          "status": null,
+          "ability": "stamina",
+          "item": "leftovers",
+          "types": [
+           "STEEL",
+           "DRAGON"
+          ],
+          "base_stats": {
+           "atk": 105,
+           "def": 130,
+           "hp": 90,
+           "spa": 125,
+           "spd": 65,
+           "spe": 85
+          },
+          "boosts": {
+           "accuracy": 0,
+           "atk": 0,
+           "def": 0,
+           "evasion": 0,
+           "spa": -2,
+           "spd": 0,
+           "spe": 0
+          },
+          "moves": [
+           "bodypress",
+           "dracometeor",
+           "flashcannon",
+           "protect"
+          ],
+          "fainted": false,
+          "active": true,
+          "revealed": true,
+          "is_terastallized": false
+         },
+         "force_switch": false,
+         "options": [
+          {
+           "type": "pass"
+          }
+         ]
+        }
+       ],
+       "target_legend": {
+        "-1": "board position A on your side (always slot 0's position)",
+        "-2": "board position B on your side (always slot 1's position)",
+        "1": "board position A on the opponent's side",
+        "2": "board position B on the opponent's side",
+        "0": "no target needed (self/field/spread move)"
+       },
+       "instructions": "Submit one action for slot 0 and one for slot 1 together via play_action with action={'type':'doubles_turn','slot_0':{...},'slot_1':{...}}. Each slot is {'type':'move','move_id':...,'target': <int>} (target required unless the move's only legal target is 0), {'type':'switch','species':...}, or {'type':'pass'} (required when this slot's own options list is just [{'type':'pass'}]). IMPORTANT: -1 and -2 are FIXED board positions (see target_legend), not 'self'/'ally' labels -- check each slot's own board_position to know which one it is. For slot 0 (board_position -1), -1 means targeting itself and -2 means its ally. For slot 1 (board_position -2), it's the reverse: -2 is itself and -1 is its ally. Never assume -1 always means self. Simplest: read each move's target_options, which names every legal target for that slot as side 'opponent', 'ally' or 'self' with the species standing there now -- then submit that option's integer as 'target'. Targeting your own ally is legal but hits your own Pok\u00e9mon."
+      },
+      "action_id": "doubles_turn",
+      "state_version": 3
+     }
+    }
+   ]
+  },
+  "next_actions": [
+   {
+    "tool": "play_action",
+    "hint": "Pick one of legal_actions.actions and pass its `input`."
+   }
+  ],
+  "updated": true
+ },
+ "turn_7": {
+  "session_id": "live-session",
+  "game_type": "pokemon_vgc_doubles_draft",
+  "runtime_adapter": "pokemon",
+  "status": "in_progress",
+  "state_version": 9,
+  "observation": {
+   "battle_tag": "battle-gen9vgc2025regi-live",
+   "turn": 7,
+   "format": "gen9vgc2025regi",
+   "finished": false,
+   "won": null,
+   "lost": null,
+   "weather": {},
+   "fields": {},
+   "side_conditions": {},
+   "opponent_side_conditions": {},
+   "team": {
+    "p1: Iron Hands": {
+     "species": "ironhands",
+     "name": "Iron Hands",
+     "current_hp": 0,
+     "max_hp": 259,
+     "current_hp_fraction": 0,
+     "status": "FNT",
+     "ability": "quarkdrive",
+     "item": "assaultvest",
+     "types": [
+      "FIGHTING",
+      "ELECTRIC"
+     ],
+     "base_stats": {
+      "atk": 140,
+      "def": 108,
+      "hp": 154,
+      "spa": 50,
+      "spd": 68,
+      "spe": 50
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "fakeout",
+      "closecombat",
+      "wildcharge",
+      "drainpunch"
+     ],
+     "fainted": true,
+     "active": false,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p1: Archaludon": {
+     "species": "archaludon",
+     "name": "Archaludon",
+     "current_hp": 166,
+     "max_hp": 197,
+     "current_hp_fraction": 0.8426395939086294,
+     "status": null,
+     "ability": "stamina",
+     "item": "leftovers",
+     "types": [
+      "STEEL",
+      "DRAGON"
+     ],
+     "base_stats": {
+      "atk": 105,
+      "def": 130,
+      "hp": 90,
+      "spa": 125,
+      "spd": 65,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 5,
+      "evasion": 0,
+      "spa": -6,
+      "spd": 0,
+      "spe": -3
+     },
+     "moves": [
+      "bodypress",
+      "dracometeor",
+      "flashcannon",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p1: Basculegion": {
+     "species": "basculegion",
+     "name": "Basculegion",
+     "current_hp": 0,
+     "max_hp": 196,
+     "current_hp_fraction": 0,
+     "status": "FNT",
+     "ability": "adaptability",
+     "item": "lifeorb",
+     "types": [
+      "WATER",
+      "GHOST"
+     ],
+     "base_stats": {
+      "atk": 112,
+      "def": 65,
+      "hp": 120,
+      "spa": 80,
+      "spd": 75,
+      "spe": 78
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "wavecrash",
+      "aquajet",
+      "liquidation",
+      "protect"
+     ],
+     "fainted": true,
+     "active": false,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p1: Gyarados": {
+     "species": "gyarados",
+     "name": "Gyarados",
+     "current_hp": 158,
+     "max_hp": 202,
+     "current_hp_fraction": 0.7821782178217822,
+     "status": null,
+     "ability": "intimidate",
+     "item": "sitrusberry",
+     "types": [
+      "WATER",
+      "FLYING"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 79,
+      "hp": 95,
+      "spa": 60,
+      "spd": 100,
+      "spe": 81
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": -3
+     },
+     "moves": [
+      "waterfall",
+      "earthquake",
+      "taunt",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p1: Iron Treads": {
+     "species": "irontreads",
+     "name": "Iron Treads",
+     "current_hp": 166,
+     "max_hp": 166,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "quarkdrive",
+     "item": "boosterenergy",
+     "types": [
+      "GROUND",
+      "STEEL"
+     ],
+     "base_stats": {
+      "atk": 112,
+      "def": 120,
+      "hp": 90,
+      "spa": 72,
+      "spd": 70,
+      "spe": 106
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "earthquake",
+      "ironhead",
+      "highhorsepower",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    },
+    "p1: Tyranitar": {
+     "species": "tyranitar",
+     "name": "Tyranitar",
+     "current_hp": 207,
+     "max_hp": 207,
+     "current_hp_fraction": 1.0,
+     "status": null,
+     "ability": "sandstream",
+     "item": "chopleberry",
+     "types": [
+      "ROCK",
+      "DARK"
+     ],
+     "base_stats": {
+      "atk": 134,
+      "def": 110,
+      "hp": 100,
+      "spa": 95,
+      "spd": 100,
+      "spe": 61
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "rockslide",
+      "knockoff",
+      "lowkick",
+      "protect"
+     ],
+     "fainted": false,
+     "active": false,
+     "revealed": false,
+     "is_terastallized": false
+    }
+   },
+   "opponent_team": {
+    "p2: Rillaboom": {
+     "species": "rillaboom",
+     "name": "Rillaboom",
+     "current_hp": 0,
+     "max_hp": 100,
+     "current_hp_fraction": 0,
+     "status": "FNT",
+     "ability": null,
+     "item": "unknown_item",
+     "types": [
+      "GRASS"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 90,
+      "hp": 100,
+      "spa": 60,
+      "spd": 70,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "fakeout",
+      "woodhammer"
+     ],
+     "fainted": true,
+     "active": false,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p2: Dondozo": {
+     "species": "dondozo",
+     "name": "Dondozo",
+     "current_hp": 0,
+     "max_hp": 100,
+     "current_hp_fraction": 0,
+     "status": "FNT",
+     "ability": null,
+     "item": "leftovers",
+     "types": [
+      "WATER"
+     ],
+     "base_stats": {
+      "atk": 100,
+      "def": 115,
+      "hp": 150,
+      "spa": 65,
+      "spd": 65,
+      "spe": 35
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": -1,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "earthquake",
+      "wavecrash"
+     ],
+     "fainted": true,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p2: Iron Valiant": {
+     "species": "ironvaliant",
+     "name": "Iron Valiant",
+     "current_hp": 0,
+     "max_hp": 100,
+     "current_hp_fraction": 0,
+     "status": "FNT",
+     "ability": "quarkdrive",
+     "item": null,
+     "types": [
+      "FAIRY",
+      "FIGHTING"
+     ],
+     "base_stats": {
+      "atk": 130,
+      "def": 90,
+      "hp": 74,
+      "spa": 120,
+      "spd": 60,
+      "spe": 116
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "thunderbolt"
+     ],
+     "fainted": true,
+     "active": false,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    "p2: Cresselia": {
+     "species": "cresselia",
+     "name": "Cresselia",
+     "current_hp": 27,
+     "max_hp": 100,
+     "current_hp_fraction": 0.27,
+     "status": null,
+     "ability": "levitate",
+     "item": null,
+     "types": [
+      "PSYCHIC"
+     ],
+     "base_stats": {
+      "atk": 70,
+      "def": 110,
+      "hp": 120,
+      "spa": 75,
+      "spd": 120,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": -1,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "icywind"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    }
+   },
+   "is_doubles": true,
+   "force_switch": [
+    false,
+    false
+   ],
+   "can_tera": [
+    true,
+    true
+   ],
+   "active_pokemon": [
+    {
+     "species": "gyarados",
+     "name": "Gyarados",
+     "current_hp": 158,
+     "max_hp": 202,
+     "current_hp_fraction": 0.7821782178217822,
+     "status": null,
+     "ability": "intimidate",
+     "item": "sitrusberry",
+     "types": [
+      "WATER",
+      "FLYING"
+     ],
+     "base_stats": {
+      "atk": 125,
+      "def": 79,
+      "hp": 95,
+      "spa": 60,
+      "spd": 100,
+      "spe": 81
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": -3
+     },
+     "moves": [
+      "waterfall",
+      "earthquake",
+      "taunt",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    {
+     "species": "archaludon",
+     "name": "Archaludon",
+     "current_hp": 166,
+     "max_hp": 197,
+     "current_hp_fraction": 0.8426395939086294,
+     "status": null,
+     "ability": "stamina",
+     "item": "leftovers",
+     "types": [
+      "STEEL",
+      "DRAGON"
+     ],
+     "base_stats": {
+      "atk": 105,
+      "def": 130,
+      "hp": 90,
+      "spa": 125,
+      "spd": 65,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": 0,
+      "def": 5,
+      "evasion": 0,
+      "spa": -6,
+      "spd": 0,
+      "spe": -3
+     },
+     "moves": [
+      "bodypress",
+      "dracometeor",
+      "flashcannon",
+      "protect"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    }
+   ],
+   "opponent_active_pokemon": [
+    {
+     "species": "cresselia",
+     "name": "Cresselia",
+     "current_hp": 27,
+     "max_hp": 100,
+     "current_hp_fraction": 0.27,
+     "status": null,
+     "ability": "levitate",
+     "item": null,
+     "types": [
+      "PSYCHIC"
+     ],
+     "base_stats": {
+      "atk": 70,
+      "def": 110,
+      "hp": 120,
+      "spa": 75,
+      "spd": 120,
+      "spe": 85
+     },
+     "boosts": {
+      "accuracy": 0,
+      "atk": -1,
+      "def": 0,
+      "evasion": 0,
+      "spa": 0,
+      "spd": 0,
+      "spe": 0
+     },
+     "moves": [
+      "icywind"
+     ],
+     "fainted": false,
+     "active": true,
+     "revealed": true,
+     "is_terastallized": false
+    },
+    null
+   ],
+   "available_moves": [
+    [
+     {
+      "id": "waterfall",
+      "type": "WATER",
+      "category": "PHYSICAL",
+      "base_power": 80,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 21,
+      "max_pp": 24,
+      "target": "NORMAL",
+      "targets": [
+       -2,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -2,
+        "side": "ally",
+        "species": "archaludon"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "cresselia"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": null
+       }
+      ]
+     },
+     {
+      "id": "earthquake",
+      "type": "GROUND",
+      "category": "PHYSICAL",
+      "base_power": 100,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 16,
+      "max_pp": 16,
+      "target": "ALL_ADJACENT",
+      "targets": [
+       0
+      ],
+      "target_options": [
+       {
+        "target": 0,
+        "side": "none",
+        "species": null
+       }
+      ]
+     },
+     {
+      "id": "taunt",
+      "type": "DARK",
+      "category": "STATUS",
+      "base_power": 0,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 32,
+      "max_pp": 32,
+      "target": "NORMAL",
+      "targets": [
+       -2,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -2,
+        "side": "ally",
+        "species": "archaludon"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "cresselia"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": null
+       }
+      ]
+     },
+     {
+      "id": "protect",
+      "type": "NORMAL",
+      "category": "STATUS",
+      "base_power": 0,
+      "accuracy": 1.0,
+      "priority": 4,
+      "current_pp": 16,
+      "max_pp": 16,
+      "target": "SELF",
+      "targets": [
+       0
+      ],
+      "target_options": [
+       {
+        "target": 0,
+        "side": "none",
+        "species": null
+       }
+      ]
+     }
+    ],
+    [
+     {
+      "id": "bodypress",
+      "type": "FIGHTING",
+      "category": "PHYSICAL",
+      "base_power": 80,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 15,
+      "max_pp": 16,
+      "target": "NORMAL",
+      "targets": [
+       -1,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -1,
+        "side": "ally",
+        "species": "gyarados"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "cresselia"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": null
+       }
+      ]
+     },
+     {
+      "id": "dracometeor",
+      "type": "DRAGON",
+      "category": "SPECIAL",
+      "base_power": 130,
+      "accuracy": 0.9,
+      "priority": 0,
+      "current_pp": 4,
+      "max_pp": 8,
+      "target": "NORMAL",
+      "targets": [
+       -1,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -1,
+        "side": "ally",
+        "species": "gyarados"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "cresselia"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": null
+       }
+      ]
+     },
+     {
+      "id": "flashcannon",
+      "type": "STEEL",
+      "category": "SPECIAL",
+      "base_power": 80,
+      "accuracy": 1.0,
+      "priority": 0,
+      "current_pp": 16,
+      "max_pp": 16,
+      "target": "NORMAL",
+      "targets": [
+       -1,
+       1,
+       2
+      ],
+      "target_options": [
+       {
+        "target": -1,
+        "side": "ally",
+        "species": "gyarados"
+       },
+       {
+        "target": 1,
+        "side": "opponent",
+        "species": "cresselia"
+       },
+       {
+        "target": 2,
+        "side": "opponent",
+        "species": null
+       }
+      ]
+     },
+     {
+      "id": "protect",
+      "type": "NORMAL",
+      "category": "STATUS",
+      "base_power": 0,
+      "accuracy": 1.0,
+      "priority": 4,
+      "current_pp": 15,
+      "max_pp": 16,
+      "target": "SELF",
+      "targets": [
+       0
+      ],
+      "target_options": [
+       {
+        "target": 0,
+        "side": "none",
+        "species": null
+       }
+      ]
+     }
+    ]
+   ],
+   "available_switches": [
+    [],
+    []
+   ],
+   "target_legend": {
+    "-1": "board position A on your side (always slot 0's position)",
+    "-2": "board position B on your side (always slot 1's position)",
+    "1": "board position A on the opponent's side",
+    "2": "board position B on the opponent's side",
+    "0": "no target needed (self/field/spread move)"
+   },
+   "waiting_for_action": true,
+   "clock": {
+    "decision_seconds_left": 50,
+    "bank_seconds_left": 420
+   }
+  },
+  "phase": "moving",
+  "is_terminal": false,
+  "is_current_actor": true,
+  "current_actor": {
+   "agent_id": "seat-a",
+   "position": 0
+  },
+  "legal_actions": {
+   "session_id": "live-session",
+   "state_version": 9,
+   "actions": [
+    {
+     "action_id": "doubles_turn",
+     "label": "Choose actions for both active Pok\u00e9mon",
+     "input": {
+      "session_id": "live-session",
+      "action": {
+       "type": "doubles_turn",
+       "slots": [
+        {
+         "slot": 0,
+         "board_position": -1,
+         "active": {
+          "species": "gyarados",
+          "name": "Gyarados",
+          "current_hp": 158,
+          "max_hp": 202,
+          "current_hp_fraction": 0.7821782178217822,
+          "status": null,
+          "ability": "intimidate",
+          "item": "sitrusberry",
+          "types": [
+           "WATER",
+           "FLYING"
+          ],
+          "base_stats": {
+           "atk": 125,
+           "def": 79,
+           "hp": 95,
+           "spa": 60,
+           "spd": 100,
+           "spe": 81
+          },
+          "boosts": {
+           "accuracy": 0,
+           "atk": 0,
+           "def": 0,
+           "evasion": 0,
+           "spa": 0,
+           "spd": 0,
+           "spe": -3
+          },
+          "moves": [
+           "waterfall",
+           "earthquake",
+           "taunt",
+           "protect"
+          ],
+          "fainted": false,
+          "active": true,
+          "revealed": true,
+          "is_terastallized": false
+         },
+         "force_switch": false,
+         "options": [
+          {
+           "type": "move",
+           "move_id": "waterfall",
+           "base_power": 80,
+           "category": "PHYSICAL",
+           "move_type": "WATER",
+           "current_pp": 21,
+           "accuracy": 1.0,
+           "targets": [
+            -2,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -2,
+             "side": "ally",
+             "species": "archaludon"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "cresselia"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": null
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "earthquake",
+           "base_power": 100,
+           "category": "PHYSICAL",
+           "move_type": "GROUND",
+           "current_pp": 16,
+           "accuracy": 1.0,
+           "targets": [
+            0
+           ],
+           "target_options": [
+            {
+             "target": 0,
+             "side": "none",
+             "species": null
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "taunt",
+           "base_power": 0,
+           "category": "STATUS",
+           "move_type": "DARK",
+           "current_pp": 32,
+           "accuracy": 1.0,
+           "targets": [
+            -2,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -2,
+             "side": "ally",
+             "species": "archaludon"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "cresselia"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": null
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "protect",
+           "base_power": 0,
+           "category": "STATUS",
+           "move_type": "NORMAL",
+           "current_pp": 16,
+           "accuracy": 1.0,
+           "targets": [
+            0
+           ],
+           "target_options": [
+            {
+             "target": 0,
+             "side": "none",
+             "species": null
+            }
+           ]
+          }
+         ]
+        },
+        {
+         "slot": 1,
+         "board_position": -2,
+         "active": {
+          "species": "archaludon",
+          "name": "Archaludon",
+          "current_hp": 166,
+          "max_hp": 197,
+          "current_hp_fraction": 0.8426395939086294,
+          "status": null,
+          "ability": "stamina",
+          "item": "leftovers",
+          "types": [
+           "STEEL",
+           "DRAGON"
+          ],
+          "base_stats": {
+           "atk": 105,
+           "def": 130,
+           "hp": 90,
+           "spa": 125,
+           "spd": 65,
+           "spe": 85
+          },
+          "boosts": {
+           "accuracy": 0,
+           "atk": 0,
+           "def": 5,
+           "evasion": 0,
+           "spa": -6,
+           "spd": 0,
+           "spe": -3
+          },
+          "moves": [
+           "bodypress",
+           "dracometeor",
+           "flashcannon",
+           "protect"
+          ],
+          "fainted": false,
+          "active": true,
+          "revealed": true,
+          "is_terastallized": false
+         },
+         "force_switch": false,
+         "options": [
+          {
+           "type": "move",
+           "move_id": "bodypress",
+           "base_power": 80,
+           "category": "PHYSICAL",
+           "move_type": "FIGHTING",
+           "current_pp": 15,
+           "accuracy": 1.0,
+           "targets": [
+            -1,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -1,
+             "side": "ally",
+             "species": "gyarados"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "cresselia"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": null
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "dracometeor",
+           "base_power": 130,
+           "category": "SPECIAL",
+           "move_type": "DRAGON",
+           "current_pp": 4,
+           "accuracy": 0.9,
+           "targets": [
+            -1,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -1,
+             "side": "ally",
+             "species": "gyarados"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "cresselia"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": null
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "flashcannon",
+           "base_power": 80,
+           "category": "SPECIAL",
+           "move_type": "STEEL",
+           "current_pp": 16,
+           "accuracy": 1.0,
+           "targets": [
+            -1,
+            1,
+            2
+           ],
+           "target_options": [
+            {
+             "target": -1,
+             "side": "ally",
+             "species": "gyarados"
+            },
+            {
+             "target": 1,
+             "side": "opponent",
+             "species": "cresselia"
+            },
+            {
+             "target": 2,
+             "side": "opponent",
+             "species": null
+            }
+           ]
+          },
+          {
+           "type": "move",
+           "move_id": "protect",
+           "base_power": 0,
+           "category": "STATUS",
+           "move_type": "NORMAL",
+           "current_pp": 15,
+           "accuracy": 1.0,
+           "targets": [
+            0
+           ],
+           "target_options": [
+            {
+             "target": 0,
+             "side": "none",
+             "species": null
+            }
+           ]
+          }
+         ]
+        }
+       ],
+       "target_legend": {
+        "-1": "board position A on your side (always slot 0's position)",
+        "-2": "board position B on your side (always slot 1's position)",
+        "1": "board position A on the opponent's side",
+        "2": "board position B on the opponent's side",
+        "0": "no target needed (self/field/spread move)"
+       },
+       "instructions": "Submit one action for slot 0 and one for slot 1 together via play_action with action={'type':'doubles_turn','slot_0':{...},'slot_1':{...}}. Each slot is {'type':'move','move_id':...,'target': <int>} (target required unless the move's only legal target is 0), {'type':'switch','species':...}, or {'type':'pass'} (required when this slot's own options list is just [{'type':'pass'}]). IMPORTANT: -1 and -2 are FIXED board positions (see target_legend), not 'self'/'ally' labels -- check each slot's own board_position to know which one it is. For slot 0 (board_position -1), -1 means targeting itself and -2 means its ally. For slot 1 (board_position -2), it's the reverse: -2 is itself and -1 is its ally. Never assume -1 always means self. Simplest: read each move's target_options, which names every legal target for that slot as side 'opponent', 'ally' or 'self' with the species standing there now -- then submit that option's integer as 'target'. Targeting your own ally is legal but hits your own Pok\u00e9mon."
+      },
+      "action_id": "doubles_turn",
+      "state_version": 9
+     }
+    }
+   ]
+  },
+  "next_actions": [
+   {
+    "tool": "play_action",
+    "hint": "Pick one of legal_actions.actions and pass its `input`."
+   }
+  ],
+  "updated": true
+ }
+}

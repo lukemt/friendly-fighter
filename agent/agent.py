@@ -8,9 +8,11 @@ and returns a fresh ``FriendlyFighter``:
   the optional OpenAI ``Commander`` (agent/commander.py) tuning its strategy
   in the background when ``OPENAI_API_KEY`` is set. The game never waits on
   the model.
-- **Any other game** (in case this agent is ever seated in Werewolf or
-  Pokémon) goes to the starter's LLM example when ``OPENAI_API_KEY`` is set,
-  and otherwise plays the first legal action.
+- **Pokémon** (``pokemon_vgc_doubles_draft``) is played by the scripted
+  ``bots.pokemon`` agent: draft, Team Preview and doubles turns, no model calls.
+- **Any other game** (in case this agent is ever seated in Werewolf) goes to
+  the starter's LLM example when ``OPENAI_API_KEY`` is set, and otherwise
+  plays the first legal action.
 """
 
 from __future__ import annotations
@@ -34,6 +36,7 @@ from .remote import RemoteSeat, read_control
 from .redalert_bot import Knobs, RedAlertBot
 
 RED_ALERT = "red_alert"
+POKEMON = "pokemon_vgc_doubles_draft"
 # remote/control.json is looked at once a second at most, not on every view: on the shared
 # workspace filesystem each look costs about a millisecond (a fifth of a worker's CPU).
 CONTROL_EVERY_SECONDS = 1.0
@@ -81,6 +84,7 @@ class FriendlyFighter:
         self._bot: RedAlertBot | None = None
         self._commander: Commander | None = None
         self._fallback: Any = None
+        self._pokemon_bot: Any = None
         self._fallback_ready = False
         custom = knobs is not None or bool(os.environ.get("FF_KNOBS"))
         self._recorder = Recorder(enabled=record, bot="ff-live" if custom and self.BOT == "ff-default" else self.BOT)
@@ -129,6 +133,8 @@ class FriendlyFighter:
                     self._remote = RemoteSeat(bot, context.seat_position)
                 return self._remote.choose_action(state, context, autopilot=control.get("autopilot", True) is not False)
             return bot.choose_action(state, context)
+        if context.game_type == POKEMON:
+            return self._pokemon().choose_action(state, context)
         other = self._other()
         if other is not None:
             return other.choose_action(state, context)
@@ -142,6 +148,8 @@ class FriendlyFighter:
             self._remote.on_action_result(result, context)
         elif self._bot is not None:
             self._bot.on_action_result(result, context)
+        elif self._pokemon_bot is not None:
+            self._pokemon_bot.on_action_result(result, context)
         elif self._fallback is not None and hasattr(self._fallback, "on_action_result"):
             self._fallback.on_action_result(result, context)
 
@@ -167,6 +175,14 @@ class FriendlyFighter:
             else:
                 print_line("[ff] red_alert: scripted controller (no OPENAI_API_KEY: commander off)")
         return self._bot
+
+    def _pokemon(self) -> Any:
+        if self._pokemon_bot is None:
+            from bots.pokemon import create_agent as create_pokemon_agent
+
+            self._pokemon_bot = create_pokemon_agent()
+            print_line("[ff] pokemon_vgc_doubles_draft: scripted bot (bots.pokemon)")
+        return self._pokemon_bot
 
     def _other(self) -> Any:
         if not self._fallback_ready:
