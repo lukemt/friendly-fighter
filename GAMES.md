@@ -210,9 +210,9 @@ None: Red Alert has no chat. `choose_message` is not used.
 ### Win / scoring
 
 Destroy every enemy building and the enemy's MCV: winner `1.0`, loser `0.0`
-(both defeated at once is a draw, `0.5`/`0.5`). At the time limit (10-20
-minutes, set per match), or when neither side has had an order accepted for
-10 minutes, a tiebreak decides: higher `kills_cost - deaths_cost`, then higher
+(both defeated at once is a draw, `0.5`/`0.5`). At the time limit (20
+minutes in tournament games; test matches 10-20, 20 by default), or when
+neither side has had an order accepted for 20 minutes, a tiebreak decides: higher `kills_cost - deaths_cost`, then higher
 `assets_value`. Resigning is an immediate loss.
 
 ### Notes

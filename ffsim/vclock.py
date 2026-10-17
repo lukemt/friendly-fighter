@@ -10,6 +10,8 @@ in virtual seconds (``tick / 25``):
   round trips to draw from (``platform_rtts()``: the platform's, measured: median 0.195 s);
 - the agent's own time: what it spends between an answer and its next call (``think``):
   ``"measured"`` charges the wall time it really took, a number charges that many seconds;
+  ``seat_think`` sets it per seat, and ``"paused"`` (a person at the controls) charges nothing
+  and stops the game until that seat calls again, however long it takes;
 - GameAPI's own waits (the 0.2 s hold between batches, ``wait_for_update``'s long poll, the
   hand-over) are virtual sleeps.
 
@@ -124,11 +126,13 @@ class VirtualClock:
 
     def __init__(self, cond: threading.Condition, seats: list[int], *, rtt: float | list[float] = 0.19,
                  think: str | float = "measured", patience: float = 5.0, wall=time.monotonic,
-                 seed: int | str | None = None, prefetch: bool = True) -> None:
+                 seed: int | str | None = None, prefetch: bool = True,
+                 seat_think: dict[int, str | float] | None = None) -> None:
         self.cond = cond
         self.rtts = list(rtt) if isinstance(rtt, (list, tuple)) else [float(rtt)]
         self.min_half = min(self.rtts) / 2
         self.think = think
+        self.seat_think = {int(k): v for k, v in (seat_think or {}).items() if v is not None}
         self.patience = patience  # fixed think: a seat silent this long (wall) is timed by the wall clock
         self.prefetch = prefetch  # run the ticks before each view while the agents think
         self.wall = wall
@@ -204,7 +208,7 @@ class VirtualClock:
             if sc.departed is None:
                 arrival = self.t + half
             else:
-                think = self._think(now_wall - sc.departed_wall)
+                think = self._think(now_wall - sc.departed_wall, seat)
                 sc.think.append(think)
                 arrival = sc.departed + sc.back + think + half
             call = _Call(seat, max(arrival, self.t), back=half, tool=tool)
@@ -229,10 +233,16 @@ class VirtualClock:
             self.local.call = None
             self.cond.notify_all()
 
-    def _think(self, wall_elapsed: float) -> float:
-        if self.think == "measured":
+    def _think_of(self, seat: int | None) -> str | float:
+        return self.think if seat is None else self.seat_think.get(seat, self.think)
+
+    def _think(self, wall_elapsed: float, seat: int | None = None) -> float:
+        think = self._think_of(seat)
+        if think == "measured":
             return wall_elapsed
-        return float(self.think) + max(0.0, wall_elapsed - self.patience)
+        if think == "paused":
+            return 0.0  # the game waits for this seat: none of its thinking is game time
+        return float(think) + max(0.0, wall_elapsed - self.patience)
 
     # -- the conductor --------------------------------------------------------------------
 
@@ -240,7 +250,7 @@ class VirtualClock:
         """How far virtual time may move: no call may still arrive, wake or need to look before it."""
         h = math.inf
         now_wall = self.wall()
-        for sc in self.seats.values():
+        for p, sc in self.seats.items():
             if sc.calls:
                 for c in sc.calls:
                     if c.state == "running":
@@ -252,7 +262,7 @@ class VirtualClock:
                     else:
                         h = min(h, c.wake)
             elif sc.departed is not None:
-                h = min(h, sc.departed + sc.back + self._think(now_wall - sc.departed_wall) + self.min_half)
+                h = min(h, sc.departed + sc.back + self._think(now_wall - sc.departed_wall, p) + self.min_half)
             else:
                 h = min(h, self.t + self.min_half)  # a seat yet to call
         if h == math.inf:  # no agent seat (OpenRA bots only): any pace will do
@@ -357,14 +367,18 @@ class VirtualClock:
         wall clock to carry a thinking seat's horizon there."""
         timeout = None
         now_wall = self.wall()
-        thinking = [sc for sc in self.seats.values() if not sc.calls and sc.departed is not None]
+        thinking = [(p, sc) for p, sc in self.seats.items() if not sc.calls and sc.departed is not None]
         if thinking and h > self.t - 1e-9 and not any(c.state == "running" for sc in self.seats.values() for c in sc.calls):
-            if self.think == "measured":
-                timeout = event - h  # the horizon grows with the wall clock
-            else:
-                left = min(self.patience - (now_wall - sc.departed_wall) for sc in thinking)
-                timeout = left if left > 0 else event - h
-            timeout = max(0.0005, timeout)
+            timeouts = []
+            for p, sc in thinking:
+                think = self._think_of(p)
+                if think == "measured":
+                    timeouts.append(event - h)  # the horizon grows with the wall clock
+                elif think != "paused":  # (a paused seat moves the horizon only by calling)
+                    left = self.patience - (now_wall - sc.departed_wall)
+                    timeouts.append(left if left > 0 else event - h)
+            if timeouts:
+                timeout = max(0.0005, min(timeouts))
         self.stats["idle_waits"] += 1
         self.cond.wait(timeout)
         self.stats["wall_waiting"] += self.wall() - now_wall
@@ -381,4 +395,5 @@ class VirtualClock:
                 "wait_ms_histogram": {k: v for k, v in sorted(hist.items()) if v * 100 >= len(waits)},
                 "think_ms_p50": round(think[len(think) // 2] * 1000, 2) if think else None,
                 "think_ms_p90": round(think[int(len(think) * 0.9)] * 1000, 2) if think else None,
-                "rtt_ms_p50": round(sorted(self.rtts)[len(self.rtts) // 2] * 1000, 1), "think": self.think}
+                "rtt_ms_p50": round(sorted(self.rtts)[len(self.rtts) // 2] * 1000, 1), "think": self.think,
+                **({"seat_think": self.seat_think} if self.seat_think else {})}

@@ -1,0 +1,1041 @@
+{
+ "bots": [
+  {
+   "name": "jev-council-m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent"
+   },
+   "think": "measured",
+   "description": "ff-jev-council with real decision time charged to the game clock (local Jev server)",
+   "tags": [
+    "jev",
+    "council",
+    "latency"
+   ]
+  },
+  {
+   "name": "jev-base",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "copy of the frozen champion v10 (bots/jev/v10): the base every jev bot changes by opt-in settings",
+   "tags": [
+    "jev",
+    "rules",
+    "control"
+   ]
+  },
+  {
+   "name": "jev-selltest",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.selltest:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "mcv_at": 360
+    }
+   },
+   "think": 0.005,
+   "description": "mechanics test: v10 + second MCV at 6:00, then sells every building",
+   "tags": [
+    "jev",
+    "test"
+   ]
+  },
+  {
+   "name": "jev-ls1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 630,
+     "sell_mode": "overrun"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + an insurance MCV from 10:30 (hides on the map) + sells the whole base when it is overrun while the score is ahead",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 630,
+     "cashout_at": 1080,
+     "cashout_net": 2000
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 10:30 + banks the lead: sells the whole base at 18:00 when ahead by 2000+ (army stays)",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls2h",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 630,
+     "cashout_at": 1080,
+     "cashout_net": 2000,
+     "stand_army": "hide"
+    }
+   },
+   "think": 0.005,
+   "description": "jev-ls2 with the army going to the MCV's hiding place after the sale",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls3",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 720,
+     "sell_mode": "overrun",
+     "cashout_at": 960,
+     "cashout_net": 2000,
+     "stand_army": "hide"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 12:00 hiding on the map + sells the base when overrun + banks the lead at 16:00 (ahead by 2000+): sells everything, army and harvesters go to the MCV",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls4s",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 720,
+     "cashout_at": 1020,
+     "cashout_net": 2000,
+     "stand_army": "split"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 12:00 (hides, no flee) + cash-out at 17:00 (ahead by 2000+), army/harvesters: split",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls4m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 720,
+     "cashout_at": 1020,
+     "cashout_net": 2000,
+     "stand_army": "mcv"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 12:00 (hides, no flee) + cash-out at 17:00 (ahead by 2000+), army/harvesters: mcv",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-ls4t",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.laststand:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "insure_from": 720,
+     "cashout_at": 1020,
+     "cashout_net": 2000,
+     "stand_army": "stay"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + insurance MCV from 12:00 (hides, no flee) + cash-out at 17:00 (ahead by 2000+), army/harvesters: stay",
+   "tags": [
+    "jev",
+    "rules",
+    "laststand"
+   ]
+  },
+  {
+   "name": "jev-timed",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.timing:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "v10 (bots/jev/v10) timing every decision (wall and CPU): FF_TIMING_LOG",
+   "tags": [
+    "jev",
+    "test",
+    "timing"
+   ]
+  },
+  {
+   "name": "jev-st5",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base with the army waiting 5 cells from home toward the enemy (under the towers) instead of a fifth of the way; idle units regroup there",
+   "tags": [
+    "jev",
+    "rules",
+    "stage"
+   ]
+  },
+  {
+   "name": "jev-st8",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 8,
+     "regroup": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base with the army waiting 8 cells from home toward the enemy (under the towers) instead of a fifth of the way; idle units regroup there",
+   "tags": [
+    "jev",
+    "rules",
+    "stage"
+   ]
+  },
+  {
+   "name": "jev-rifb",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "rifles"
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base but riflemen only (and a support vehicle every other one) while the enemy army is unseen after 5:00 (v10: rocket soldiers)",
+   "tags": [
+    "jev",
+    "rules",
+    "composition"
+   ]
+  },
+  {
+   "name": "jev-rifr",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-rifb + riflemen when 60%+ of the enemy units seen in the last 90 s are infantry, rocket soldiers when 35%- (and vehicles seen), else mixed",
+   "tags": [
+    "jev",
+    "rules",
+    "composition"
+   ]
+  },
+  {
+   "name": "jev-focus",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "focus": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + focus fire when defending the base: rocket soldiers aim at aircraft and vehicles, riflemen at infantry, tanks at vehicles, artillery at infantry (attack orders with a target, every 3 s)",
+   "tags": [
+    "jev",
+    "rules",
+    "micro"
+   ]
+  },
+  {
+   "name": "jev-sjs",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_split_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "shadow"
+    }
+   },
+   "think": 0.005,
+   "description": "jev-rifr (rules) with the quartermaster question also asked of Jev: shadow (shadow: the rules decide, Jev logged; jev: Jev decides at p>=0.55)",
+   "tags": [
+    "jev",
+    "council",
+    "composition"
+   ]
+  },
+  {
+   "name": "jev-sjj",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_split_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "jev"
+    }
+   },
+   "think": 0.005,
+   "description": "jev-rifr (rules) with the quartermaster question also asked of Jev: jev (shadow: the rules decide, Jev logged; jev: Jev decides at p>=0.55)",
+   "tags": [
+    "jev",
+    "council",
+    "composition"
+   ]
+  },
+  {
+   "name": "jev-a1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + army waiting 5 cells from home + riflemen when the enemy is mostly infantry (jev-st5 + jev-rifr)",
+   "tags": [
+    "jev",
+    "rules",
+    "combo"
+   ]
+  },
+  {
+   "name": "jev-a2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "focus": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-a1 (staging 5 cells + riflemen rule) + focus fire when defending",
+   "tags": [
+    "jev",
+    "rules",
+    "combo"
+   ]
+  },
+  {
+   "name": "jev-st5-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_st5_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-st5 jev-st5@9e879f7a at 850b164+changes: jev-base with the army waiting 5 cells from home toward the enemy (under the towers) instead of a fifth of the way; idle units regroup there",
+   "tags": [
+    "frozen",
+    "jev",
+    "rules",
+    "stage"
+   ]
+  },
+  {
+   "name": "jev-plc",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "regroup": true
+    }
+   },
+   "think": 0.005,
+   "description": "PLACEBO for the staging probes: jev-base with regroup only (idle units walk to v10's own staging point): a perturbation that should do nothing, to measure what any change gains on outcome-selected moments",
+   "tags": [
+    "jev",
+    "rules",
+    "placebo"
+   ]
+  },
+  {
+   "name": "jev-tan1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "snipe": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + Tanya answers (snipe=true): snipe = while Tanya (e7) is in sight every combat unit attacks her; tanya_rule = tanks only once she has been seen",
+   "tags": [
+    "jev",
+    "rules",
+    "tanya"
+   ]
+  },
+  {
+   "name": "jev-tan2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "tanya_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + Tanya answers (tanya_rule=true): snipe = while Tanya (e7) is in sight every combat unit attacks her; tanya_rule = tanks only once she has been seen",
+   "tags": [
+    "jev",
+    "rules",
+    "tanya"
+   ]
+  },
+  {
+   "name": "jev-tan3",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "snipe": true,
+     "tanya_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + Tanya answers (snipe=true,tanya_rule=true): snipe = while Tanya (e7) is in sight every combat unit attacks her; tanya_rule = tanks only once she has been seen",
+   "tags": [
+    "jev",
+    "rules",
+    "tanya"
+   ]
+  },
+  {
+   "name": "jev-regroup-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_regroup_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "regroup": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-plc jev-plc@9f7dc537 at af73e86: PLACEBO for the staging probes: jev-base with regroup only (idle units walk to v10's own staging point): a perturbation that should do nothing, to measure what any change gains on outcome-selected moments",
+   "tags": [
+    "frozen",
+    "jev",
+    "placebo",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-rifr-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_rifr_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-rifr jev-rifr@c9b72cfd at 811281f: jev-rifb + riflemen when 60%+ of the enemy units seen in the last 90 s are infantry, rocket soldiers when 35%- (and vehicles seen), else mixed",
+   "tags": [
+    "composition",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-rr",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "jev-rifr + regroup (idle units walk back to the staging point), no change of the staging point",
+   "tags": [
+    "jev",
+    "rules",
+    "combo"
+   ]
+  },
+  {
+   "name": "jev-rifr-m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": "measured",
+   "description": "jev-rifr with its real decision time charged to the game clock (the control for jev-sjj-m)",
+   "tags": [
+    "jev",
+    "rules",
+    "composition",
+    "latency"
+   ]
+  },
+  {
+   "name": "jev-sjj-m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_split_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "jev"
+    }
+   },
+   "think": "measured",
+   "description": "jev-rifr-m with the quartermaster's production question answered by Jev (p>=0.55, else the rules); real decision time charged to the game clock",
+   "tags": [
+    "jev",
+    "council",
+    "composition",
+    "latency"
+   ]
+  },
+  {
+   "name": "jev-sjs-m",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_split_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "shadow"
+    }
+   },
+   "think": "measured",
+   "description": "jev-rifr-m with Jev asked next to the rules and only logged (shadow)",
+   "tags": [
+    "jev",
+    "council",
+    "composition",
+    "latency"
+   ]
+  },
+  {
+   "name": "jev-a1-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_a1_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-a1 jev-a1@2b44eb57 at 55f5380+changes: jev-base + army waiting 5 cells from home + riflemen when the enemy is mostly infantry (jev-st5 + jev-rifr)",
+   "tags": [
+    "combo",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-g1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "greed_hold": 1
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base but greed 1 in the plans hold/attack (v10: 0): one raid no longer ends the boom for good; fortify still stops it",
+   "tags": [
+    "jev",
+    "rules",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-g2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "greed_hold": 2
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base but greed 2 in the plans hold/attack (v10: 0): one raid no longer ends the boom for good; fortify still stops it",
+   "tags": [
+    "jev",
+    "rules",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-m5",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "macro": 5
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + a refinery schedule (4 by 5:00, 5 by 6:30, 6 by 8:00, 7 by 9:30, 8 by 11:00, capped at 5) and harvesters = refineries + 2 (max 12), whatever the plan (v10: 3-4 refineries, ~5 harvesters against raiders)",
+   "tags": [
+    "jev",
+    "rules",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-m8",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "macro": 8
+    }
+   },
+   "think": 0.005,
+   "description": "jev-base + a refinery schedule (4 by 5:00, 5 by 6:30, 6 by 8:00, 7 by 9:30, 8 by 11:00, capped at 8) and harvesters = refineries + 2 (max 12), whatever the plan (v10: 3-4 refineries, ~5 harvesters against raiders)",
+   "tags": [
+    "jev",
+    "rules",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-a1g2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "greed_hold": 2
+    }
+   },
+   "think": 0.005,
+   "description": "jev-a1 (staging 5 + riflemen rule) + greed 2 outside fortify",
+   "tags": [
+    "jev",
+    "rules",
+    "combo",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-a1m5",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 5
+    }
+   },
+   "think": 0.005,
+   "description": "jev-a1 (staging 5 + riflemen rule) + the refinery schedule up to 5",
+   "tags": [
+    "jev",
+    "rules",
+    "combo",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-a1m8",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 8
+    }
+   },
+   "think": 0.005,
+   "description": "jev-a1 (staging 5 + riflemen rule) + the refinery schedule up to 8",
+   "tags": [
+    "jev",
+    "rules",
+    "combo",
+    "economy"
+   ]
+  },
+  {
+   "name": "jev-a1m8-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_a1m8_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 8
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-a1m8 jev-a1m8@8580b146 at ca99c04: jev-a1 (staging 5 + riflemen rule) + the refinery schedule up to 8",
+   "tags": [
+    "combo",
+    "economy",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-a1g2-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_a1g2_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "greed_hold": 2
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-a1g2 jev-a1g2@6e9a2c07 at ca99c04+changes: jev-a1 (staging 5 + riflemen rule) + greed 2 outside fortify",
+   "tags": [
+    "combo",
+    "economy",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-combo",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev.v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 8,
+     "defend_radius": 22
+    }
+   },
+   "think": 0.005,
+   "description": "v11 candidate: jev-a1m8 (staging 5 + regroup + riflemen rule + refinery schedule 8) + rush-wave-k's defend_radius 22",
+   "tags": [
+    "jev",
+    "rules",
+    "combo"
+   ]
+  },
+  {
+   "name": "jev-combo-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_combo_v1.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "stage_cells": 5,
+     "regroup": true,
+     "blind_production": "rifles",
+     "rifle_rule": true,
+     "macro": 8,
+     "defend_radius": 22
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-combo jev-combo@f295ab5c at 2bdd54f+changes: v11 candidate: jev-a1m8 (staging 5 + regroup + riflemen rule + refinery schedule 8) + rush-wave-k's defend_radius 22",
+   "tags": [
+    "combo",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-rifr-v2",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_rifr_v2.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "rifles",
+     "rifle_rule": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-rifr jev-rifr@1a62cf87 at 679dc78+changes: jev-rifb + riflemen when 60%+ of the enemy units seen in the last 90 s are infantry, rocket soldiers when 35%- (and vehicles seen), else mixed",
+   "tags": [
+    "composition",
+    "frozen",
+    "jev",
+    "rules"
+   ]
+  },
+  {
+   "name": "jev-sjj-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_sjj_v1.bot:create_split_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "jev"
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-sjj jev-sjj@58e10717 at 679dc78+changes: jev-rifr (rules) with the quartermaster question also asked of Jev: jev (shadow: the rules decide, Jev logged; jev: Jev decides at p>=0.55)",
+   "tags": [
+    "composition",
+    "council",
+    "frozen",
+    "jev"
+   ]
+  },
+  {
+   "name": "jev-sjs-v1",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.jev_sjs_v1.bot:create_split_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "supply_mode": "shadow"
+    }
+   },
+   "think": 0.005,
+   "description": "frozen jev-sjs jev-sjs@65e21bae at 679dc78+changes: jev-rifr (rules) with the quartermaster question also asked of Jev: shadow (shadow: the rules decide, Jev logged; jev: Jev decides at p>=0.55)",
+   "tags": [
+    "composition",
+    "council",
+    "frozen",
+    "jev"
+   ]
+  }
+ ]
+}

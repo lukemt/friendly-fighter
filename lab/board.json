@@ -1,0 +1,26 @@
+{
+ "_doc": "The board's settings (lab/board.py, docs/LAB.md 'The board'). The coordinator owns this file. Changing the reference, the baselines, the seed or the length starts a new board (old games stay, but no longer count).",
+ "reference": "rush-wave-k-v1",
+ "fixed": [
+  "ff-council-champ-v10",
+  "ff-default",
+  "ff-greedy-turtle-eco"
+ ],
+ "baselines": [
+  "ai-normal",
+  "ai-rush",
+  "ai-turtle",
+  "exploit-eco-waves",
+  "exploit-eco-tanks",
+  "ext-ryan"
+ ],
+ "games": 8,
+ "seed": 2026,
+ "minutes": 20,
+ "maps": [
+  "trapped",
+  "sidestep",
+  "shadowfiend-ii"
+ ],
+ "entries_per_family": 2
+}

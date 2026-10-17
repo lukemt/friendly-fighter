@@ -40,19 +40,21 @@ class FakeOfficial:
 
 @pytest.fixture
 def env(monkeypatch):
-    for name in ("ALTRUAGENT_CLAIM_TOKEN", "ALTRUAGENT_API_KEY"):
+    for name in ("ALTRUAGENT_CLAIM_TOKEN", "ALTRUAGENT_API_KEY", "FF_GAMES", "FF_SKIP_GAMES"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("ALTRUAGENT_OFFICIAL_AGENT_KEY", KEY)
     monkeypatch.setenv("ALTRUAGENT_CONTROL_URL", "https://control.example.test")
 
 
-def _install(monkeypatch, official=None, *, supervisor=None):
+def _install(monkeypatch, official=None, *, supervisor=None, filters=None):
     official = official or FakeOfficial()
     calls = []
     monkeypatch.setattr(agent_main, "OfficialAgentClient", lambda *a, **k: official)
 
-    def fake_supervisor(client, *, agent_spec, kinds):
+    def fake_supervisor(client, *, agent_spec, kinds, games=None, skip_games=frozenset()):
         calls.append((client, agent_spec, kinds))
+        if filters is not None:
+            filters.append((games, skip_games))
         if supervisor:
             supervisor()
 
@@ -371,3 +373,66 @@ def test_mark_falls_back_when_console_cannot_encode(monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(io.BytesIO(), encoding="cp1252"))
 
     assert agent_main._mark("✓", "[ok]") == "[ok]"
+
+
+# -- --games / --skip-games -------------------------------------------------------------
+
+
+def test_no_game_filter_plays_every_game(env, monkeypatch, capsys):
+    filters = []
+    _install(monkeypatch, filters=filters)
+
+    assert agent_main.main(["--tournament"]) == 0
+
+    assert filters == [(None, frozenset())]
+    assert not any(line.startswith("Games:") for line in capsys.readouterr().out.splitlines())
+
+
+def test_games_flag_names_the_games_this_runtime_plays(env, monkeypatch, capsys):
+    filters = []
+    _install(monkeypatch, filters=filters)
+
+    assert agent_main.main(["--tournament", "--match", "--games", " Werewolf, pokemon_vgc_doubles_draft ,"]) == 0
+
+    assert filters == [(frozenset({"werewolf", "pokemon_vgc_doubles_draft"}), frozenset())]
+    assert "Games: only pokemon_vgc_doubles_draft, werewolf." in capsys.readouterr().out.splitlines()
+
+
+def test_skip_games_flag_plays_everything_else(env, monkeypatch, capsys):
+    filters = []
+    _install(monkeypatch, filters=filters)
+
+    assert agent_main.main(["--tournament", "--skip-games", "werewolf,pokemon_vgc_doubles_draft"]) == 0
+
+    assert filters == [(None, frozenset({"werewolf", "pokemon_vgc_doubles_draft"}))]
+    assert "Games: all but pokemon_vgc_doubles_draft, werewolf." in capsys.readouterr().out.splitlines()
+
+
+def test_game_filters_default_to_the_environment_and_flags_win(env, monkeypatch):
+    filters = []
+    _install(monkeypatch, filters=filters)
+    monkeypatch.setenv("FF_GAMES", "werewolf")
+    monkeypatch.setenv("FF_SKIP_GAMES", "red_alert")
+
+    assert agent_main.main(["--match"]) == 0
+    assert agent_main.main(["--match", "--games", "red_alert,unknown", "--skip-games", ""]) == 0
+
+    assert filters == [(frozenset({"werewolf"}), frozenset({"red_alert"})),
+                       (frozenset({"red_alert", "unknown"}), frozenset())]
+
+
+def test_game_filters_that_leave_nothing_are_refused(env, monkeypatch, capsys):
+    _, calls = _install(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        agent_main.main(["--tournament", "--games", "werewolf", "--skip-games", "werewolf"])
+
+    assert calls == []
+    assert "leave no game to play" in capsys.readouterr().err
+
+
+def test_game_filters_need_a_playing_mode(env, monkeypatch, capsys):
+    with pytest.raises(SystemExit):
+        agent_main.main(["--games", "werewolf"])
+
+    assert "only supported together with --tournament or --match" in capsys.readouterr().err

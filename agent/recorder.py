@@ -4,7 +4,8 @@ Every match writes ``recordings/<session_id>/seat<N>.jsonl.gz``, one JSON
 object per line:
 
 - ``{"kind": "config", ...}``: the game's ``get_game_config`` reference
-  (rules, order schema, maps), once per match;
+  (rules, order schema, maps), once per match, with ``bot``: which bot played
+  (``lab import`` names our seat by it);
 - ``{"kind": "state", ...}``: each raw state the agent decided on;
 - ``{"kind": "action", ...}``: each move the agent sent;
 - ``{"kind": "result", ...}``: each ``play_action`` answer (or the error the
@@ -57,10 +58,11 @@ def _jsonable(value: Any) -> Any:
 
 
 class Recorder:
-    def __init__(self, root: Path = ROOT) -> None:
+    def __init__(self, root: Path = ROOT, *, enabled: bool | None = None, bot: str | None = None) -> None:
         self._root = root
+        self._bot = bot
         self._file: gzip.GzipFile | None = None
-        self._enabled = os.environ.get("FF_RECORD", "1") != "0"
+        self._enabled = os.environ.get("FF_RECORD", "1") != "0" if enabled is None else enabled
         self._pending = 0
         self._config_written = False
 
@@ -109,7 +111,8 @@ class Recorder:
     def state(self, state, context) -> None:
         if not self._config_written and getattr(context, "game_config", None) is not None:
             self._config_written = True
-            self._write(context, {"kind": "config", "game_type": context.game_type, "config": context.game_config})
+            self._write(context, {"kind": "config", "game_type": context.game_type, "bot": self._bot,
+                                  "config": context.game_config})
         self._write(context, {"kind": "state", "game_type": context.game_type, "raw": state.raw})
         if isinstance(state.raw, dict) and state.raw.get("result"):
             self.close()  # game over: finish the file now (a later write appends a new gzip member)

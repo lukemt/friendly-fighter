@@ -1,0 +1,9 @@
+#!/bin/sh
+# friendly-fighter (AGENTS.md): nothing is pushed unless the user asked for that push.
+# The GitHub repository is public, so a push publishes our bots and strategy. When the user says
+# to push, push once with: FF_ALLOW_PUSH=1 git push ...
+# (Installed by `python scripts/session.py hooks` into .git/hooks: it applies to every worktree.)
+if [ "$FF_ALLOW_PUSH" != "1" ]; then
+  echo "push refused: pushing needs the user's go for that push (AGENTS.md). With it: FF_ALLOW_PUSH=1 git push ..." >&2
+  exit 1
+fi

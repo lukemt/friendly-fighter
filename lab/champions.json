@@ -1,0 +1,47 @@
+{
+ "_doc": "The champion over time: lab champion (show) / lab champion set BOT --run N --why '...'. The last entry is the current one.",
+ "ladder": [
+  {
+   "bot": "ff-default",
+   "since": "2026-10-13",
+   "run": null,
+   "why": "the submitted tournament bot"
+  },
+  {
+   "bot": "ff-turtle",
+   "since": "2026-10-14",
+   "run": 12,
+   "why": "beat ff-default 6/6 (gate run 12); Normal AI 4.5/6"
+  },
+  {
+   "bot": "ff-guard-turtle",
+   "since": "2026-10-14",
+   "run": 29,
+   "why": "guard opening from Claude's Rush win: Rush 3/6 (turtle 1/6), Normal 6/6"
+  },
+  {
+   "bot": "ff-jev-push",
+   "since": "2026-10-14",
+   "run": 39,
+   "why": "Jev posture loops: AIs 14W 3D 1L of 18, ff-default 6/6 (runs 34-43)"
+  },
+  {
+   "bot": "ff-jev-champ-v7",
+   "since": "2026-10-14",
+   "run": 50,
+   "why": "no scout (its deaths lost standoffs), literal playbook, Jev-decided greed: 94% on @standard+chaotic+builder (suite saturated); lost to the exploiters (run 53: 5/12)"
+  },
+  {
+   "bot": "ff-council-champ-v10",
+   "since": "2026-10-15",
+   "run": 64,
+   "why": "the council's loops answered by code rules + a second refinery before the war factory; no API. 86% (run 63, +0.15 vs greedy turtle) and 95% (run 64, +0.19, CI +0.09..+0.29); exploiters 32/32"
+  },
+  {
+   "bot": "rush-wave-k-v1",
+   "since": "2026-10-16",
+   "run": 212,
+   "why": "v10 with the army defending out to 22 cells (rush-wave family): +0.064 points a game over v10 pooled over 235 paired games (CI +0.017..+0.111), margin score +0.093 (+0.029..+0.158); on seeds after the find (2027, 4711: 77 pairs) the same +0.065; no opponent worse on points; seed 2027 alone +0.12 (CI +0.01..+0.24, run 212). The crown rule: better clearly, no worse anywhere. The live bot stays v10 (the user's call)."
+  }
+ ]
+}

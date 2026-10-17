@@ -52,6 +52,9 @@ from altruagent.supervisor import ALL_KINDS, TESTING, TOURNAMENT, WAITING_MESSAG
 
 
 CLAIM_TOKEN_ENV = "ALTRUAGENT_CLAIM_TOKEN"
+# Defaults for --games and --skip-games, so a container can set them in its compose file.
+GAMES_ENV = "FF_GAMES"
+SKIP_GAMES_ENV = "FF_SKIP_GAMES"
 
 
 def _retired(notice: str) -> int:
@@ -68,10 +71,27 @@ PLAYING_MESSAGES = {
 }
 
 
-def _run_tournament(agent_spec: str, kinds: frozenset[str] = ALL_KINDS) -> int:
+def _game_list(text: str | None) -> frozenset[str] | None:
+    """``--games``/``--skip-games``: comma-separated game types, any case; None when not given."""
+    if text is None or not text.strip():
+        return None
+    return frozenset(part.strip().lower() for part in text.split(",") if part.strip())
+
+
+def _games_message(games: frozenset[str] | None, skip_games: frozenset[str]) -> str | None:
+    if games is not None:
+        return f"Games: only {', '.join(sorted(games))}."
+    if skip_games:
+        return f"Games: all but {', '.join(sorted(skip_games))}."
+    return None
+
+
+def _run_tournament(agent_spec: str, kinds: frozenset[str] = ALL_KINDS, games: frozenset[str] | None = None,
+                    skip_games: frozenset[str] = frozenset()) -> int:
     """The runtime: authenticate with the Official Agent Key, then keep one
     worker process per assigned game of the chosen ``kinds`` (test matches,
-    tournament games or both) until Ctrl+C.
+    tournament games or both) and ``games`` (all, or the given game types,
+    minus ``skip_games``) until Ctrl+C.
     """
     try:
         _load_agent_factory(agent_spec)  # validated eagerly; built once per match, in its worker
@@ -99,8 +119,10 @@ def _run_tournament(agent_spec: str, kinds: frozenset[str] = ALL_KINDS) -> int:
         else:
             print("Connected with your Official Agent Key.")
         print(PLAYING_MESSAGES[kinds])
+        if (games_message := _games_message(games, skip_games)) is not None:
+            print(games_message)
         print(f"{WAITING_MESSAGE} (Press Ctrl+C to stop.)", flush=True)
-        run_tournament_forever(official, agent_spec=agent_spec, kinds=kinds)
+        run_tournament_forever(official, agent_spec=agent_spec, kinds=kinds, games=games, skip_games=skip_games)
         return 0
     except KeyboardInterrupt:
         print("\nStopped.")
@@ -237,6 +259,19 @@ def _build_parser() -> argparse.ArgumentParser:
     # notice instead of an argparse error; hidden from --help.
     mode.add_argument("--claim", nargs="?", const="", metavar="TOKEN", help=argparse.SUPPRESS)
     parser.add_argument(
+        "--games",
+        metavar="TYPE[,TYPE...]",
+        help=(
+            "play only these game types (e.g. red_alert, werewolf, pokemon_vgc_doubles_draft; "
+            f"'unknown' for an assignment without one); default ${GAMES_ENV}, else every game"
+        ),
+    )
+    parser.add_argument(
+        "--skip-games",
+        metavar="TYPE[,TYPE...]",
+        help=f"play every game type but these (games nobody named are still played); default ${SKIP_GAMES_ENV}",
+    )
+    parser.add_argument(
         "--agent",
         metavar="MODULE[:FACTORY]",
         help=f"agent factory to use (default: {DEFAULT_AGENT_SPEC})",
@@ -257,12 +292,19 @@ def main(argv: list[str] | None = None) -> int:
         return _check_tournament(args.agent or DEFAULT_AGENT_SPEC)
     if args.tournament or args.match:
         kinds = frozenset(kind for kind, chosen in ((TOURNAMENT, args.tournament), (TESTING, args.match)) if chosen)
-        return _run_tournament(args.agent or DEFAULT_AGENT_SPEC, kinds)
+        games = _game_list(args.games if args.games is not None else os.environ.get(GAMES_ENV))
+        skip_games = _game_list(args.skip_games if args.skip_games is not None
+                                else os.environ.get(SKIP_GAMES_ENV)) or frozenset()
+        if games is not None and not games - skip_games:
+            parser.error("--games and --skip-games leave no game to play")
+        return _run_tournament(args.agent or DEFAULT_AGENT_SPEC, kinds, games, skip_games)
 
     if args.claim is not None:
         return _retired(CLAIM_CODES_RETIRED_NOTICE)
     if args.agent is not None:
         parser.error("--agent is only supported together with --tournament, --match or --check-tournament")
+    if args.games is not None or args.skip_games is not None:
+        parser.error("--games and --skip-games are only supported together with --tournament or --match")
     if os.environ.get(CLAIM_TOKEN_ENV):
         return _retired(CLAIM_CODES_RETIRED_NOTICE)
     return _retired(PLATFORM_KEY_RETIRED_NOTICE)

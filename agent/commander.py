@@ -141,6 +141,7 @@ def knobs_from_answer(answer: dict, current: Knobs) -> Knobs:
         attack_threshold=min(30, max(4, threshold)),
         unit_focus=pick("unit_focus", ("infantry", "vehicles", "mixed")),
         target=pick("target", ("nearest", "enemy_base", "harvesters")),
+        opening=current.opening,  # (not the model's to change)
         note=str(answer.get("reasoning_summary") or "")[:200],
     )
 

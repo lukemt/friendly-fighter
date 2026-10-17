@@ -203,7 +203,12 @@ python scripts/ff_play.py status | attack X Y [all|ids] | build powr | train 3tn
 ## Next steps (in priority order)
 
 The longer-term direction (modular bot, league of bots, snapshot branching) is in
-[ROADMAP.md](ROADMAP.md).
+[ROADMAP.md](ROADMAP.md). The lab that runs those experiments is in [LAB.md](LAB.md)
+(`scripts/lab.py`):
+- play, leagues and gates;
+- you at the controls;
+- snapshots and branches;
+- reports, ratings and the dashboard.
 
 1. **User:** click "Register my agent" before 11:59 PM PDT. Revoke the
    GitHub token. Consider rotating the agent key.
@@ -216,3 +221,14 @@ The longer-term direction (modular bot, league of bots, snapshot branching) is i
 5. Finish Phase 1 (time limit, parallel test), then Phases 2–4, or start
    with the cheaper platform A/B testing.
 6. (Done: `scripts/ff_resign.py`.)
+7. New sparring partners: [EXTERNAL_BOTS.md](EXTERNAL_BOTS.md) surveys bots found online
+   (2026-10-15): three contestants' public Red Alert agents that plug in as `module` bots, OpenRA's
+   unregistered beginner/easy/medium AIs, FransBots, OpenRA-RL's examples, and the GitHub
+   "AltruAgent" search. Its checklist is the order to explore them. Note: this repository is public.
+8. **The lab plan:** [LAB_PLAN.md](LAB_PLAN.md) (2026-10-15) covers where v10 stands, lab
+   infrastructure to build (contestant bots in their own processes, Claude as the council's
+   advisor, decision branches, tournament scoring), bots to add, and experiments E1–E10 in order.
+9. **Several agent sessions (2026-10-16):** [AGENTS.md](../AGENTS.md) holds the rules for every
+   agent (Claude Code, Codex): a coordinator in `/workspace`, one family session per git worktree
+   (`scripts/session.py new <family>`), a shared lab and shared game slots, and a push guard.
+   Games are 20 minutes since 2026-10-16, and the experiment funnel is LAB_PLAN.md Part 0.

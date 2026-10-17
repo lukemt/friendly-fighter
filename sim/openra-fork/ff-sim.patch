@@ -242,7 +242,7 @@ index ec56ecc..7c372a5 100644
  
  			while (reader.TryRead(out var item))
 diff --git a/OpenRA.Game/Traits/World/ScreenMap.cs b/OpenRA.Game/Traits/World/ScreenMap.cs
-index 079f811..a5a6de8 100644
+index 079f811..279791c 100644
 --- a/OpenRA.Game/Traits/World/ScreenMap.cs
 +++ b/OpenRA.Game/Traits/World/ScreenMap.cs
 @@ -83,6 +83,9 @@ public ScreenMap(World world, ScreenMapInfo info)
@@ -273,7 +273,7 @@ index 079f811..a5a6de8 100644
  			removeActors.Remove(a);
  
  			addOrUpdateActors.Add(a);
-@@ -102,6 +111,9 @@ public void AddOrUpdate(Actor a)
+@@ -102,11 +111,17 @@ public void AddOrUpdate(Actor a)
  
  		public void Remove(Actor a)
  		{
@@ -281,6 +281,43 @@ index 079f811..a5a6de8 100644
 +				return;
 +
  			removeActors.Add(a);
+ 		}
+ 
+ 		public void Add(IEffect effect, WPos position, Size size)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			var screenPos = worldRenderer.ScreenPxPosition(position);
+ 			var screenWidth = Math.Abs(size.Width);
+ 			var screenHeight = Math.Abs(size.Height);
+@@ -117,6 +132,9 @@ public void Add(IEffect effect, WPos position, Size size)
+ 
+ 		public void Add(IEffect effect, WPos position, Sprite sprite)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			var size = new Size((int)sprite.Size.X, (int)sprite.Size.Y);
+ 			Add(effect, position, size);
+ 		}
+@@ -129,12 +147,18 @@ public void Update(IEffect effect, WPos position, Size size)
+ 
+ 		public void Update(IEffect effect, WPos position, Sprite sprite)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			var size = new Size((int)sprite.Size.X, (int)sprite.Size.Y);
+ 			Update(effect, position, size);
+ 		}
+ 
+ 		public void Remove(IEffect effect)
+ 		{
++			if (Game.Unrendered)
++				return;
++
+ 			partitionedRenderableEffects.Remove(effect);
  		}
  
 diff --git a/OpenRA.Game/World.cs b/OpenRA.Game/World.cs
@@ -1288,10 +1325,10 @@ index d7c77c0..055d4f0 100644
  				{
  					if (Game.IsCurrentWorld(player.World))
 diff --git a/OpenRA.Mods.Common/Traits/Player/ModularBot.cs b/OpenRA.Mods.Common/Traits/Player/ModularBot.cs
-index 3643dec..34c4a3c 100644
+index 3643dec..e33b848 100644
 --- a/OpenRA.Mods.Common/Traits/Player/ModularBot.cs
 +++ b/OpenRA.Mods.Common/Traits/Player/ModularBot.cs
-@@ -80,9 +80,15 @@ public void Activate(Player p)
+@@ -80,14 +80,26 @@ public void Activate(Player p)
  
  		void IBot.QueueOrder(Order order)
  		{
@@ -1304,9 +1341,53 @@ index 3643dec..34c4a3c 100644
  
 +		static readonly bool DebugOrders = System.Environment.GetEnvironmentVariable("RL_DEBUG_BOT_ORDERS") == "1";
 +
++		// friendly-fighter sim: RL_BOT_TIMING=1 measures how long this bot thinks (its modules' ticks and
++		// attack responses) and prints the running total once a game minute. Measurement only.
++		static readonly bool TimeBots = System.Environment.GetEnvironmentVariable("RL_BOT_TIMING") == "1";
++		long thinkTimestamp;
++
  		void ITick.Tick(Actor self)
  		{
  			if (!IsEnabled || self.World.IsLoadingGameSave)
+ 				return;
+ 
++			var started = TimeBots ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+ 			using (new PerfSample("bot_tick"))
+ 			{
+ 				Sync.RunUnsynced(Game.Settings.Debug.SyncCheckBotModuleCode, world, () =>
+@@ -101,6 +113,14 @@ void ITick.Tick(Actor self)
+ 			var ordersToIssueThisTick = Math.Min((orders.Count + info.MinOrderQuotientPerTick - 1) / info.MinOrderQuotientPerTick, orders.Count);
+ 			for (var i = 0; i < ordersToIssueThisTick; i++)
+ 				world.IssueOrder(orders.Dequeue());
++
++			if (TimeBots)
++			{
++				thinkTimestamp += System.Diagnostics.Stopwatch.GetTimestamp() - started;
++				if (world.WorldTick % 1500 == 0)
++					Console.Error.WriteLine($"ff-bot-timing {player?.InternalName} tick {world.WorldTick} think_ms " +
++						$"{thinkTimestamp * 1000.0 / System.Diagnostics.Stopwatch.Frequency:F0}");
++			}
+ 		}
+ 
+ 		void INotifyDamage.Damaged(Actor self, AttackInfo e)
+@@ -108,6 +128,7 @@ void INotifyDamage.Damaged(Actor self, AttackInfo e)
+ 			if (!IsEnabled || self.World.IsLoadingGameSave)
+ 				return;
+ 
++			var started = TimeBots ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
+ 			using (new PerfSample("bot_attack_response"))
+ 			{
+ 				Sync.RunUnsynced(Game.Settings.Debug.SyncCheckBotModuleCode, world, () =>
+@@ -117,6 +138,9 @@ void INotifyDamage.Damaged(Actor self, AttackInfo e)
+ 							t.RespondToAttack(this, self, e);
+ 				});
+ 			}
++
++			if (TimeBots)
++				thinkTimestamp += System.Diagnostics.Stopwatch.GetTimestamp() - started;
+ 		}
+ 	}
+ }
 diff --git a/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs b/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs
 index 69cea95..e9e9d56 100644
 --- a/OpenRA.Mods.Common/Traits/Player/ObservationSerializer.cs

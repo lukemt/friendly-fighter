@@ -1,0 +1,1267 @@
+{
+ "bots": [
+  {
+   "name": "ff-default",
+   "kind": "ff",
+   "params": {
+    "knobs": {}
+   },
+   "think": 0.005,
+   "description": "our tournament bot as submitted: mixed army, waves of 8+, nearest target",
+   "tags": [
+    "ours",
+    "champion"
+   ]
+  },
+  {
+   "name": "ff-turtle",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "posture": "defend",
+     "attack_threshold": 20
+    }
+   },
+   "think": 0.005,
+   "description": "defends at home, never sends waves (beat ff-default 11 of 12 in self-play)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-rush",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "posture": "attack",
+     "attack_threshold": 4,
+     "unit_focus": "infantry",
+     "target": "nearest"
+    }
+   },
+   "think": 0.005,
+   "description": "small infantry waves early",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-eco",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "posture": "eco",
+     "attack_threshold": 14,
+     "unit_focus": "vehicles",
+     "target": "enemy_base"
+    }
+   },
+   "think": 0.005,
+   "description": "extra refineries first, big vehicle waves at the enemy base",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-harass",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "unit_focus": "vehicles",
+     "target": "harvesters"
+    }
+   },
+   "think": 0.005,
+   "description": "vehicle waves that hunt harvesters",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-tanks",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "unit_focus": "vehicles",
+     "attack_threshold": 12
+    }
+   },
+   "think": 0.005,
+   "description": "vehicles only, waves of 12+",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-patient",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "posture": "attack",
+     "attack_threshold": 20
+    }
+   },
+   "think": 0.005,
+   "description": "attacks only with a big army (waves of 20+)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "counter",
+   "kind": "module",
+   "params": {
+    "factory": "bots.example:create_agent",
+    "kwargs": {
+     "threshold": 12
+    }
+   },
+   "think": 0.005,
+   "description": "bots/example.py: defends, and counterattacks once ahead on kills with 12+ units (a turtle that scores)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-guard",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "opening": "guard"
+    }
+   },
+   "think": 0.005,
+   "description": "ff-default with the guard opening: a defense after the barracks, 10 infantry first, no waves before 6:00, emergency infantry (from beating the Rush AI by hand)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-guard-turtle",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "opening": "guard",
+     "posture": "defend",
+     "attack_threshold": 20
+    }
+   },
+   "think": 0.005,
+   "description": "ff-turtle with the guard opening",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-jev",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent"
+   },
+   "think": 0.005,
+   "description": "our bot steered by Jev (TypeSafe) decision loops: opponent read, posture, production, opening, from Claude's playbook; needs TYPESAFE_API_KEY",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-push",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true
+    }
+   },
+   "think": 0.005,
+   "description": "ff-jev, but an attack falls back only when the counted odds are against it too",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-slow",
+   "kind": "ff",
+   "params": {
+    "knobs": {}
+   },
+   "think": 0.8,
+   "description": "ff-default deciding in 0.8 s, like an LLM agent",
+   "tags": [
+    "ours",
+    "latency"
+   ]
+  },
+  {
+   "name": "ff-sluggish",
+   "kind": "ff",
+   "params": {
+    "knobs": {}
+   },
+   "think": 2.5,
+   "description": "ff-default deciding in 2.5 s, like the starter's LLM player",
+   "tags": [
+    "ours",
+    "latency"
+   ]
+  },
+  {
+   "name": "starter-llm",
+   "kind": "module",
+   "params": {
+    "factory": "examples.llm_agent:create_agent"
+   },
+   "think": "measured",
+   "description": "the starter's LLM player (OpenAI): needs OPENAI_API_KEY and FF_SIM_OPENAI=1; its real latency is game time",
+   "tags": [
+    "llm",
+    "needs-openai"
+   ]
+  },
+  {
+   "name": "builder",
+   "kind": "module",
+   "params": {
+    "factory": "lab.simple_bots:create_builder"
+   },
+   "think": 0.005,
+   "description": "builds a base and an economy, never trains an army: can we finish it?",
+   "tags": [
+    "baseline",
+    "weak"
+   ]
+  },
+  {
+   "name": "idle",
+   "kind": "module",
+   "params": {
+    "factory": "lab.simple_bots:create_idle"
+   },
+   "think": 0.005,
+   "description": "does nothing at all (not even deploying): an opponent whose agent never acts",
+   "tags": [
+    "baseline",
+    "weak"
+   ]
+  },
+  {
+   "name": "ai-normal",
+   "kind": "ai",
+   "params": {
+    "type": "normal"
+   },
+   "think": 0.005,
+   "description": "OpenRA's Normal AI",
+   "tags": [
+    "baseline",
+    "openra"
+   ]
+  },
+  {
+   "name": "ai-rush",
+   "kind": "ai",
+   "params": {
+    "type": "rush"
+   },
+   "think": 0.005,
+   "description": "OpenRA's Rush AI",
+   "tags": [
+    "baseline",
+    "openra"
+   ]
+  },
+  {
+   "name": "ai-turtle",
+   "kind": "ai",
+   "params": {
+    "type": "turtle"
+   },
+   "think": 0.005,
+   "description": "OpenRA's Turtle AI",
+   "tags": [
+    "baseline",
+    "openra"
+   ]
+  },
+  {
+   "name": "ai-naval",
+   "kind": "ai",
+   "params": {
+    "type": "naval"
+   },
+   "think": 0.005,
+   "description": "OpenRA's Naval AI",
+   "tags": [
+    "baseline",
+    "openra"
+   ]
+  },
+  {
+   "name": "ff-jev-push-v4",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_jev_push_v4.bot:create_agent",
+    "kwargs": {
+     "push": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-jev-push ff-jev-push@cacba02a at 7b8e525+changes: ff-jev, but an attack falls back only when the counted odds are against it too",
+   "tags": [
+    "frozen",
+    "jev",
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-jev-push-v5",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_jev_push_v5.bot:create_agent",
+    "kwargs": {
+     "push": true
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-jev-push ff-jev-push@a5111a30 at 7b8e525+changes: ff-jev, but an attack falls back only when the counted odds are against it too",
+   "tags": [
+    "frozen",
+    "jev",
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-jev-off",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "use_jev": false
+    }
+   },
+   "think": 0.005,
+   "description": "the control: ff-jev-push's code with Jev switched off (guard opening, defend, scout; no decisions)",
+   "tags": [
+    "ours",
+    "jev",
+    "control"
+   ]
+  },
+  {
+   "name": "ff-jev-v6",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json"
+    }
+   },
+   "think": 0.005,
+   "description": "v6: literal playbook (attack only when clearly behind, never into a fortified base, wipe passive opponents), scouting report, skip unchanged calls",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-v6-noscout",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false
+    }
+   },
+   "think": 0.005,
+   "description": "ff-jev-v6 without the scout",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-off-noscout",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "use_jev": false,
+     "scout": false
+    }
+   },
+   "think": 0.005,
+   "description": "control: guard opening + defend, no Jev, no scout",
+   "tags": [
+    "ours",
+    "jev",
+    "control"
+   ]
+  },
+  {
+   "name": "ff-jev-v6-measured",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json"
+    }
+   },
+   "think": "measured",
+   "description": "ff-jev-v6 with its real decision time (Jev calls included) charged as game time, as on the platform",
+   "tags": [
+    "ours",
+    "jev",
+    "latency"
+   ]
+  },
+  {
+   "name": "chaotic",
+   "kind": "module",
+   "params": {
+    "factory": "lab.simple_bots:create_chaotic"
+   },
+   "think": 0.005,
+   "description": "erratic: our economy, the army sent to random places every 15-40 s (a confused LLM-like player)",
+   "tags": [
+    "baseline",
+    "weak"
+   ]
+  },
+  {
+   "name": "ff-jev-force-defend",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "scout": false,
+     "force": "defend"
+    }
+   },
+   "think": 0.005,
+   "description": "coach variant: the Jev bot with its posture forced to defend (no Jev calls)",
+   "tags": [
+    "jev",
+    "coach"
+   ]
+  },
+  {
+   "name": "ff-jev-force-gather",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "scout": false,
+     "force": "gather"
+    }
+   },
+   "think": 0.005,
+   "description": "coach variant: the Jev bot with its posture forced to gather (no Jev calls)",
+   "tags": [
+    "jev",
+    "coach"
+   ]
+  },
+  {
+   "name": "ff-jev-force-commit",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "scout": false,
+     "force": "commit"
+    }
+   },
+   "think": 0.005,
+   "description": "coach variant: the Jev bot with its posture forced to commit (no Jev calls)",
+   "tags": [
+    "jev",
+    "coach"
+   ]
+  },
+  {
+   "name": "ff-jev-force-retreat",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "scout": false,
+     "force": "retreat"
+    }
+   },
+   "think": 0.005,
+   "description": "coach variant: the Jev bot with its posture forced to retreat (no Jev calls)",
+   "tags": [
+    "jev",
+    "coach"
+   ]
+  },
+  {
+   "name": "ff-jev-v6ns",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_jev_v6ns.bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/frozen/ff_jev_v6ns/literal2.json",
+     "scout": false
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-jev-v6-noscout ff-jev-v6-noscout@3b688681 at 38aa662: ff-jev-v6 without the scout",
+   "tags": [
+    "frozen",
+    "jev",
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-greedy-turtle",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "opening": "guard",
+     "posture": "defend",
+     "attack_threshold": 20,
+     "greed": 2
+    }
+   },
+   "think": 0.005,
+   "description": "ff-guard-turtle with greed 2 (wins standoffs on assets: 8/8 vs both turtles)",
+   "tags": [
+    "ours"
+   ]
+  },
+  {
+   "name": "ff-jev-v7",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": "jev"
+    }
+   },
+   "think": 0.005,
+   "description": "v7: v6 without the scout, Jev decides when to be greedy (assets tiebreak)",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-v7-greedy",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": 2
+    }
+   },
+   "think": 0.005,
+   "description": "v7 with greed 2 from the start",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-champ-v7",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_jev_champ_v7.bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/frozen/ff_jev_champ_v7/literal2.json",
+     "scout": false,
+     "economy": "jev"
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-jev-v7 ff-jev-v7@507587c8 at 38aa662+changes: v7: v6 without the scout, Jev decides when to be greedy (assets tiebreak)",
+   "tags": [
+    "frozen",
+    "jev",
+    "ours"
+   ]
+  },
+  {
+   "name": "exploit-eco-waves",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "attack_threshold": 4,
+     "opening": "standard",
+     "posture": "eco",
+     "target": "nearest",
+     "unit_focus": "mixed"
+    }
+   },
+   "think": 0.005,
+   "description": "found by lab exploit: beats ff-jev-champ-v7 6/8 (eco economy, constant small waves)",
+   "tags": [
+    "exploiter"
+   ]
+  },
+  {
+   "name": "exploit-eco-tanks",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "attack_threshold": 16,
+     "opening": "standard",
+     "posture": "eco",
+     "target": "nearest",
+     "unit_focus": "vehicles"
+    }
+   },
+   "think": 0.005,
+   "description": "found by lab exploit: beats ff-jev-champ-v7 5/8 (eco economy, waves of 16 tanks)",
+   "tags": [
+    "exploiter"
+   ]
+  },
+  {
+   "name": "ff-jev-v8a",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": 2,
+     "guard_end": 260
+    }
+   },
+   "think": 0.005,
+   "description": "v8a: greedy from the start, the guard ends at 4:20 without a raid",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-v8b",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": "jev",
+     "greed_floor": 16,
+     "guard_end": 260
+    }
+   },
+   "think": 0.005,
+   "description": "v8b: Jev decides greed (only with 16+ units), the guard ends at 4:20 without a raid",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-v9",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_bot:create_agent",
+    "kwargs": {
+     "push": true,
+     "questions": "bots/jev_variants/literal2.json",
+     "scout": false,
+     "economy": "read"
+    }
+   },
+   "think": 0.005,
+   "description": "v9: greedy from the start until Jev reads an attacker (rusher/aggressive) or raids come; no scout; literal playbook",
+   "tags": [
+    "ours",
+    "jev"
+   ]
+  },
+  {
+   "name": "ff-jev-council",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {}
+   },
+   "think": 0.005,
+   "description": "Jev as three loops (strategist / quartermaster / field commander), each with its own briefing in the state, pace and questions; plan -> greed/defenses; pinned jev-1.13.0",
+   "tags": [
+    "jev",
+    "council"
+   ]
+  },
+  {
+   "name": "ff-jev-council-boom",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "plan": "boom",
+     "keep_first": 240
+    }
+   },
+   "think": 0.005,
+   "description": "ff-jev-council starting greedy (plan boom), kept until 4:00 unless raided or an attack is expected",
+   "tags": [
+    "jev",
+    "council"
+   ]
+  },
+  {
+   "name": "ff-council-rules",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240
+    }
+   },
+   "think": 0.005,
+   "description": "the council's loops answered by code rules (the briefings as written), no Jev: the control for ff-jev-council-boom, and a council with no API",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-rules-eco",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "ff-council-rules with a second refinery before the war factory",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-greedy-turtle-eco",
+   "kind": "ff",
+   "params": {
+    "knobs": {
+     "opening": "guard",
+     "posture": "defend",
+     "attack_threshold": 20,
+     "greed": 2,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "ff-greedy-turtle with a second refinery before the war factory (run 61: 88% vs 80%)"
+  },
+  {
+   "name": "ff-council-champ-v10",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_council_champ_v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.005,
+   "description": "frozen ff-council-rules-eco ff-council-rules-eco@4023a564 at 7036a80+changes: ff-council-rules with a second refinery before the war factory",
+   "tags": [
+    "council",
+    "frozen",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-champ-v10-jev",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_council_champ_v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "jev",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": "measured",
+   "description": "the champion's frozen code with Jev (TypeSafe, paid) answering the council's three loops instead of the code rules; think measured (Jev's latency charged to the game clock, as on the platform). The test of what Jev adds over the rules (docs/LAB_PLAN.md J1)",
+   "tags": [
+    "council",
+    "frozen",
+    "jev"
+   ]
+  },
+  {
+   "name": "ext-ryan",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "ryanxxhuang-altruagent-redalert",
+     "url": "https://github.com/ryanxxhuang/altruagent-redalert",
+     "commit": "8047e75da137",
+     "name": "ext-ryan",
+     "stubs": {
+      "agent.agent:dump_dir_from_env": null
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "contestant ryanxxhuang/altruagent-redalert @8047e75 (2026-10-10): rule-based waves, kiting, focus fire, retreats; its Claude advisor off (rules only)",
+   "tags": [
+    "external",
+    "field"
+   ]
+  },
+  {
+   "name": "ext-ryan-claude",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "ryanxxhuang-altruagent-redalert",
+     "url": "https://github.com/ryanxxhuang/altruagent-redalert",
+     "commit": "8047e75da137",
+     "name": "ext-ryan-claude",
+     "stubs": {
+      "agent.agent:dump_dir_from_env": null
+     },
+     "advisor": "desk",
+     "env": {
+      "STRATEGY_EVERY": "60",
+      "TACTICAL_EVERY": "20",
+      "FAST_MODEL": "off"
+     }
+    }
+   },
+   "think": "paused",
+   "description": "ext-ryan with Claude as its advisor at the desk (lab advise): strategy every 60 s, tactics every 20 s, micro off; the game waits for each answer",
+   "tags": [
+    "external",
+    "advisor"
+   ]
+  },
+  {
+   "name": "ai-beginner",
+   "kind": "ai",
+   "params": {
+    "type": "beginner"
+   },
+   "think": 0.005,
+   "tags": [
+    "baseline",
+    "openra",
+    "weak"
+   ]
+  },
+  {
+   "name": "ai-easy",
+   "kind": "ai",
+   "params": {
+    "type": "easy"
+   },
+   "think": 0.005,
+   "tags": [
+    "baseline",
+    "openra",
+    "weak"
+   ]
+  },
+  {
+   "name": "ai-medium",
+   "kind": "ai",
+   "params": {
+    "type": "medium"
+   },
+   "think": 0.005,
+   "tags": [
+    "baseline",
+    "openra",
+    "weak"
+   ]
+  },
+  {
+   "name": "exploit-ryan-plan",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "ryanxxhuang-altruagent-redalert",
+     "url": "https://github.com/ryanxxhuang/altruagent-redalert",
+     "commit": "8047e75da137",
+     "name": "exploit-ryan-plan",
+     "stubs": {
+      "agent.agent:dump_dir_from_env": null
+     },
+     "advisor": "bots.ryan_plan:PlanDesk",
+     "env": {
+      "STRATEGY_EVERY": "60",
+      "TACTICAL_EVERY": "20",
+      "FAST_MODEL": "off"
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "ext-ryan advised by a script of the plan Claude played against v10 (runs 75-77): economy first, one massed strike on the ore-field guard, hold the lead, all-in when behind late",
+   "tags": [
+    "exploiter",
+    "external"
+   ]
+  },
+  {
+   "name": "ff-council-v11",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "comeback_army": 10,
+     "blind_production": "mixed",
+     "commit_min_army": 10
+    }
+   },
+   "think": 0.005,
+   "description": "v11 candidate: ff-council-rules-eco + comes back from behind late with 10+ units (v10: 25), trains a mix instead of rockets when the enemy army is unseen after 5:00",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11b",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "comeback_army": 10,
+     "blind_production": "mixed",
+     "commit_min_army": 10,
+     "surplus": 800,
+     "extra_barracks": 1
+    }
+   },
+   "think": 0.005,
+   "description": "v11 + spends piled-up money: factories once cash+ore passes 800 (v10: 1500) and a second barracks after the war factory",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11c",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "fallback": 1.3
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + falls back to its defenses when attackers at the base are worth 1.3x its army",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11d",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "fallback": 1.3,
+     "comeback_army": 10,
+     "blind_production": "mixed",
+     "commit_min_army": 10
+    }
+   },
+   "think": 0.005,
+   "description": "v11 (comeback with 10+ units, mixed blind production) + the fallback to defenses at 1.3x",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11-mixed",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "blind_production": "mixed"
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + trains a mix instead of rockets when the enemy army is unseen after 5:00 (v11's first change alone)",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ff-council-v11-comeback",
+   "kind": "module",
+   "params": {
+    "factory": "bots.jev_council:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1,
+     "comeback_army": 10,
+     "commit_min_army": 10
+    }
+   },
+   "think": 0.005,
+   "description": "v10 + comes back from behind late with 10+ combat units (v11's second change alone)",
+   "tags": [
+    "council",
+    "rules"
+   ]
+  },
+  {
+   "name": "ext-henry",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ADVISOR": "off",
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry/logs"
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "contestant henrysue/ucla-steve-nash-equilibrium @6856a69 (2026-10-15): large rules RA bot tuned for the 20-min tiebreak; Claude advisor, analyst and squad leads off",
+   "tags": [
+    "external",
+    "field"
+   ]
+  },
+  {
+   "name": "ext-henry-codex",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry-codex",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry-codex/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry-codex/logs",
+      "REDALERT_ADVISOR_SECONDS": "30"
+     },
+     "advisor": "bots.codex_advisor:HenryCodexDesk",
+     "stubs": {
+      "agent.vgc.providers:anthropic_credentials": true
+     }
+    }
+   },
+   "think": "paused",
+   "description": "ext-henry with its model advisor on, Codex GPT-6-Luna (low effort) in Claude's place (bots/codex_advisor.py, FF_LAB_CODEX=1, the user's ChatGPT quota): advice every 30 game s, the game waits for each answer; analyst and squad leads off",
+   "tags": [
+    "external",
+    "advisor"
+   ]
+  },
+  {
+   "name": "ext-henry-codex-t",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry-codex-t",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry-codex-t/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry-codex-t/logs",
+      "REDALERT_ADVISOR_SECONDS": "30"
+     },
+     "advisor": "bots.codex_advisor:HenryCodexTuned",
+     "stubs": {
+      "agent.vgc.providers:anthropic_credentials": true
+     }
+    }
+   },
+   "think": "paused",
+   "description": "ext-henry-codex tuned: our notes after henry's own advisor prompt (bots/codex_advisor.py HENRY_NOTES: grow and strike once, no reflex holds, no mid-game attacks under 1.5x, a flanked final push with a target from 16:00) and Luna at medium effort; FF_LAB_CODEX=1, the user's ChatGPT quota",
+   "tags": [
+    "external",
+    "advisor"
+   ]
+  },
+  {
+   "name": "ext-henry-rusher",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry-rusher",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ADVISOR": "off",
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "RA_SPARRING": "rusher",
+      "RA_SPARRING_AGAINST": "lab",
+      "REDALERT_OPPONENT": "lab",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry-rusher/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry-rusher/logs"
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "henrysue's sparring archetype 'rusher' (agent/redalert/sparring.py: scripted from real tournament replays), @6856a69, models off",
+   "tags": [
+    "external",
+    "field",
+    "archetype"
+   ]
+  },
+  {
+   "name": "ext-henry-yuriko",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "henrysue-ucla-steve-nash-equilibrium",
+     "url": "https://github.com/henrysue/ucla-steve-nash-equilibrium",
+     "commit": "6856a69d96d0",
+     "name": "ext-henry-yuriko",
+     "entry": "agent.dispatch:create_agent",
+     "env": {
+      "REDALERT_ADVISOR": "off",
+      "REDALERT_ANALYST": "off",
+      "REDALERT_SQUAD_LEADS": "off",
+      "RA_SPARRING": "yuriko",
+      "RA_SPARRING_AGAINST": "lab",
+      "REDALERT_OPPONENT": "lab",
+      "REDALERT_PROFILE_DIR": "/workspace/sim/lab/external/ext-henry-yuriko/profiles",
+      "REDALERT_LOG_DIR": "/workspace/sim/lab/external/ext-henry-yuriko/logs"
+     }
+    }
+   },
+   "think": 0.005,
+   "description": "henrysue's sparring archetype 'yuriko' (agent/redalert/sparring.py: scripted from real tournament replays), @6856a69, models off",
+   "tags": [
+    "external",
+    "field",
+    "archetype"
+   ]
+  },
+  {
+   "name": "ext-pakled",
+   "kind": "module",
+   "params": {
+    "factory": "bots.external:create_agent",
+    "kwargs": {
+     "repo": "SirLinhart-PakledAgent",
+     "url": "https://github.com/SirLinhart/PakledAgent",
+     "commit": "2232a0e641e4",
+     "name": "ext-pakled",
+     "subdir": "src",
+     "packages": [
+      "agent",
+      "ucla_agent"
+     ]
+    }
+   },
+   "think": 0.005,
+   "description": "contestant SirLinhart/PakledAgent @2232a0e (2026-10-13): very large scripted RA core; its local JevK5-9B model unreachable here, so the script plays every choice",
+   "tags": [
+    "external",
+    "field"
+   ]
+  },
+  {
+   "name": "ff-council-champ-v10-placebo",
+   "kind": "module",
+   "params": {
+    "factory": "bots.frozen.ff_council_champ_v10.bot:create_agent",
+    "kwargs": {
+     "oracle": "rules",
+     "plan": "boom",
+     "keep_first": 240,
+     "early_refineries": 1
+    }
+   },
+   "think": 0.045,
+   "description": "placebo for probes: v10 exactly, but each decision lands one tick later (think 45 ms instead of 5): a different trajectory with no strategic change. On moments selected for bad outcomes, compare variants to this, not to the control (jev's run 185)",
+   "tags": [
+    "council",
+    "frozen",
+    "rules",
+    "placebo"
+   ]
+  }
+ ]
+}

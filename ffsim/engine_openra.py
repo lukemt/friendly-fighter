@@ -59,7 +59,10 @@ RUNS_DIR = Path(os.environ.get("FF_SIM_RUNS", SIM_HOME / "runs"))
 # load the game data and compile the engine's code again; one exits after FF_LANE_IDLE_EXIT seconds
 # without a run.
 LANES_DIR = Path(os.environ.get("FF_LANES_DIR", SIM_HOME / "lanes"))
-LANE_IDLE_EXIT_SECONDS = int(os.environ.get("FF_LANE_IDLE_EXIT", "1800"))
+LANE_IDLE_EXIT_SECONDS = int(os.environ.get("FF_LANE_IDLE_EXIT", "600"))
+# An engine grows with every game it hosts (~320 MB fresh, 900+ MB after ~60 games): a lane whose
+# engine is bigger than this is restarted before its next game (FF_LANE_MAX_RSS_MB; 0: never).
+LANE_MAX_RSS_MB = int(os.environ.get("FF_LANE_MAX_RSS_MB", "600"))
 
 VIEW_INTERVAL = 6
 VIEW_PHASE = 5  # the platform's views fall on ticks 5, 11, 17... (state_version % 6 == 5 in every recording)
@@ -247,6 +250,20 @@ def _engine_alive(pid: int, port: int) -> bool:
     return state != "Z" and f"Launch.MultiSession={port}".encode() in cmdline
 
 
+def _rss_mb(pid: int) -> float:
+    try:
+        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
+            if line.startswith("VmRSS:"):
+                return int(line.split()[1]) / 1024
+    except (OSError, IndexError, ValueError):
+        pass
+    return 0.0
+
+
+def _too_big(pid: int) -> bool:
+    return bool(LANE_MAX_RSS_MB) and _rss_mb(pid) > LANE_MAX_RSS_MB
+
+
 class _Detached:
     """A persistent lane's engine started by an earlier run: as much of Popen as EngineHost uses."""
 
@@ -340,7 +357,7 @@ class EngineHost:
             return False
         if not _engine_alive(info.get("pid", 0), info.get("port", 0)):
             return False
-        if info.get("key") != self._env_key() or not self.RAW:
+        if info.get("key") != self._env_key() or not self.RAW or _too_big(info["pid"]):
             self._kill(info["pid"])
             return False
         try:
@@ -461,6 +478,10 @@ class EngineHost:
     def alive(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
+    def rss_mb(self) -> float:
+        """The engine process's resident memory, in MB (0 when unknown)."""
+        return _rss_mb(self.proc.pid) if self.proc is not None else 0.0
+
     def cpu_seconds(self) -> float:
         """CPU time the engine process has used so far (all its threads)."""
         try:
@@ -527,7 +548,8 @@ class HostPool:
     def _claim(self) -> Path:
         """A persistent lane no other run is using (its lock file, held until this pool stops)."""
         LANES_DIR.mkdir(parents=True, exist_ok=True)
-        for i in range(1, 65):
+        # (lanes with an engine left running first: taking over a loaded engine beats starting one more)
+        for i in sorted(range(1, 65), key=lambda i: not (LANES_DIR / f"lane-{i}" / "host.json").exists()):
             lane = LANES_DIR / f"lane-{i}"
             lane.mkdir(exist_ok=True)
             fd = os.open(lane / "lock", os.O_CREAT | os.O_RDWR, 0o644)
@@ -562,7 +584,8 @@ class HostPool:
             while True:
                 for i, host in enumerate(self.lanes):
                     if not host.busy:
-                        if host.games >= self.recycle or (host.proc is not None and not host.alive()):
+                        if (host.games >= self.recycle or (host.proc is not None and not host.alive())
+                                or (LANE_MAX_RSS_MB and host.proc is not None and host.rss_mb() > LANE_MAX_RSS_MB)):
                             if self.persist:
                                 host.stop(kill=True)
                             else:
@@ -595,7 +618,11 @@ class OpenRAEngine:
 
     def __init__(self, session_id: str, map_id: str, seat_kinds: list[str], *, lobby: dict | None = None,
                  view_interval: int = VIEW_INTERVAL, log_dir: Path | None = None, lockstep: bool = False,
-                 host: EngineHost | None = None, seed: int = 0) -> None:
+                 host: EngineHost | None = None, seed: int = 0, trace_path: Path | None = None,
+                 prefix: list | None = None) -> None:
+        """``trace_path``: write this game's engine trace there (default: ``FF_ENGINE_TRACE``'s folder).
+        ``prefix``: a snapshot to start from (virtual time, with a host): the ``(StepRequest, tick, digest)``
+        steps of a trace (``read_trace``) to replay first; the game then goes on from where they end."""
         self.session_id = session_id
         self.map_file = MAP_FILES.get(map_id, map_id)
         self.seat_kinds = seat_kinds
@@ -628,6 +655,12 @@ class OpenRAEngine:
         self.steps = 0
         self.step_lock = threading.Lock()  # one step at a time; stop() waits for the last one
         self.trace = None  # FF_ENGINE_TRACE
+        self.trace_path = Path(trace_path) if trace_path else (
+            Path(TRACE_DIR) / f"{session_id}.trace" if TRACE_DIR else None)
+        self.prefix = prefix or []
+        self.prefix_views: list | None = None  # the snapshot's views, handed out by the first step
+        self.prefix_diff: int | None = None  # the first replayed step whose views differed from the trace's
+        self.first_view_tick: int | None = None
 
     # -- lifecycle ----------------------------------------------------------------------
 
@@ -641,11 +674,13 @@ class OpenRAEngine:
         self.on_view, self.on_exit = on_view, on_exit
         if self.host is not None:
             self.host_session = self.host.create(self.map_file, self._bots(), self.seed, self.lobby)
-            if TRACE_DIR:
-                Path(TRACE_DIR).mkdir(parents=True, exist_ok=True)
-                self.trace = open(Path(TRACE_DIR) / f"{self.session_id}.trace", "w")
+            if self.trace_path is not None:
+                self.trace_path.parent.mkdir(parents=True, exist_ok=True)
+                self.trace = open(self.trace_path, "w")
                 self.trace.write(json.dumps({"map_file": self.map_file, "bots": self._bots(), "seed": self.seed,
                                              "lobby": self.lobby}) + "\n")
+            if self.prefix:
+                self._replay_prefix()
             return
         support = self.run_dir / "support"
         support.mkdir(parents=True, exist_ok=True)
@@ -697,9 +732,55 @@ class OpenRAEngine:
             self.stub = pb_grpc.RLBridgeStub(self.channel)
         return self.stub
 
+    def _replay_prefix(self) -> None:
+        """Play the snapshot's recorded steps (the same actions at the same ticks: the same game, as
+        ``scripts/ffbench.py`` checks), keeping the last step's views for the first ``step``.
+
+        Steps without actions are merged: the world runs straight to the tick before the next step
+        with actions, then that step is sent. The actions land on the same ticks, so it is the same
+        game, with ~12x fewer engine calls and ~13% less time for a 17-minute prefix. The check against
+        the trace: every step with actions and the last step must give the trace's views exactly; a
+        merged step only its tick (its reply holds the views of several recorded steps at once, and
+        any difference in the world would show in the next step's views)."""
+        views: list = []
+
+        def send(n: int, request, tick: int, digest: str | None) -> None:
+            nonlocal views
+            request = pb.StepRequest.FromString(request.SerializeToString())
+            request.session_id = self.host_session
+            reply = self.host.step(request)
+            if self.trace is not None:
+                request.session_id = ""
+                self.trace.write(json.dumps([base64.b64encode(request.SerializeToString()).decode(), reply.tick,
+                                             views_digest(reply.observations)]) + "\n")
+            if self.prefix_diff is None and (reply.tick != tick or (digest is not None
+                                                                    and views_digest(reply.observations) != digest)):
+                self.prefix_diff = n
+            if reply.observations:
+                views = [(int(o.player[5:]), view_from_pb(o.observation)) for o in reply.observations]
+                if self.first_view_tick is None:
+                    self.first_view_tick = views[0][1]["tick"]
+            self.tick = reply.tick
+            self.steps += 1
+
+        with self.step_lock:
+            skipped = None  # the last step without actions not sent yet: (n, until_tick, tick)
+            for n, (request, tick, digest) in enumerate(self.prefix, 1):
+                if not len(request.actions) and n < len(self.prefix):
+                    skipped = (n, request.until_tick, tick)
+                    continue
+                if skipped is not None:
+                    send(skipped[0], pb.StepRequest(until_tick=skipped[1]), skipped[2], None)
+                    skipped = None
+                send(n, request, tick, digest)
+        self.prefix_views = views
+
     def step(self, until_tick: int) -> list[tuple[int, dict]]:
         """Virtual time: run the world up to ``until_tick`` (with the actions queued since the
         last step) and return the views those ticks made, as (seat position, view)."""
+        if self.prefix_views is not None and until_tick <= self.tick:
+            views, self.prefix_views = self.prefix_views, None  # (a snapshot: where it starts)
+            return views
         with self.step_lock:
             if self.stopping:
                 raise RuntimeError("engine stopped")
@@ -723,6 +804,8 @@ class OpenRAEngine:
             self.tick = reply.tick
             for _, v in views:
                 self.last_tick = v["tick"]
+                if self.first_view_tick is None:
+                    self.first_view_tick = v["tick"]
         return views
 
     def _watch(self) -> None:

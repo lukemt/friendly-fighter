@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(FF_ALLOW_PUSH=1 git push:*)",
+      "Bash(pkill -f:*)"
+    ]
+  }
+}

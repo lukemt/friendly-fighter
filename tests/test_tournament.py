@@ -99,7 +99,7 @@ class FakeOfficial:
 
 
 class Harness:
-    def __init__(self, *listings, cooldown=60.0, kinds=ALL_KINDS):
+    def __init__(self, *listings, cooldown=60.0, kinds=ALL_KINDS, games=None, skip_games=()):
         self.official = FakeOfficial(*listings)
         self.state = TournamentState()
         self.factory = FakeProcessFactory()
@@ -107,11 +107,14 @@ class Harness:
         self.clock = {"t": 0.0}
         self.cooldown = cooldown
         self.kinds = kinds
+        self.games = games
+        self.skip_games = skip_games
 
     def tick(self, advance=1.0):
         self.clock["t"] += advance
         run_tournament_once(
-            self.official, self.state, agent_spec=SPEC, kinds=self.kinds, now=lambda: self.clock["t"],
+            self.official, self.state, agent_spec=SPEC, kinds=self.kinds, games=self.games,
+            skip_games=self.skip_games, now=lambda: self.clock["t"],
             cooldown_seconds=self.cooldown, process_factory=self.factory, log=self.log.append,
             wall_now=lambda: NOW,
         )
@@ -938,6 +941,66 @@ def test_forever_hands_its_kinds_to_every_tick():
 
     assert [p.args[0].seat_id for p in factory.processes] == ["seat-2"]
     assert log.count(FALL_CUP_WARNING) == 1
+
+
+def test_games_plays_only_the_named_games_and_notes_the_rest_once_per_game():
+    h = Harness([tournament_game("seat-1"), a("seat-2"), a("seat-3", game_type="red_alert")],
+                games=frozenset({"werewolf"}))
+
+    h.tick()
+    h.tick(advance=100.0)
+
+    assert h.started() == ["seat-1"]
+    assert h.log.count(
+        "A pokemon_vgc_doubles_draft game is waiting: this runtime doesn't play pokemon_vgc_doubles_draft "
+        "(--games/--skip-games); another runtime with your key must") == 1
+    assert h.log.count(
+        "A red_alert game is waiting: this runtime doesn't play red_alert "
+        "(--games/--skip-games); another runtime with your key must") == 1
+
+
+def test_skip_games_plays_every_other_game_including_new_and_unnamed_ones():
+    h = Harness([tournament_game("seat-1"), a("seat-2", game_type="honor_of_kings"), a("seat-3", game_type=None),
+                 a("seat-4", game_type="Red_Alert")],
+                skip_games=frozenset({"werewolf", "pokemon_vgc_doubles_draft"}))
+
+    h.tick()
+
+    assert h.started() == ["seat-2", "seat-3", "seat-4"]
+    assert h.log[0] == ("A werewolf game is waiting (tournament): this runtime doesn't play werewolf "
+                        "(--games/--skip-games); another runtime with your key must")
+
+
+def test_unknown_names_an_assignment_without_a_game_type():
+    named = Harness([a("seat-1", game_type=None), a("seat-2", game_type="  ")], games=frozenset({"unknown"}))
+    other = Harness([a("seat-1", game_type=None)], games=frozenset({"red_alert"}))
+
+    named.tick()
+    other.tick()
+
+    assert named.started() == ["seat-1", "seat-2"]
+    assert other.started() == []
+
+
+def test_a_running_game_is_never_stopped_by_the_game_filter():
+    h = Harness([a("seat-1", game_type="werewolf")], games=frozenset({"werewolf"}))
+    h.tick()
+    h.games = frozenset({"red_alert"})
+
+    for _ in range(5):
+        h.tick()
+
+    assert h.started() == ["seat-1"] and h.factory.processes[0].terminated is False
+
+
+def test_forever_hands_its_game_filter_to_every_tick():
+    official = FakeOfficial([a("seat-1", game_type="werewolf"), a("seat-2", game_type="red_alert")])
+    factory = FakeProcessFactory()
+
+    run_tournament_forever(official, agent_spec=SPEC, skip_games=frozenset({"red_alert"}), sleep=lambda s: None,
+                           process_factory=factory, log=lambda line: None, max_iterations=3)
+
+    assert [p.args[0].seat_id for p in factory.processes] == ["seat-1"]
 
 
 def test_forever_plays_both_kinds_by_default():
